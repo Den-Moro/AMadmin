@@ -11,6 +11,8 @@
     <nav>
         <a href="index.html">Дашборд</a>
         <a href="notifications.html" class="active">Оповещения</a>
+        <a href="groups.html">Группы</a>
+        <a href="manuals.html">Мануалы</a>
     </nav>
     <button id="logoutBtn">Выйти</button>
 </header>
@@ -53,8 +55,13 @@
             </label>
         </div>
 
+        <label>Мануал из библиотеки (необязательно)
+            <select id="manualPicker">
+                <option value="">— не выбирать —</option>
+            </select>
+        </label>
         <label>Ссылка/текст мануала (необязательно)
-            <input type="text" id="manualUrl">
+            <textarea id="manualUrl" rows="2"></textarea>
         </label>
 
         <button type="submit">Отправить</button>

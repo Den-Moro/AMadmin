@@ -15,6 +15,8 @@ require __DIR__ . '/../src/Controllers/AdminAuthController.php';
 require __DIR__ . '/../src/Controllers/AdminPcsController.php';
 require __DIR__ . '/../src/Controllers/AdminMetaController.php';
 require __DIR__ . '/../src/Controllers/AdminNotificationsController.php';
+require __DIR__ . '/../src/Controllers/AdminHostGroupsController.php';
+require __DIR__ . '/../src/Controllers/AdminManualsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -33,9 +35,20 @@ $router->get('/admin/me', array('AdminAuthController', 'me'));
 $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->get('/admin/stores', array('AdminMetaController', 'stores'));
 $router->get('/admin/device-types', array('AdminMetaController', 'deviceTypes'));
-$router->get('/admin/host-groups', array('AdminMetaController', 'hostGroups'));
 $router->get('/admin/notifications', array('AdminNotificationsController', 'index'));
 $router->post('/admin/notifications', array('AdminNotificationsController', 'store'));
+
+$router->get('/admin/host-groups', array('AdminHostGroupsController', 'index'));
+$router->post('/admin/host-groups', array('AdminHostGroupsController', 'store'));
+$router->delete('/admin/host-groups/{id}', array('AdminHostGroupsController', 'destroy'));
+$router->get('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'members'));
+$router->post('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'addMember'));
+$router->delete('/admin/host-groups/{id}/members/{pcId}', array('AdminHostGroupsController', 'removeMember'));
+
+$router->get('/admin/manuals', array('AdminManualsController', 'index'));
+$router->post('/admin/manuals', array('AdminManualsController', 'store'));
+$router->put('/admin/manuals/{id}', array('AdminManualsController', 'update'));
+$router->delete('/admin/manuals/{id}', array('AdminManualsController', 'destroy'));
 
 try {
     $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

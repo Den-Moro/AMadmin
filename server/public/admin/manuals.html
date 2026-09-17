@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Мануалы — AMadmin</title>
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">AMadmin</div>
+    <nav>
+        <a href="index.html">Дашборд</a>
+        <a href="notifications.html">Оповещения</a>
+        <a href="groups.html">Группы</a>
+        <a href="manuals.html" class="active">Мануалы</a>
+    </nav>
+    <button id="logoutBtn">Выйти</button>
+</header>
+
+<main>
+    <h1 id="formTitle">Новый мануал</h1>
+    <form id="manualForm" class="card">
+        <input type="hidden" id="editId" value="">
+        <label>Название
+            <input type="text" id="title" required>
+        </label>
+        <label>Текст или ссылка
+            <textarea id="urlOrText" rows="4" required></textarea>
+        </label>
+        <div class="row">
+            <button type="submit" id="submitBtn">Сохранить</button>
+            <button type="button" id="cancelEditBtn" style="display:none">Отменить редактирование</button>
+        </div>
+        <p id="error" class="error"></p>
+    </form>
+
+    <h1>Библиотека мануалов</h1>
+    <table id="manualsTable">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Текст/ссылка</th>
+                <th>Обновлён</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/manuals.js"></script>
+</body>
+</html>

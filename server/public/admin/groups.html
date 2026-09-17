@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Группы хостов — AMadmin</title>
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">AMadmin</div>
+    <nav>
+        <a href="index.html">Дашборд</a>
+        <a href="notifications.html">Оповещения</a>
+        <a href="groups.html" class="active">Группы</a>
+        <a href="manuals.html">Мануалы</a>
+    </nav>
+    <button id="logoutBtn">Выйти</button>
+</header>
+
+<main>
+    <h1>Новая группа</h1>
+    <form id="createForm" class="card">
+        <label>Название
+            <input type="text" id="name" required>
+        </label>
+        <button type="submit">Создать</button>
+        <p id="createError" class="error"></p>
+    </form>
+
+    <h1>Группы</h1>
+    <table id="groupsTable">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Участников</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div id="detail" class="card" style="display:none">
+        <h2 id="detailTitle"></h2>
+
+        <div class="row">
+            <label>Добавить ПК
+                <select id="addPcSelect"></select>
+            </label>
+            <button type="button" id="addPcBtn" style="align-self:flex-end">Добавить</button>
+        </div>
+
+        <table id="membersTable">
+            <thead>
+                <tr>
+                    <th>Магазин</th>
+                    <th>Хост</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/groups.js"></script>
+</body>
+</html>
