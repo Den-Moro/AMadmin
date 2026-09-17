@@ -47,7 +47,10 @@ CREATE TABLE pcs (
     hostname VARCHAR(255) NOT NULL,
     username VARCHAR(100) NULL,
     display_name VARCHAR(255) NULL,
-    agent_token CHAR(64) NOT NULL,
+    -- utf8mb4_bin: секретный токен должен сравниваться строго побайтово, обычная
+    -- collation (…_unicode_ci) считает строки разного регистра одинаковыми, что
+    -- ослабляет токен и ломает предположение об уникальности.
+    agent_token CHAR(64) COLLATE utf8mb4_bin NOT NULL,
     last_seen DATETIME NULL,
     agent_version VARCHAR(50) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

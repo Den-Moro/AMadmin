@@ -1,0 +1,41 @@
+<?php
+
+// Самописный роутер вместо фреймворка: сопоставляет метод+путь с обработчиком.
+// Поддерживает плейсхолдеры вида {id} в пути.
+class Router
+{
+    private $routes = array();
+
+    public function get($pattern, $handler)
+    {
+        $this->routes[] = array('method' => 'GET', 'pattern' => $pattern, 'handler' => $handler);
+    }
+
+    public function post($pattern, $handler)
+    {
+        $this->routes[] = array('method' => 'POST', 'pattern' => $pattern, 'handler' => $handler);
+    }
+
+    public function dispatch($method, $uri)
+    {
+        $path = parse_url($uri, PHP_URL_PATH);
+
+        foreach ($this->routes as $route) {
+            if ($route['method'] !== $method) {
+                continue;
+            }
+
+            $regex = preg_replace('#\{[a-zA-Z_]+\}#', '([^/]+)', $route['pattern']);
+            $regex = '#^' . $regex . '$#';
+
+            if (preg_match($regex, $path, $matches)) {
+                array_shift($matches);
+                call_user_func_array($route['handler'], $matches);
+                return;
+            }
+        }
+
+        http_response_code(404);
+        echo json_encode(array('error' => 'not_found'));
+    }
+}
