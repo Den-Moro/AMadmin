@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Инструкция для администратора — AMadmin</title>
+<style>
+    :root {
+        --bg: #f4f5f7;
+        --card-bg: #ffffff;
+        --text: #1f2430;
+        --muted: #6b7280;
+        --border: #d8dbe0;
+        --primary: #2563eb;
+        --code-bg: #f1f2f5;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.6;
+    }
+    main {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+    }
+    .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 28px 32px;
+    }
+    h1 {
+        font-size: 26px;
+        margin: 0 0 4px;
+    }
+    .subtitle {
+        color: var(--muted);
+        margin: 0 0 28px;
+        font-size: 15px;
+    }
+    h2 {
+        font-size: 19px;
+        margin: 32px 0 12px;
+        border-top: 1px solid var(--border);
+        padding-top: 24px;
+    }
+    h2:first-of-type {
+        border-top: none;
+        padding-top: 0;
+    }
+    h3 {
+        font-size: 15.5px;
+        margin: 20px 0 8px;
+    }
+    p, li {
+        font-size: 15px;
+    }
+    ol, ul {
+        padding-left: 22px;
+    }
+    a {
+        color: var(--primary);
+    }
+    code {
+        background: var(--code-bg);
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+        font-family: ui-monospace, Consolas, monospace;
+    }
+    pre {
+        background: var(--code-bg);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-size: 13px;
+        font-family: ui-monospace, Consolas, monospace;
+    }
+    pre code {
+        background: none;
+        padding: 0;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+    }
+    th, td {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+    }
+    .backlog {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 14px 18px;
+        font-size: 14px;
+    }
+    .backlog li {
+        margin-bottom: 4px;
+    }
+    @media print {
+        body { background: white; }
+        .card { border: none; }
+    }
+</style>
+</head>
+<body>
+<main>
+    <div class="card">
+        <h1>Инструкция для администратора</h1>
+        <p class="subtitle">
+            Как поднять сервер, пользоваться админ-панелью и раскатать клиент на кассы.
+            Полное техническое ТЗ — в <a href="AGENTS.md">AGENTS.md</a>, текущий статус —
+            в <a href="README.md">README.md</a>, инструкция для сотрудников магазина —
+            в <a href="INSTRUCTIONS.html">INSTRUCTIONS.html</a>.
+        </p>
+
+        <h2>1. Что это за система</h2>
+        <p>Два больших модуля:</p>
+        <ol>
+            <li><strong>Оповещения</strong> — сервер (PHP + SQLite) рассылает уведомления о
+            плановых/срочных IT-работах на ПК магазинов; клиент (PowerShell + WPF)
+            показывает их и подтверждает получение. Реализовано и проверено.</li>
+            <li><strong>Удалённое администрирование</strong> (управление службами, файлами,
+            процессами на кассах массово) — пока не реализовано, в планах отдельным
+            этапом.</li>
+        </ol>
+
+        <h2>2. Сервер</h2>
+
+        <h3>2.1 Запуск через Docker (рекомендуется для теста/разработки)</h3>
+        <pre><code>docker compose up -d --build</code></pre>
+        <p>Первый запуск на чистом томе сам накатывает миграции из
+        <code>server/migrations/</code>. Сервер слушает
+        <code>http://localhost:8000</code>.</p>
+        <p>Тестовые данные и первый логин в панель (если ещё не созданы):</p>
+        <pre><code>docker compose exec server php -r "(new PDO('sqlite:/app/data/amadmin.sqlite'))->exec(file_get_contents('/app/dev-seed.sql'));"
+docker compose exec server php bin/create-admin.php &lt;логин&gt; &lt;пароль&gt;</code></pre>
+
+        <h3>2.2 Запуск напрямую (без Docker)</h3>
+        <p>См. раздел «Быстрый старт (сервер)» в <a href="README.md">README.md</a>.
+        Продакшен по плану — ручная установка на Windows-хосте (IIS/Apache), Docker —
+        только для тестирования.</p>
+
+        <h3>2.3 Логи и диагностика</h3>
+        <ul>
+            <li>Серверный лог: <code>server/logs/app.log</code> (в Docker —
+            <code>docker compose exec server tail -f logs/app.log</code>).</li>
+            <li>Уровень логирования настраивается в <code>config.php</code>
+            (<code>log_level</code>: <code>debug</code>/<code>info</code>/
+            <code>warning</code>/<code>error</code>). Пока приложение в бете — держите
+            <code>debug</code>, это значение по умолчанию.</li>
+            <li>Клиентский лог у каждого агента — <code>client/ui-agent.log</code> рядом с
+            <code>UiAgent.ps1</code>, тот же принцип уровней (<code>config.json</code> →
+            <code>log_level</code>).</li>
+        </ul>
+
+        <h2>3. Админ-панель</h2>
+        <p>Откройте <code>http://&lt;адрес-сервера&gt;/admin/login.html</code>. Логинов с
+        самого начала может быть несколько — заводятся через
+        <code>server/bin/create-admin.php</code>, публичной регистрации в панели нет и не
+        будет. После 5 неудачных попыток подряд логин временно блокируется.</p>
+
+        <h3>3.1 Дашборд (index.html)</h3>
+        <p>Список ПК: магазин, <code>hostname\username</code>, тип устройства,
+        онлайн/офлайн (по времени последнего опроса), когда последний раз выходил на связь.
+        Поиск и фильтры по магазину/типу устройства.</p>
+
+        <h3>3.2 Оповещения (notifications.html)</h3>
+        <p>Форма создания: текст, важность (важное всегда принудительное окно; неважное —
+        по настройке клиента), размер окна, кому (всем / конкретному магазину / группе
+        хостов / типу устройства / конкретному ПК), и опционально мануал — либо выбрать
+        готовый из библиотеки (текст скопируется в поле), либо вписать вручную. Ниже —
+        история уже отправленных оповещений со сводными счётчиками показов/подтверждений.
+        </p>
+        <p>Повторяющиеся оповещения (ежедневно/еженедельно) и функция «догона» пропущенных
+        пока не реализованы в панели — см. известные ограничения ниже.</p>
+
+        <h3>3.3 Группы хостов (groups.html)</h3>
+        <p>Свои произвольные группы ПК, не привязанные к структуре «магазин» (например
+        «Кассы 1 этажа»). Группа создаётся, затем через неё же добавляются/убираются
+        конкретные ПК. Группа становится доступна как цель рассылки сразу после создания.
+        </p>
+
+        <h3>3.4 Библиотека мануалов (manuals.html)</h3>
+        <p>Инструкции (текст или ссылка) для повторного использования при создании
+        оповещений — создание, редактирование, удаление. Текст мануала копируется в
+        оповещение в момент отправки, а не связывается «вживую» — более поздняя правка
+        мануала в библиотеке не меняет задним числом уже отправленные оповещения.</p>
+
+        <h2>4. Клиент (UI-агент на кассах)</h2>
+        <ol>
+            <li>Скопировать <code>client/config.example.json</code> →
+            <code>client/config.json</code>, указать <code>server_url</code> и
+            <code>agent_token</code> конкретного ПК (сейчас токен выдаётся вручную —
+            саморегистрация агента ещё не реализована, см. известные ограничения).</li>
+            <li>Запуск: <code>powershell -File client/UiAgent/UiAgent.ps1</code>, от имени
+            обычного пользователя (не администратора/SYSTEM) — иначе окно оповещения будет
+            не видно.</li>
+            <li>Массовая раскатка на десятки/сотни касс (сборка в <code>.exe</code> через
+            <code>ps2exe</code>, регистрация автозапуска через <code>schtasks</code>) — по
+            плану, ещё не реализовано.</li>
+        </ol>
+
+        <h2>5. Известные ограничения (осознанный бэклог)</h2>
+        <ul class="backlog">
+            <li>Нет CSRF-защиты на POST-запросах админ-панели.</li>
+            <li>Двухфакторная аутентификация для входа в панель — не реализована.</li>
+            <li>Саморегистрация ПК (выдача <code>agent_token</code> при первом запуске
+            агента) — пока токены создаются вручную.</li>
+            <li>Повторяющиеся оповещения (<code>recurrence</code> в схеме есть, генерация по
+            расписанию — нет) и режим «догона» пропущенных (<code>CatchUpMissed</code>) —
+            не реализованы.</li>
+            <li>CRUD для магазинов и типов устройств, экспорт статистики, история по
+            конкретному ПК, пилотный режим в UI, шаблоны типовых сообщений, просмотр логов
+            прямо из панели — пока нет отдельных экранов.</li>
+            <li>Сборка <code>.exe</code> клиента и групповая раскатка — не реализованы.</li>
+            <li>Удалённое администрирование — весь раздел впереди, отдельным этапом.</li>
+        </ul>
+        <p>Актуальный чек-лист статуса — всегда в <a href="README.md">README.md</a>.</p>
+    </div>
+</main>
+</body>
+</html>
