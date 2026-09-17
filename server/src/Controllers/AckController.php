@@ -11,6 +11,7 @@ class AckController
     {
         $pc = Auth::authenticatePc();
         if (!$pc) {
+            Logger::warning('POST /occurrences/' . $occurrenceId . '/ack: неверный или отсутствующий agent_token');
             http_response_code(401);
             echo json_encode(array('error' => 'invalid_token'));
             return;
@@ -21,6 +22,7 @@ class AckController
         $stmt = Db::get()->prepare('SELECT id FROM notification_occurrences WHERE id = :id');
         $stmt->execute(array('id' => $occurrenceId));
         if (!$stmt->fetch()) {
+            Logger::warning('POST /occurrences/' . $occurrenceId . '/ack: occurrence не найден (pc_id=' . $pc['id'] . ')');
             http_response_code(404);
             echo json_encode(array('error' => 'occurrence_not_found'));
             return;
@@ -45,6 +47,7 @@ class AckController
         $check = Db::get()->prepare($checkSql);
         $check->execute($checkParams);
         if (!$check->fetch()) {
+            Logger::warning('POST /occurrences/' . $occurrenceId . '/ack: occurrence не таргетирован на pc_id=' . $pc['id']);
             http_response_code(403);
             echo json_encode(array('error' => 'occurrence_not_targeted'));
             return;
@@ -67,6 +70,8 @@ class AckController
             'pc_id'         => $pc['id'],
             'reacted'       => $reacted,
         ));
+
+        Logger::info('Ack: occurrence_id=' . $occurrenceId . ' pc_id=' . $pc['id'] . ' reacted=' . ($reacted ? '1' : '0'));
 
         echo json_encode(array('status' => 'ok'));
     }

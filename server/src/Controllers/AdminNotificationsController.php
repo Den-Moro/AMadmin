@@ -79,6 +79,7 @@ class AdminNotificationsController
         // Без этой проверки оповещение с опечаткой в id осталось бы "висеть", ни на кого не
         // таргетированным, без единой явной ошибки при создании.
         if ($targetType !== 'all' && !self::targetExists($targetType, $targetId)) {
+            Logger::warning("Создание оповещения: target {$targetType}:{$targetId} не найден (автор='{$_SESSION['admin_username']}')");
             http_response_code(400);
             echo json_encode(array('error' => 'target_not_found'));
             return;
@@ -118,6 +119,11 @@ class AdminNotificationsController
             $db->rollBack();
             throw $e;
         }
+
+        Logger::info(
+            "Оповещение создано: id={$notificationId} автор='{$_SESSION['admin_username']}' " .
+            "таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " priority={$priority}"
+        );
 
         echo json_encode(array('status' => 'ok', 'notification_id' => $notificationId, 'occurrence_id' => $occurrenceId));
     }

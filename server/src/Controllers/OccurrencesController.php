@@ -10,6 +10,7 @@ class OccurrencesController
     {
         $pc = Auth::authenticatePc();
         if (!$pc) {
+            Logger::warning('GET /occurrences: неверный или отсутствующий agent_token');
             http_response_code(401);
             echo json_encode(array('error' => 'invalid_token'));
             return;
@@ -45,7 +46,10 @@ class OccurrencesController
 
         $stmt = Db::get()->prepare($sql);
         $stmt->execute($params);
+        $rows = $stmt->fetchAll();
 
-        echo json_encode($stmt->fetchAll());
+        Logger::debug('GET /occurrences: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
+
+        echo json_encode($rows);
     }
 }

@@ -1,16 +1,41 @@
-﻿# Логирование агента в файл с простой ротацией (один .old-бэкап при превышении размера) —
-# без этого дебаг на удалённых кассах, куда нет быстрого доступа, будет почти невозможен.
+﻿# Логирование агента в файл с уровнями (Debug/Info/Warning/Error) и простой ротацией
+# (один .old-бэкап при превышении размера). Минимальный уровень настраивается через
+# config.json (log_level) — см. Set-AgentLogLevel, вызывается один раз при старте.
+# По умолчанию — Debug: пока приложение в бете, лучше больше сигнала в логах, чем
+# меньше, когда баги ещё ловятся на реальных кассах, а не в проде.
+
+$script:AgentLogLevels = @{ Debug = 10; Info = 20; Warning = 30; Error = 40 }
+$script:AgentMinLogLevel = 'Debug'
+
+function Set-AgentLogLevel {
+    param(
+        [Parameter(Mandatory)] [string] $Level
+    )
+
+    $normalized = (Get-Culture).TextInfo.ToTitleCase($Level.ToLower())
+    if (-not $script:AgentLogLevels.ContainsKey($normalized)) {
+        $normalized = 'Debug'
+    }
+
+    $script:AgentMinLogLevel = $normalized
+}
+
 function Write-AgentLog {
     param(
         [Parameter(Mandatory)] [string] $Message,
+        [ValidateSet('Debug', 'Info', 'Warning', 'Error')] [string] $Level = 'Info',
         [string] $Path = (Join-Path $PSScriptRoot "..\ui-agent.log"),
         [int] $MaxBytes = 1MB
     )
+
+    if ($script:AgentLogLevels[$Level] -lt $script:AgentLogLevels[$script:AgentMinLogLevel]) {
+        return
+    }
 
     if ((Test-Path $Path) -and (Get-Item $Path).Length -gt $MaxBytes) {
         Move-Item -Path $Path -Destination "$Path.old" -Force
     }
 
-    $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
+    $line = "[{0}] [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level.ToUpper(), $Message
     Add-Content -Path $Path -Value $line
 }

@@ -69,25 +69,34 @@ function Show-NotificationWindow {
     $timer.Stop()
 }
 
-Write-AgentLog "UiAgent запущен"
-
 $config = Get-AgentConfig
+
+# По умолчанию Debug, пока приложение в бете — больше сигнала в логах лучше, чем меньше,
+# когда баги ещё ловятся на реальных кассах, а не после стабилизации на проде.
+$logLevel = if ($config.log_level) { $config.log_level } else { 'Debug' }
+Set-AgentLogLevel -Level $logLevel
+
+Write-AgentLog "UiAgent запущен (log_level=$logLevel, poll_interval=$($config.poll_interval_seconds)s)" -Level Info
 
 while ($true) {
     try {
+        Write-AgentLog "Опрос сервера: $($config.server_url)/occurrences" -Level Debug
+
         # @(...) здесь обязателен, а не для красоты: без него при ровно одном оповещении
         # $occurrences станет не массивом, а одним объектом (см. пояснение в ApiClient.ps1) —
         # foreach это переживёт и так, но .Count/индексация ниже сломались бы молча.
         $occurrences = @(Get-Occurrences -ServerUrl $config.server_url -Token $config.agent_token)
 
+        Write-AgentLog "Получено оповещений: $($occurrences.Count)" -Level Debug
+
         foreach ($occurrence in $occurrences) {
-            Write-AgentLog "Показ оповещения occurrence_id=$($occurrence.occurrence_id)"
+            Write-AgentLog "Показ оповещения occurrence_id=$($occurrence.occurrence_id)" -Level Info
             Show-NotificationWindow -Occurrence $occurrence
             Send-Ack -ServerUrl $config.server_url -Token $config.agent_token -OccurrenceId $occurrence.occurrence_id
-            Write-AgentLog "Ack отправлен occurrence_id=$($occurrence.occurrence_id)"
+            Write-AgentLog "Ack отправлен occurrence_id=$($occurrence.occurrence_id)" -Level Info
         }
     } catch {
-        Write-AgentLog "ERROR: $($_.Exception.Message)"
+        Write-AgentLog "$($_.Exception.Message)" -Level Error
     }
 
     Start-Sleep -Seconds $config.poll_interval_seconds

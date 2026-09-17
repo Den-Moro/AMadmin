@@ -6,4 +6,7 @@ return array(
     'db' => array(
         'path' => __DIR__ . '/data/amadmin.sqlite',
     ),
+    // debug|info|warning|error. Пока приложение в бете — держим debug: понизить до info
+    // имеет смысл только после стабилизации на проде, не раньше.
+    'log_level' => 'debug',
 );

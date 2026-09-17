@@ -18,7 +18,7 @@ require __DIR__ . '/../src/Controllers/AdminNotificationsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-Logger::log($_SERVER['REQUEST_METHOD'] . ' ' . $_SERVER['REQUEST_URI']);
+Logger::debug($_SERVER['REQUEST_METHOD'] . ' ' . $_SERVER['REQUEST_URI']);
 
 $router = new Router();
 
@@ -41,7 +41,7 @@ try {
     $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 } catch (Exception $e) {
     // Ловим тут же, не даём PHP напечатать сырой стектрейс с путями сервера наружу.
-    Logger::log('ERROR: ' . $e->getMessage());
+    Logger::error($e->getMessage());
     http_response_code(500);
     echo json_encode(array('error' => 'internal_error'));
 }
