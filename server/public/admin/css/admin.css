@@ -1,0 +1,223 @@
+:root {
+    --bg: #f4f5f7;
+    --card-bg: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #d8dbe0;
+    --primary: #2563eb;
+    --danger: #dc2626;
+    --success: #16a34a;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 12px 24px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.topbar .brand {
+    font-weight: 700;
+}
+
+.topbar nav {
+    display: flex;
+    gap: 16px;
+    flex: 1;
+}
+
+.topbar nav a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.topbar nav a.active,
+.topbar nav a:hover {
+    color: var(--text);
+}
+
+.topbar button {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    cursor: pointer;
+}
+
+main {
+    max-width: 960px;
+    margin: 24px auto;
+    padding: 0 16px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card-bg);
+}
+
+th,
+td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+
+th {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.badge {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.badge-online {
+    background: #dcfce7;
+    color: var(--success);
+}
+
+.badge-offline {
+    background: #fee2e2;
+    color: var(--danger);
+}
+
+.filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.filters input,
+.filters select {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.card label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.card input,
+.card select,
+.card textarea {
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font: inherit;
+    color: var(--text);
+}
+
+.card .row {
+    display: flex;
+    gap: 16px;
+}
+
+.card .row label {
+    flex: 1;
+}
+
+.card button {
+    align-self: flex-start;
+    padding: 8px 16px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.error {
+    color: var(--danger);
+    font-size: 14px;
+    margin: 0;
+}
+
+.success {
+    color: var(--success);
+    font-size: 14px;
+    margin: 0;
+}
+
+.login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+.login-form {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.login-form h1 {
+    margin: 0 0 8px;
+    font-size: 20px;
+}
+
+.login-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.login-form input {
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.login-form button {
+    padding: 8px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.muted {
+    color: var(--muted);
+    font-size: 12px;
+}

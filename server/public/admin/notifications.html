@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Оповещения — AMadmin</title>
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">AMadmin</div>
+    <nav>
+        <a href="index.html">Дашборд</a>
+        <a href="notifications.html" class="active">Оповещения</a>
+    </nav>
+    <button id="logoutBtn">Выйти</button>
+</header>
+
+<main>
+    <h1>Новое оповещение</h1>
+    <form id="createForm" class="card">
+        <label>Текст
+            <textarea id="text" rows="3" required></textarea>
+        </label>
+
+        <div class="row">
+            <label>Важность
+                <select id="priority">
+                    <option value="normal">Неважное</option>
+                    <option value="important">Важное</option>
+                </select>
+            </label>
+            <label>Размер окна
+                <select id="size">
+                    <option value="small">Маленькое</option>
+                    <option value="medium" selected>Среднее</option>
+                    <option value="large">Крупное</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="row">
+            <label>Кому
+                <select id="targetType">
+                    <option value="all">Всем</option>
+                    <option value="store">Магазину</option>
+                    <option value="group">Группе хостов</option>
+                    <option value="device_type">Типу устройства</option>
+                    <option value="pc">Конкретному ПК</option>
+                </select>
+            </label>
+            <label id="targetIdWrap" style="display:none">Кто именно
+                <select id="targetId"></select>
+            </label>
+        </div>
+
+        <label>Ссылка/текст мануала (необязательно)
+            <input type="text" id="manualUrl">
+        </label>
+
+        <button type="submit">Отправить</button>
+        <p id="error" class="error"></p>
+        <p id="success" class="success"></p>
+    </form>
+
+    <h1>История оповещений</h1>
+    <table id="notificationsTable">
+        <thead>
+            <tr>
+                <th>Когда создано</th>
+                <th>Текст</th>
+                <th>Важность</th>
+                <th>Показов</th>
+                <th>Подтверждений</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/notifications.js"></script>
+</body>
+</html>

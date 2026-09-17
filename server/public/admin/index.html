@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Дашборд — AMadmin</title>
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">AMadmin</div>
+    <nav>
+        <a href="index.html" class="active">Дашборд</a>
+        <a href="notifications.html">Оповещения</a>
+    </nav>
+    <button id="logoutBtn">Выйти</button>
+</header>
+
+<main>
+    <h1>ПК магазинов</h1>
+    <div class="filters">
+        <input type="text" id="search" placeholder="Поиск: hostname, пользователь, магазин…">
+        <select id="storeFilter"><option value="">Все магазины</option></select>
+        <select id="deviceTypeFilter"><option value="">Все типы устройств</option></select>
+    </div>
+    <table id="pcsTable">
+        <thead>
+            <tr>
+                <th>Статус</th>
+                <th>Магазин</th>
+                <th>Хост \ Пользователь</th>
+                <th>Тип устройства</th>
+                <th>Версия агента</th>
+                <th>Последний раз на связи</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>

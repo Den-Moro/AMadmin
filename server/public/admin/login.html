@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Вход — AMadmin</title>
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="login-page">
+<form id="loginForm" class="login-form">
+    <h1>AMadmin</h1>
+    <label>Логин
+        <input type="text" id="username" autocomplete="username" required>
+    </label>
+    <label>Пароль
+        <input type="password" id="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit">Войти</button>
+    <p id="error" class="error"></p>
+</form>
+<script src="js/api.js"></script>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('error');
+    errorEl.textContent = '';
+
+    try {
+        await Api.post('/admin/login', { username: username, password: password });
+        window.location.href = 'index.html';
+    } catch (err) {
+        if (err.status === 423) {
+            errorEl.textContent = 'Слишком много неудачных попыток — вход временно заблокирован.';
+        } else {
+            errorEl.textContent = 'Неверный логин или пароль.';
+        }
+    }
+});
+</script>
+</body>
+</html>
