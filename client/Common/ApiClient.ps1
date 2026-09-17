@@ -11,10 +11,14 @@ function Get-Occurrences {
     $headers = @{ Authorization = "Bearer $Token" }
 
     # GET ничего не отправляет в теле — сервер сам понимает "кто спрашивает" по токену
-    # и возвращает JSON-массив оповещений. Оборачиваем в @(...): если сервер вернёт ровно
-    # один элемент, PowerShell без этого отдаст не массив, а один объект, и foreach ниже
-    # по коду обработал бы не список оповещений, а его отдельные поля.
-    return @(Invoke-RestMethod -Uri "$ServerUrl/occurrences" -Method Get -Headers $headers)
+    # и возвращает JSON-массив оповещений.
+    #
+    # Обёртка @(...) здесь бесполезна: ConvertFrom-Json превращает пустой ответ "[]" в
+    # $null, а ответ из одного элемента — в единственный объект (не массив), и оборачивание
+    # ВНУТРИ функции это не переживает — PowerShell всё равно разворачивает массив обратно
+    # при возврате из функции (проверено). Гарантировать настоящий массив можно только
+    # оборачиванием на месте ВЫЗОВА: см. $occurrences = @(Get-Occurrences ...) в UiAgent.ps1.
+    return Invoke-RestMethod -Uri "$ServerUrl/occurrences" -Method Get -Headers $headers
 }
 
 function Send-Ack {

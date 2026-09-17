@@ -75,7 +75,10 @@ $config = Get-AgentConfig
 
 while ($true) {
     try {
-        $occurrences = Get-Occurrences -ServerUrl $config.server_url -Token $config.agent_token
+        # @(...) здесь обязателен, а не для красоты: без него при ровно одном оповещении
+        # $occurrences станет не массивом, а одним объектом (см. пояснение в ApiClient.ps1) —
+        # foreach это переживёт и так, но .Count/индексация ниже сломались бы молча.
+        $occurrences = @(Get-Occurrences -ServerUrl $config.server_url -Token $config.agent_token)
 
         foreach ($occurrence in $occurrences) {
             Write-AgentLog "Показ оповещения occurrence_id=$($occurrence.occurrence_id)"

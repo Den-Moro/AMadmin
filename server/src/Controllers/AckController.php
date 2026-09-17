@@ -53,10 +53,14 @@ class AckController
         $body = json_decode(file_get_contents('php://input'), true);
         $reacted = (!empty($body['reacted'])) ? 1 : null;
 
+        // ON CONFLICT — диалект SQLite для upsert (аналог MySQL-ного ON DUPLICATE KEY
+        // UPDATE), опирается на UNIQUE(occurrence_id, pc_id) из схемы.
         $upsert = Db::get()->prepare('
             INSERT INTO notification_acks (occurrence_id, pc_id, acked_at, reacted)
-            VALUES (:occurrence_id, :pc_id, NOW(), :reacted)
-            ON DUPLICATE KEY UPDATE acked_at = NOW(), reacted = VALUES(reacted)
+            VALUES (:occurrence_id, :pc_id, CURRENT_TIMESTAMP, :reacted)
+            ON CONFLICT (occurrence_id, pc_id) DO UPDATE SET
+                acked_at = CURRENT_TIMESTAMP,
+                reacted = excluded.reacted
         ');
         $upsert->execute(array(
             'occurrence_id' => $occurrenceId,

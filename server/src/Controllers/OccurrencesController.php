@@ -16,7 +16,7 @@ class OccurrencesController
         }
 
         // Одновременно и heartbeat: last_seen обновляется на каждом опросе.
-        $update = Db::get()->prepare('UPDATE pcs SET last_seen = NOW() WHERE id = :id');
+        $update = Db::get()->prepare('UPDATE pcs SET last_seen = CURRENT_TIMESTAMP WHERE id = :id');
         $update->execute(array('id' => $pc['id']));
 
         $sql = "
@@ -32,7 +32,7 @@ class OccurrencesController
             JOIN notification_targets t ON t.notification_id = n.id
             " . TargetMatcher::JOIN . "
             LEFT JOIN notification_acks a ON a.occurrence_id = o.id AND a.pc_id = :ack_pc_id
-            WHERE o.fire_at <= NOW()
+            WHERE o.fire_at <= CURRENT_TIMESTAMP
               AND a.id IS NULL
               AND " . TargetMatcher::CONDITION . "
             ORDER BY (n.priority = 'important') DESC, o.fire_at ASC
