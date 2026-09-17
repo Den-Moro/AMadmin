@@ -8,7 +8,7 @@
 
 - [x] Схема БД (`server/migrations/001_init.sql`)
 - [x] `GET /occurrences`, `POST /occurrences/{id}/ack`
-- [ ] PowerShell-клиент
+- [x] PowerShell-клиент (MVP: опрос, WPF-окно, ack — без трея/мануалов/брендинга)
 - [ ] Админ-панель
 - [ ] Удалённое администрирование
 
@@ -30,6 +30,17 @@
 4. Проверка (токен из `dev-seed.sql`):
    ```
    curl -H "Authorization: Bearer <agent_token>" http://localhost:8000/occurrences
+   ```
+
+## Быстрый старт (клиент)
+
+1. Скопировать конфиг и указать адрес сервера и токен тестового ПК из `dev-seed.sql`:
+   ```
+   cp client/config.example.json client/config.json
+   ```
+2. Запустить (в обычной сессии пользователя, не от имени администратора/SYSTEM):
+   ```
+   powershell -File client/UiAgent/UiAgent.ps1
    ```
 
 ## Структура
