@@ -14,11 +14,49 @@
         <a href="/admin/groups/groups.html">Группы</a>
         <a href="/admin/manuals/manuals.html">Мануалы</a>
         <a href="/admin/commands/commands.html">Команды</a>
+        <a href="/admin/settings/settings.html">Настройки</a>
     </nav>
+    <span id="roleLabel" class="muted" style="margin-right:12px"></span>
     <button id="logoutBtn">Выйти</button>
 </header>
 
 <main>
+    <h1>Новый ПК</h1>
+    <p class="muted">
+        Заводит запись о кассе/ПК и сразу выдаёт токен для клиента — ничего руками в базе
+        править не нужно.
+    </p>
+    <form id="createPcForm" class="card">
+        <div class="row">
+            <label>Магазин
+                <select id="pcStoreId" required></select>
+            </label>
+            <label>Тип устройства
+                <select id="pcDeviceTypeId" required></select>
+            </label>
+        </div>
+        <div class="row">
+            <label>Hostname
+                <input type="text" id="pcHostname" placeholder="например, KASSA-05" required>
+            </label>
+            <label>Понятное имя (необязательно)
+                <input type="text" id="pcDisplayName" placeholder="например, Касса 5">
+            </label>
+        </div>
+        <button type="submit">Создать</button>
+        <p id="createPcError" class="error"></p>
+    </form>
+
+    <div id="newPcConfig" class="card" style="display:none">
+        <h2>Готовый конфиг для нового ПК</h2>
+        <p class="muted">
+            Скопируйте это содержимое в <code>client/config.json</code> на новом ПК —
+            больше ничего вписывать не нужно.
+        </p>
+        <textarea id="newPcConfigText" rows="8" readonly style="width:100%; font-family: ui-monospace, Consolas, monospace; font-size: 13px;"></textarea>
+        <button type="button" id="copyConfigBtn">Скопировать</button>
+    </div>
+
     <h1>ПК магазинов</h1>
     <div class="filters">
         <input type="text" id="search" placeholder="Поиск: hostname, пользователь, магазин…">
@@ -34,6 +72,7 @@
                 <th>Тип устройства</th>
                 <th>Версия агента</th>
                 <th>Последний раз на связи</th>
+                <th></th>
             </tr>
         </thead>
         <tbody></tbody>

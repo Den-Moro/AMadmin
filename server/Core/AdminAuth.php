@@ -16,6 +16,20 @@ class AdminAuth
         }
     }
 
+    // Как requireLogin(), но ещё и проверяет роль — для самых рискованных действий
+    // (например, отправка команд удалённого администрирования). $allowedRoles — список
+    // ролей, которым это разрешено, например array('administrator', 'superadmin').
+    public static function requireRole($allowedRoles)
+    {
+        self::requireLogin();
+
+        if (!in_array($_SESSION['admin_role'], $allowedRoles, true)) {
+            http_response_code(403);
+            echo json_encode(array('error' => 'insufficient_role'));
+            exit;
+        }
+    }
+
     // true — вход выполнен, false — неверный логин/пароль, 'locked' — учётка временно
     // заблокирована из-за подбора.
     public static function attemptLogin($username, $password)
@@ -42,6 +56,7 @@ class AdminAuth
         self::resetAttempts($user['id']);
         $_SESSION['admin_id'] = $user['id'];
         $_SESSION['admin_username'] = $user['username'];
+        $_SESSION['admin_role'] = $user['role'];
 
         return true;
     }

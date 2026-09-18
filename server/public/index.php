@@ -19,6 +19,7 @@ require __DIR__ . '/../Modules/Groups/AdminHostGroupsController.php';
 require __DIR__ . '/../Modules/Manuals/AdminManualsController.php';
 require __DIR__ . '/../Modules/Commands/CommandsController.php';
 require __DIR__ . '/../Modules/Commands/AdminCommandsController.php';
+require __DIR__ . '/../Modules/Settings/AdminSettingsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -38,6 +39,7 @@ $router->post('/admin/login', array('AdminAuthController', 'login'));
 $router->post('/admin/logout', array('AdminAuthController', 'logout'));
 $router->get('/admin/me', array('AdminAuthController', 'me'));
 $router->get('/admin/pcs', array('AdminPcsController', 'index'));
+$router->post('/admin/pcs', array('AdminPcsController', 'store'));
 $router->get('/admin/stores', array('AdminMetaController', 'stores'));
 $router->get('/admin/device-types', array('AdminMetaController', 'deviceTypes'));
 $router->get('/admin/notifications', array('AdminNotificationsController', 'index'));
@@ -58,6 +60,9 @@ $router->delete('/admin/manuals/{id}', array('AdminManualsController', 'destroy'
 $router->get('/admin/commands', array('AdminCommandsController', 'index'));
 $router->post('/admin/commands', array('AdminCommandsController', 'store'));
 $router->get('/admin/commands/{id}/results', array('AdminCommandsController', 'results'));
+
+$router->get('/admin/settings', array('AdminSettingsController', 'index'));
+$router->put('/admin/settings', array('AdminSettingsController', 'update'));
 
 try {
     $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

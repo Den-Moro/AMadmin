@@ -58,7 +58,9 @@ class AdminCommandsController
     // добавляются по очереди отдельными шагами (см. AGENTS.md, "Порядок работы", п.7).
     public static function store()
     {
-        AdminAuth::requireLogin();
+        // Самое рискованное действие в панели — удалённое выполнение команд на кассах —
+        // требует роль administrator/superadmin, обычному operator недоступно.
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         $body = json_decode(file_get_contents('php://input'), true);
         $type = isset($body['type']) ? $body['type'] : '';

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Настройки — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">AMadmin</div>
+    <nav>
+        <a href="/admin/index.html">Дашборд</a>
+        <a href="/admin/notifications/notifications.html">Оповещения</a>
+        <a href="/admin/groups/groups.html">Группы</a>
+        <a href="/admin/manuals/manuals.html">Мануалы</a>
+        <a href="/admin/commands/commands.html">Команды</a>
+        <a href="/admin/settings/settings.html" class="active">Настройки</a>
+    </nav>
+    <button id="logoutBtn">Выйти</button>
+</header>
+
+<main>
+    <h1>Настройки по умолчанию</h1>
+    <p class="muted">
+        Применяются к новым оповещениям, если не переопределены при создании конкретного
+        оповещения.
+    </p>
+    <form id="settingsForm" class="card">
+        <label>Режим показа неважных оповещений
+            <select id="force_mode_default">
+                <option value="soft">Soft — мягкое окно в углу, не мешает работе</option>
+                <option value="strict">Strict — тоже принудительное, как важные</option>
+            </select>
+        </label>
+
+        <label>
+            <input type="checkbox" id="catchup_missed_default">
+            Догонять пропущенные важные оповещения при следующем выходе ПК на связь
+        </label>
+
+        <label>Секунд до активации кнопки закрытия
+            <input type="number" id="close_delay_seconds" min="0" max="300">
+        </label>
+
+        <label>Размер окна оповещения по умолчанию
+            <select id="window_size_default">
+                <option value="small">Маленькое</option>
+                <option value="medium">Среднее</option>
+                <option value="large">Крупное</option>
+            </select>
+        </label>
+
+        <label>Название IT-компании (показывается кассиру в окне)
+            <input type="text" id="brand_name" placeholder="например, ООО «Рога и копыта IT»">
+        </label>
+
+        <label>Контакт для связи (показывается там же)
+            <input type="text" id="brand_contact" placeholder="например, +7 900 000-00-00">
+        </label>
+
+        <button type="submit">Сохранить</button>
+        <p id="error" class="error"></p>
+        <p id="success" class="success"></p>
+    </form>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>

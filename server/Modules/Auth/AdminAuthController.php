@@ -17,8 +17,8 @@ class AdminAuthController
         $result = AdminAuth::attemptLogin($username, $password);
 
         if ($result === true) {
-            Logger::info("Вход в админ-панель: '{$username}' успешно");
-            echo json_encode(array('status' => 'ok', 'username' => $_SESSION['admin_username']));
+            Logger::info("Вход в админ-панель: '{$username}' успешно (роль={$_SESSION['admin_role']})");
+            echo json_encode(array('status' => 'ok', 'username' => $_SESSION['admin_username'], 'role' => $_SESSION['admin_role']));
             return;
         }
 
@@ -47,6 +47,6 @@ class AdminAuthController
     public static function me()
     {
         AdminAuth::requireLogin();
-        echo json_encode(array('username' => $_SESSION['admin_username']));
+        echo json_encode(array('username' => $_SESSION['admin_username'], 'role' => $_SESSION['admin_role']));
     }
 }
