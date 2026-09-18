@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Удалённое администрирование — AMadmin</title>
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">AMadmin</div>
+    <nav>
+        <a href="index.html">Дашборд</a>
+        <a href="notifications.html">Оповещения</a>
+        <a href="groups.html">Группы</a>
+        <a href="manuals.html">Мануалы</a>
+        <a href="commands.html" class="active">Команды</a>
+    </nav>
+    <button id="logoutBtn">Выйти</button>
+</header>
+
+<main>
+    <h1>Новая команда: управление службой</h1>
+    <p class="muted">
+        Пока доступно только управление службами Windows. Диспетчер задач, файлы и запуск
+        скриптов — следующие шаги.
+    </p>
+    <form id="createForm" class="card">
+        <div class="row">
+            <label>Имя службы
+                <input type="text" id="serviceName" placeholder="например, Spooler" required>
+            </label>
+            <label>Действие
+                <select id="action">
+                    <option value="restart">Перезапустить</option>
+                    <option value="start">Запустить</option>
+                    <option value="stop">Остановить</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="row">
+            <label>Кому
+                <select id="targetType">
+                    <option value="all">Всем</option>
+                    <option value="store">Магазину</option>
+                    <option value="group">Группе хостов</option>
+                    <option value="device_type">Типу устройства</option>
+                    <option value="pc">Конкретному ПК</option>
+                </select>
+            </label>
+            <label id="targetIdWrap" style="display:none">Кто именно
+                <select id="targetId"></select>
+            </label>
+        </div>
+
+        <button type="submit">Отправить команду</button>
+        <p id="error" class="error"></p>
+        <p id="success" class="success"></p>
+    </form>
+
+    <h1>Последние команды</h1>
+    <table id="commandsTable">
+        <thead>
+            <tr>
+                <th>Когда</th>
+                <th>Команда</th>
+                <th>Кому</th>
+                <th>В процессе</th>
+                <th>Успех</th>
+                <th>Ошибка</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div id="detail" class="card" style="display:none">
+        <h2 id="detailTitle"></h2>
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th>Магазин</th>
+                    <th>Хост</th>
+                    <th>Статус</th>
+                    <th>Результат</th>
+                    <th>Застолблено</th>
+                    <th>Выполнено</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/commands.js"></script>
+</body>
+</html>

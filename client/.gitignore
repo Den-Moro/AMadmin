@@ -1,2 +1,4 @@
 config.json
 *.exe
+*.log
+*.log.old

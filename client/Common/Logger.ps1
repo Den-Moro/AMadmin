@@ -7,6 +7,12 @@
 $script:AgentLogLevels = @{ Debug = 10; Info = 20; Warning = 30; Error = 40 }
 $script:AgentMinLogLevel = 'Debug'
 
+# UiAgent.ps1 и ManagementAgent.ps1 — два разных процесса на одном ПК (см. AGENTS.md,
+# "два агента, не один"), у каждого свой лог-файл. Путь по умолчанию ниже завязан на
+# расположение самого Logger.ps1 (Common/), а не вызывающего скрипта — без явного
+# Set-AgentLogPath оба агента писали бы в один и тот же ui-agent.log.
+$script:AgentLogPath = Join-Path $PSScriptRoot "..\ui-agent.log"
+
 function Set-AgentLogLevel {
     param(
         [Parameter(Mandatory)] [string] $Level
@@ -20,11 +26,19 @@ function Set-AgentLogLevel {
     $script:AgentMinLogLevel = $normalized
 }
 
+function Set-AgentLogPath {
+    param(
+        [Parameter(Mandatory)] [string] $Path
+    )
+
+    $script:AgentLogPath = $Path
+}
+
 function Write-AgentLog {
     param(
         [Parameter(Mandatory)] [string] $Message,
         [ValidateSet('Debug', 'Info', 'Warning', 'Error')] [string] $Level = 'Info',
-        [string] $Path = (Join-Path $PSScriptRoot "..\ui-agent.log"),
+        [string] $Path = $script:AgentLogPath,
         [int] $MaxBytes = 1MB
     )
 

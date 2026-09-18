@@ -37,3 +37,43 @@ function Send-Ack {
 
     Invoke-RestMethod -Uri "$ServerUrl/occurrences/$OccurrenceId/ack" -Method Post -Headers $headers -Body $body -ContentType "application/json"
 }
+
+# Ниже — то же самое, но для агента управления (ManagementAgent.ps1): GET /commands,
+# "застолбить" перед выполнением, отправить результат. Тот же agent_token, что и у
+# UiAgent — токен привязан к ПК, а не к конкретному процессу на нём.
+
+function Get-Commands {
+    param(
+        [Parameter(Mandatory)] [string] $ServerUrl,
+        [Parameter(Mandatory)] [string] $Token
+    )
+
+    $headers = @{ Authorization = "Bearer $Token" }
+    return Invoke-RestMethod -Uri "$ServerUrl/commands" -Method Get -Headers $headers
+}
+
+function Invoke-CommandClaim {
+    param(
+        [Parameter(Mandatory)] [string] $ServerUrl,
+        [Parameter(Mandatory)] [string] $Token,
+        [Parameter(Mandatory)] [int] $CommandId
+    )
+
+    $headers = @{ Authorization = "Bearer $Token" }
+    return Invoke-RestMethod -Uri "$ServerUrl/commands/$CommandId/claim" -Method Post -Headers $headers
+}
+
+function Send-CommandResult {
+    param(
+        [Parameter(Mandatory)] [string] $ServerUrl,
+        [Parameter(Mandatory)] [string] $Token,
+        [Parameter(Mandatory)] [int] $CommandId,
+        [Parameter(Mandatory)] [string] $Status,
+        [string] $Output = ""
+    )
+
+    $headers = @{ Authorization = "Bearer $Token" }
+    $body = @{ status = $Status; output = $Output } | ConvertTo-Json
+
+    Invoke-RestMethod -Uri "$ServerUrl/commands/$CommandId/result" -Method Post -Headers $headers -Body $body -ContentType "application/json"
+}

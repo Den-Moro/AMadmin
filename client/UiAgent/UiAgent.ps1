@@ -71,6 +71,8 @@ function Show-NotificationWindow {
 
 $config = Get-AgentConfig
 
+Set-AgentLogPath -Path (Join-Path $scriptDir "..\ui-agent.log")
+
 # По умолчанию Debug, пока приложение в бете — больше сигнала в логах лучше, чем меньше,
 # когда баги ещё ловятся на реальных кассах, а не после стабилизации на проде.
 $logLevel = if ($config.log_level) { $config.log_level } else { 'Debug' }

@@ -17,6 +17,8 @@ require __DIR__ . '/../src/Controllers/AdminMetaController.php';
 require __DIR__ . '/../src/Controllers/AdminNotificationsController.php';
 require __DIR__ . '/../src/Controllers/AdminHostGroupsController.php';
 require __DIR__ . '/../src/Controllers/AdminManualsController.php';
+require __DIR__ . '/../src/Controllers/CommandsController.php';
+require __DIR__ . '/../src/Controllers/AdminCommandsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -27,6 +29,9 @@ $router = new Router();
 // Агенты (токен в заголовке, не сессия)
 $router->get('/occurrences', array('OccurrencesController', 'index'));
 $router->post('/occurrences/{id}/ack', array('AckController', 'store'));
+$router->get('/commands', array('CommandsController', 'index'));
+$router->post('/commands/{id}/claim', array('CommandsController', 'claim'));
+$router->post('/commands/{id}/result', array('CommandsController', 'result'));
 
 // Админ-панель (сессия, см. AdminAuth)
 $router->post('/admin/login', array('AdminAuthController', 'login'));
@@ -49,6 +54,10 @@ $router->get('/admin/manuals', array('AdminManualsController', 'index'));
 $router->post('/admin/manuals', array('AdminManualsController', 'store'));
 $router->put('/admin/manuals/{id}', array('AdminManualsController', 'update'));
 $router->delete('/admin/manuals/{id}', array('AdminManualsController', 'destroy'));
+
+$router->get('/admin/commands', array('AdminCommandsController', 'index'));
+$router->post('/admin/commands', array('AdminCommandsController', 'store'));
+$router->get('/admin/commands/{id}/results', array('AdminCommandsController', 'results'));
 
 try {
     $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
