@@ -6,14 +6,41 @@
         window.location.href = '/admin/login.html';
     });
 
+    // Все поля настроек: имя ключа в базе -> тип поля. Один список вместо ручного
+    // перечисления в двух местах, чтобы добавление новой настройки не требовало
+    // править загрузку и сохранение по отдельности.
+    const FIELDS = {
+        force_mode_default: 'text',
+        soft_corner: 'text',
+        window_size_default: 'text',
+        max_windows_per_poll: 'text',
+        close_delay_seconds: 'text',
+        close_delay_seconds_important: 'text',
+        confirm_close_required: 'bool',
+        accidental_tap_guard_ms: 'text',
+        catchup_missed_default: 'bool',
+        timezone: 'text',
+        quiet_hours_enabled: 'bool',
+        quiet_hours_from: 'text',
+        quiet_hours_to: 'text',
+        sound_on_important: 'bool',
+        brand_name: 'text',
+        brand_contact: 'text',
+    };
+
     async function loadSettings() {
         const settings = await Api.get('/admin/settings');
-        document.getElementById('force_mode_default').value = settings.force_mode_default;
-        document.getElementById('catchup_missed_default').checked = settings.catchup_missed_default === '1';
-        document.getElementById('close_delay_seconds').value = settings.close_delay_seconds;
-        document.getElementById('window_size_default').value = settings.window_size_default;
-        document.getElementById('brand_name').value = settings.brand_name;
-        document.getElementById('brand_contact').value = settings.brand_contact;
+
+        Object.keys(FIELDS).forEach(function (key) {
+            const el = document.getElementById(key);
+            if (!el || settings[key] === undefined) return;
+
+            if (FIELDS[key] === 'bool') {
+                el.checked = settings[key] === '1';
+            } else {
+                el.value = settings[key];
+            }
+        });
     }
 
     document.getElementById('settingsForm').addEventListener('submit', async function (e) {
@@ -23,18 +50,16 @@
         errorEl.textContent = '';
         successEl.textContent = '';
 
-        const body = {
-            force_mode_default: document.getElementById('force_mode_default').value,
-            catchup_missed_default: document.getElementById('catchup_missed_default').checked ? '1' : '0',
-            close_delay_seconds: document.getElementById('close_delay_seconds').value,
-            window_size_default: document.getElementById('window_size_default').value,
-            brand_name: document.getElementById('brand_name').value,
-            brand_contact: document.getElementById('brand_contact').value,
-        };
+        const body = {};
+        Object.keys(FIELDS).forEach(function (key) {
+            const el = document.getElementById(key);
+            if (!el) return;
+            body[key] = FIELDS[key] === 'bool' ? (el.checked ? '1' : '0') : el.value;
+        });
 
         try {
             await Api.request('PUT', '/admin/settings', body);
-            successEl.textContent = 'Настройки сохранены.';
+            successEl.textContent = 'Настройки сохранены — кассы подхватят их при следующем опросе.';
         } catch (err) {
             errorEl.textContent = 'Не удалось сохранить настройки (нужна роль administrator).';
         }

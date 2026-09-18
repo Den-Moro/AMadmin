@@ -23,17 +23,23 @@
     <h1>Новое оповещение</h1>
     <form id="createForm" class="card">
         <label>Текст
+            <span class="hint">То, что увидит кассир. Пишите просто и по делу: что происходит,
+            как это его касается и что делать. Человек читает это между покупателями.</span>
             <textarea id="text" rows="3" required></textarea>
         </label>
 
         <div class="row">
             <label>Важность
+                <span class="hint">Важное — окно поверх всех программ, закрыть можно только
+                прочитав. Неважное — ведёт себя по настройке из раздела «Настройки»
+                (обычно мягко, в углу).</span>
                 <select id="priority">
                     <option value="normal">Неважное</option>
                     <option value="important">Важное</option>
                 </select>
             </label>
             <label>Размер окна
+                <span class="hint">Крупное заметнее, но сильнее перекрывает экран кассы.</span>
                 <select id="size">
                     <option value="small">Маленькое</option>
                     <option value="medium" selected>Среднее</option>
@@ -44,6 +50,9 @@
 
         <div class="row">
             <label>Кому
+                <span class="hint">Всем — на все ПК сразу. Магазину — только этой точке.
+                Группе — своему набору касс (создаётся в разделе «Группы»). Типу устройства —
+                например, только кассам или только ПК менеджеров.</span>
                 <select id="targetType">
                     <option value="all">Всем</option>
                     <option value="store">Магазину</option>
@@ -53,16 +62,22 @@
                 </select>
             </label>
             <label id="targetIdWrap" style="display:none">Кто именно
+                <span class="hint">Конкретный получатель для выбранного типа.</span>
                 <select id="targetId"></select>
             </label>
         </div>
 
         <label>Мануал из библиотеки (необязательно)
+            <span class="hint">Готовая инструкция из раздела «Мануалы». Её текст подставится
+            в поле ниже — потом его можно поправить под этот конкретный случай.</span>
             <select id="manualPicker">
                 <option value="">— не выбирать —</option>
             </select>
         </label>
         <label>Ссылка/текст мануала (необязательно)
+            <span class="hint">Если заполнено, в окне появится кнопка «Открыть инструкцию», и
+            закрыть окно можно будет только после того, как кассир её откроет. Можно вписать
+            текст шагов или ссылку — ссылка откроется в браузере.</span>
             <textarea id="manualUrl" rows="2"></textarea>
         </label>
 

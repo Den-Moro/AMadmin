@@ -115,7 +115,7 @@
         rows.forEach(function (n) {
             const tr = document.createElement('tr');
             tr.innerHTML =
-                '<td>' + escapeHtml(n.created_at) + '</td>' +
+                '<td>' + escapeHtml(formatServerTime(n.created_at)) + '</td>' +
                 '<td>' + escapeHtml(n.text) + '</td>' +
                 '<td>' + (n.priority === 'important' ? 'Важное' : 'Неважное') + '</td>' +
                 '<td>' + n.occurrences_count + '</td>' +

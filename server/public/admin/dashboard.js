@@ -59,7 +59,7 @@
         if (!value) {
             return 'никогда';
         }
-        return value;
+        return formatServerTime(value);
     }
 
     function escapeHtml(s) {

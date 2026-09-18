@@ -33,7 +33,8 @@ namespace AMadmin.UiAgent
         // оповещение закроется непрочитанным. Поэтому первые полсекунды после
         // разблокировки нажатия не засчитываем — за это время случайный тап уже пройдёт,
         // а осознанное нажатие человек сделает позже.
-        private static readonly TimeSpan SettleTime = TimeSpan.FromMilliseconds(600);
+        private readonly TimeSpan _settleTime;
+        private readonly bool _confirmRequired;
         private DateTime? _enabledAt;
 
         private bool _confirming;
@@ -51,6 +52,8 @@ namespace AMadmin.UiAgent
 
             MessageText.Text = occurrence.Text;
             _remaining = occurrence.CloseDelaySeconds > 0 ? occurrence.CloseDelaySeconds : 30;
+            _settleTime = TimeSpan.FromMilliseconds(Math.Max(0, occurrence.AccidentalTapGuardMs));
+            _confirmRequired = occurrence.ConfirmCloseRequired;
 
             var important = occurrence.Priority == "important";
             // Важное — всегда принудительно. Неважное — по настройке ForceMode из панели
@@ -91,12 +94,26 @@ namespace AMadmin.UiAgent
             else
             {
                 Topmost = false;
-                // Мягкий режим — в углу, не мешая работе.
+                // Мягкий режим — в углу, не мешая работе. Угол выбирается в настройках,
+                // чтобы окно не садилось поверх рабочих кнопок кассовой программы.
                 WindowStartupLocation = WindowStartupLocation.Manual;
+                Loaded += (s, e) => PlaceInCorner(occurrence.SoftCorner);
+            }
+
+            // Размер окна из настроек/оповещения: крупное заметнее, маленькое меньше мешает.
+            switch (occurrence.Size)
+            {
+                case "small": Width = 380; break;
+                case "large": Width = 680; break;
+                default: Width = 520; break;
+            }
+
+            if (occurrence.PlaySound)
+            {
                 Loaded += (s, e) =>
                 {
-                    Left = SystemParameters.WorkArea.Right - ActualWidth - 16;
-                    Top = SystemParameters.WorkArea.Bottom - ActualHeight - 16;
+                    try { System.Media.SystemSounds.Exclamation.Play(); }
+                    catch (Exception ex) { Logger.Warning("Не удалось воспроизвести звук: " + ex.Message); }
                 };
             }
 
@@ -124,6 +141,32 @@ namespace AMadmin.UiAgent
             };
 
             UpdateCloseButton();
+        }
+
+        private void PlaceInCorner(string corner)
+        {
+            var area = SystemParameters.WorkArea;
+            const double margin = 16;
+
+            switch (corner)
+            {
+                case "bottom-left":
+                    Left = area.Left + margin;
+                    Top = area.Bottom - ActualHeight - margin;
+                    break;
+                case "top-right":
+                    Left = area.Right - ActualWidth - margin;
+                    Top = area.Top + margin;
+                    break;
+                case "top-left":
+                    Left = area.Left + margin;
+                    Top = area.Top + margin;
+                    break;
+                default: // bottom-right
+                    Left = area.Right - ActualWidth - margin;
+                    Top = area.Bottom - ActualHeight - margin;
+                    break;
+            }
         }
 
         // Возврат окна на передний план. AttachThreadInput — стандартный обход правила
@@ -226,7 +269,7 @@ namespace AMadmin.UiAgent
                 return;
             }
 
-            if (_enabledAt != null && DateTime.Now - _enabledAt.Value < SettleTime)
+            if (_enabledAt != null && DateTime.Now - _enabledAt.Value < _settleTime)
             {
                 Logger.Debug("Проигнорирован тап сразу после разблокировки кнопки (защита от случайного касания)");
                 _pressStartedWhileEnabled = false;
@@ -236,7 +279,7 @@ namespace AMadmin.UiAgent
             // Кассы сенсорные: одним случайным касанием закрыть обязательное оповещение
             // нельзя — нужно подтвердить вторым нажатием. Если второго не последовало,
             // кнопка через несколько секунд возвращается в обычное состояние.
-            if (!_confirming)
+            if (_confirmRequired && !_confirming)
             {
                 _confirming = true;
                 CloseButton.Content = "Нажмите ещё раз для подтверждения";

@@ -71,18 +71,81 @@ class OccurrencesController
             $settings[$row['key']] = $row['value'];
         }
 
-        foreach ($rows as &$row) {
+        $quietNow = self::isQuietHours($settings);
+
+        $result = array();
+        foreach ($rows as $row) {
+            $important = $row['priority'] === 'important';
+
+            // Тихие часы глушат только неважные — важные проходят всегда, так требует ТЗ.
+            if (!$important && $quietNow) {
+                continue;
+            }
+
             // Важное — всегда принудительный режим, независимо от настройки.
             // Неважное — по настройке force_mode_default (strict = тоже принудительно).
-            $row['force_mode'] = $row['priority'] === 'important' ? 'strict' : $settings['force_mode_default'];
-            $row['close_delay_seconds'] = (int) $settings['close_delay_seconds'];
+            $row['force_mode'] = $important ? 'strict' : $settings['force_mode_default'];
+
+            $importantDelay = (int) self::setting($settings, 'close_delay_seconds_important', '0');
+            $row['close_delay_seconds'] = $important && $importantDelay > 0
+                ? $importantDelay
+                : (int) $settings['close_delay_seconds'];
+
+            $row['confirm_close_required'] = self::setting($settings, 'confirm_close_required', '1') === '1';
+            $row['accidental_tap_guard_ms'] = (int) self::setting($settings, 'accidental_tap_guard_ms', '600');
+            $row['play_sound'] = $important && self::setting($settings, 'sound_on_important', '1') === '1';
+            $row['soft_corner'] = self::setting($settings, 'soft_corner', 'bottom-right');
             $row['brand_name'] = $settings['brand_name'];
             $row['brand_contact'] = $settings['brand_contact'];
+
+            $result[] = $row;
         }
-        unset($row);
+
+        // Не заваливаем кассира десятком окон разом — остальные придут следующим опросом.
+        $maxWindows = (int) self::setting($settings, 'max_windows_per_poll', '3');
+        if ($maxWindows > 0 && count($result) > $maxWindows) {
+            $result = array_slice($result, 0, $maxWindows);
+        }
+
+        $rows = $result;
 
         Logger::debug('GET /occurrences: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
 
         echo json_encode($rows);
+    }
+
+    private static function setting($settings, $key, $default)
+    {
+        return isset($settings[$key]) && $settings[$key] !== '' ? $settings[$key] : $default;
+    }
+
+    // Тихие часы могут переходить через полночь (например, 22:00–08:00) — тогда интервал
+    // "снаружи" обычного сравнения, поэтому условие другое.
+    //
+    // Время сравниваем в часовом поясе магазинов (настройка timezone), а не в UTC, в
+    // котором живёт сервер: администратор вводит "с 22:00" имея в виду своё местное
+    // время. Без этого перевода тихие часы срабатывали не в то время суток — поймано
+    // на тесте, сервер в Docker шёл по UTC при местном времени UTC+3.
+    private static function isQuietHours($settings)
+    {
+        if (self::setting($settings, 'quiet_hours_enabled', '0') !== '1') {
+            return false;
+        }
+
+        $from = self::setting($settings, 'quiet_hours_from', '22:00');
+        $to = self::setting($settings, 'quiet_hours_to', '08:00');
+
+        try {
+            $tz = new DateTimeZone(self::setting($settings, 'timezone', 'Europe/Moscow'));
+        } catch (Exception $e) {
+            Logger::warning('Неизвестный часовой пояс в настройках, использую UTC: ' . $e->getMessage());
+            $tz = new DateTimeZone('UTC');
+        }
+
+        $now = (new DateTime('now', $tz))->format('H:i');
+
+        return $from <= $to
+            ? ($now >= $from && $now < $to)
+            : ($now >= $from || $now < $to);
     }
 }

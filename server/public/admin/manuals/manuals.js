@@ -25,7 +25,7 @@
             tr.innerHTML =
                 '<td>' + escapeHtml(m.title) + '</td>' +
                 '<td>' + escapeHtml(truncate(m.url_or_text, 60)) + '</td>' +
-                '<td>' + escapeHtml(m.updated_at) + '</td>' +
+                '<td>' + escapeHtml(formatServerTime(m.updated_at)) + '</td>' +
                 '<td>' +
                 '<button type="button" data-edit="' + m.id + '">Редактировать</button> ' +
                 '<button type="button" data-delete="' + m.id + '">Удалить</button>' +

@@ -134,7 +134,7 @@
         rows.forEach(function (c) {
             const tr = document.createElement('tr');
             tr.innerHTML =
-                '<td>' + escapeHtml(c.created_at) + '</td>' +
+                '<td>' + escapeHtml(formatServerTime(c.created_at)) + '</td>' +
                 '<td>' + escapeHtml(describeCommand(c)) + '</td>' +
                 '<td>' + escapeHtml(describeTarget(c)) + '</td>' +
                 '<td>' + c.in_progress_count + '</td>' +
@@ -166,8 +166,8 @@
                 '<td>' + escapeHtml(r.display_name || r.hostname) + '</td>' +
                 '<td>' + escapeHtml(r.status) + '</td>' +
                 '<td>' + escapeHtml(r.output || '—') + '</td>' +
-                '<td>' + escapeHtml(r.claimed_at) + '</td>' +
-                '<td>' + escapeHtml(r.executed_at || '—') + '</td>';
+                '<td>' + escapeHtml(formatServerTime(r.claimed_at)) + '</td>' +
+                '<td>' + escapeHtml(formatServerTime(r.executed_at)) + '</td>';
             tbody.appendChild(tr);
         });
     });

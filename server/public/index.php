@@ -2,6 +2,12 @@
 
 session_start();
 
+// Всё, что пишется в базу, храним в UTC: SQLite CURRENT_TIMESTAMP всегда UTC, и если бы
+// PHP писал время в местной зоне, часть колонок разъехалась бы с другой частью. Местное
+// время появляется только там, где его видит человек: в панели (переводится в браузере)
+// и в тихих часах (переводятся по настройке timezone).
+date_default_timezone_set('UTC');
+
 require __DIR__ . '/../Core/Config.php';
 require __DIR__ . '/../Core/Db.php';
 require __DIR__ . '/../Core/Auth.php';

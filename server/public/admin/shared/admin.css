@@ -130,6 +130,34 @@ th {
     color: var(--muted);
 }
 
+.card h2 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--text);
+}
+
+/* Подсказка под названием настройки: объясняет, зачем эта настройка нужна,
+   чтобы не приходилось лезть в документацию. */
+.hint {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted);
+    font-weight: 400;
+    margin-bottom: 2px;
+}
+
+.card label:has(> input[type="checkbox"]) {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 8px;
+    align-items: start;
+    color: var(--text);
+}
+
+.card label:has(> input[type="checkbox"]) .hint {
+    grid-column: 2;
+}
+
 .card input,
 .card select,
 .card textarea {

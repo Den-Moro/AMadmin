@@ -20,47 +20,155 @@
 </header>
 
 <main>
-    <h1>Настройки по умолчанию</h1>
+    <h1>Настройки оповещений</h1>
     <p class="muted">
-        Применяются к новым оповещениям, если не переопределены при создании конкретного
-        оповещения.
+        Применяются ко всем новым оповещениям. Изменения подхватываются кассами при
+        следующем опросе сервера — переустанавливать агент не нужно.
     </p>
-    <form id="settingsForm" class="card">
-        <label>Режим показа неважных оповещений
-            <select id="force_mode_default">
-                <option value="soft">Soft — мягкое окно в углу, не мешает работе</option>
-                <option value="strict">Strict — тоже принудительное, как важные</option>
-            </select>
-        </label>
 
-        <label>
-            <input type="checkbox" id="catchup_missed_default">
-            Догонять пропущенные важные оповещения при следующем выходе ПК на связь
-        </label>
+    <form id="settingsForm">
+        <div class="card">
+            <h2>Как показывать</h2>
 
-        <label>Секунд до активации кнопки закрытия
-            <input type="number" id="close_delay_seconds" min="0" max="300">
-        </label>
+            <label>Режим показа неважных оповещений
+                <span class="hint">Важные всегда показываются поверх всех окон. Здесь вы решаете,
+                как вести себя обычным: мягко в углу, чтобы не мешать кассиру, или так же
+                настойчиво, как важные.</span>
+                <select id="force_mode_default">
+                    <option value="soft">Мягко — окно в углу, работе не мешает</option>
+                    <option value="strict">Настойчиво — поверх всех окон, как важные</option>
+                </select>
+            </label>
 
-        <label>Размер окна оповещения по умолчанию
-            <select id="window_size_default">
-                <option value="small">Маленькое</option>
-                <option value="medium">Среднее</option>
-                <option value="large">Крупное</option>
-            </select>
-        </label>
+            <label>Угол экрана для мягких оповещений
+                <span class="hint">Куда прилипает окно в мягком режиме. Выбирайте угол, который
+                не перекрывает рабочие кнопки вашей кассовой программы.</span>
+                <select id="soft_corner">
+                    <option value="bottom-right">Правый нижний</option>
+                    <option value="bottom-left">Левый нижний</option>
+                    <option value="top-right">Правый верхний</option>
+                    <option value="top-left">Левый верхний</option>
+                </select>
+            </label>
 
-        <label>Название IT-компании (показывается кассиру в окне)
-            <input type="text" id="brand_name" placeholder="например, ООО «Рога и копыта IT»">
-        </label>
+            <label>Размер окна по умолчанию
+                <span class="hint">Насколько крупным показывать окно. Крупное заметнее, но сильнее
+                перекрывает экран кассы.</span>
+                <select id="window_size_default">
+                    <option value="small">Маленькое</option>
+                    <option value="medium">Среднее</option>
+                    <option value="large">Крупное</option>
+                </select>
+            </label>
 
-        <label>Контакт для связи (показывается там же)
-            <input type="text" id="brand_contact" placeholder="например, +7 900 000-00-00">
-        </label>
+            <label>Максимум окон за один раз
+                <span class="hint">Если накопилось много непрочитанных, кассир получит не все сразу,
+                а по столько за раз. Остальные придут следующим заходом — иначе человек
+                просто закликает подряд всё, не читая.</span>
+                <input type="number" id="max_windows_per_poll" min="1" max="20">
+            </label>
+        </div>
 
-        <button type="submit">Сохранить</button>
-        <p id="error" class="error"></p>
-        <p id="success" class="success"></p>
+        <div class="card">
+            <h2>Защита от случайного закрытия</h2>
+            <p class="muted" style="margin-top:0">
+                Кассы сенсорные: кассир постоянно касается экрана во время работы. Эти настройки
+                не дают закрыть сообщение случайным касанием, не прочитав.
+            </p>
+
+            <label>Секунд до появления кнопки «Понятно» (обычные оповещения)
+                <span class="hint">Пока идёт отсчёт, закрыть окно нельзя. Это гарантирует, что
+                сообщение хотя бы побыло на экране.</span>
+                <input type="number" id="close_delay_seconds" min="0" max="300">
+            </label>
+
+            <label>Секунд до появления кнопки «Понятно» (важные оповещения)
+                <span class="hint">Отдельное время для важных — их обычно нужно читать
+                внимательнее. Поставьте 0, чтобы использовать то же значение, что и выше.</span>
+                <input type="number" id="close_delay_seconds_important" min="0" max="300">
+            </label>
+
+            <label>
+                <input type="checkbox" id="confirm_close_required">
+                Закрывать в два нажатия
+                <span class="hint">Первое нажатие меняет кнопку на «Нажмите ещё раз для
+                подтверждения». Случайно попасть дважды подряд практически невозможно.
+                Рекомендуем оставить включённым для сенсорных касс.</span>
+            </label>
+
+            <label>Пауза после разблокировки кнопки, мс
+                <span class="hint">Сколько миллисекунд игнорировать нажатия сразу после того, как
+                кнопка стала активной. Ловит касание, которое прилетело ровно в этот момент.
+                600 мс — проверенное значение, меньше 200 ставить не советуем.</span>
+                <input type="number" id="accidental_tap_guard_ms" min="0" max="5000" step="100">
+            </label>
+        </div>
+
+        <div class="card">
+            <h2>Когда показывать</h2>
+
+            <label>
+                <input type="checkbox" id="catchup_missed_default">
+                Догонять пропущенные важные оповещения
+                <span class="hint">Если касса была выключена или без сети во время рассылки —
+                покажет пропущенное важное сообщение, когда она снова выйдет на связь.</span>
+            </label>
+
+            <label>Часовой пояс магазинов
+                <span class="hint">В этом поясе считаются тихие часы. Сервер внутри хранит время
+                в UTC, поэтому без правильного пояса «с 22:00» сработает не в то время суток.
+                Пишется в формате Europe/Moscow, Asia/Yekaterinburg и т.п.</span>
+                <input type="text" id="timezone" placeholder="Europe/Moscow">
+            </label>
+
+            <label>
+                <input type="checkbox" id="quiet_hours_enabled">
+                Тихие часы
+                <span class="hint">В указанное время обычные оповещения не показываются и ждут
+                окончания тихих часов. На важные не действует никогда — они пройдут в любое
+                время суток.</span>
+            </label>
+
+            <div class="row">
+                <label>Тихие часы: с
+                    <span class="hint">Например, 22:00.</span>
+                    <input type="time" id="quiet_hours_from">
+                </label>
+                <label>Тихие часы: до
+                    <span class="hint">Можно указывать интервал через полночь.</span>
+                    <input type="time" id="quiet_hours_to">
+                </label>
+            </div>
+
+            <label>
+                <input type="checkbox" id="sound_on_important">
+                Звуковой сигнал при важном оповещении
+                <span class="hint">Короткий системный звук в момент показа — чтобы заметили в
+                шумном торговом зале, даже если смотрели не на экран.</span>
+            </label>
+        </div>
+
+        <div class="card">
+            <h2>Ваши контакты в окне у кассира</h2>
+
+            <label>Название обслуживающей компании
+                <span class="hint">Показывается в углу окна оповещения, чтобы кассир понимал, кто
+                ему пишет, и не принял сообщение за вирус.</span>
+                <input type="text" id="brand_name" placeholder="например, ООО «ИТ-Сервис»">
+            </label>
+
+            <label>Контакт для связи
+                <span class="hint">Телефон или почта поддержки — показывается рядом с названием,
+                чтобы человеку было куда обратиться с вопросом.</span>
+                <input type="text" id="brand_contact" placeholder="например, +7 900 000-00-00">
+            </label>
+        </div>
+
+        <div class="card">
+            <button type="submit">Сохранить настройки</button>
+            <p id="error" class="error"></p>
+            <p id="success" class="success"></p>
+        </div>
     </form>
 </main>
 

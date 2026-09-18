@@ -22,6 +22,10 @@ namespace AMadmin.Core
         // Приходит с сервера из настроек панели (см. AdminSettingsController).
         [JsonPropertyName("force_mode")] public string ForceMode { get; set; }
         [JsonPropertyName("close_delay_seconds")] public int CloseDelaySeconds { get; set; } = 30;
+        [JsonPropertyName("confirm_close_required")] public bool ConfirmCloseRequired { get; set; } = true;
+        [JsonPropertyName("accidental_tap_guard_ms")] public int AccidentalTapGuardMs { get; set; } = 600;
+        [JsonPropertyName("play_sound")] public bool PlaySound { get; set; }
+        [JsonPropertyName("soft_corner")] public string SoftCorner { get; set; } = "bottom-right";
         [JsonPropertyName("brand_name")] public string BrandName { get; set; }
         [JsonPropertyName("brand_contact")] public string BrandContact { get; set; }
     }
