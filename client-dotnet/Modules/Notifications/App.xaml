@@ -1,0 +1,7 @@
+<Application x:Class="AMadmin.UiAgent.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <!-- Без StartupUri: у агента нет "главного окна", он живёт в трее, а окна
+         оповещений показывает по мере надобности. -->
+</Application>

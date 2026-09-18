@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- net48, а не net481 и не современный .NET: только .NET Framework 4.8 поддерживает
+       Windows 7 (жёсткое требование из AGENTS.md). 4.8.1 и .NET 6/7/8 требуют Windows 10+. -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>AMadmin.Core</RootNamespace>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- В .NET Framework HttpClient живёт в отдельной сборке — без этой строки не соберётся. -->
+    <Reference Include="System.Net.Http" />
+    <!-- JSON: умеет пропускать // комментарии в конфиге (JsonCommentHandling.Skip). -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>

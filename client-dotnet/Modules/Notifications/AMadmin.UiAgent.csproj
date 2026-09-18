@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <UseWPF>true</UseWPF>
+    <!-- Иконка в трее (NotifyIcon) живёт в WinForms — WPF своей не имеет. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>AMadmin.UiAgent</RootNamespace>
+    <AssemblyName>AMadmin.UiAgent</AssemblyName>
+    <Version>0.1.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\AMadmin.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Пример конфига кладём рядом с exe, чтобы было с чего начать на новой машине. -->
+    <None Include="..\..\config.example.json" Link="config.example.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

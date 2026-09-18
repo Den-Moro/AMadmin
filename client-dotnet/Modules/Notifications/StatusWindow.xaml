@@ -1,0 +1,52 @@
+<Window x:Class="AMadmin.UiAgent.StatusWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AMadmin — статус агента"
+        Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#F4F5F7">
+    <Border Margin="16" Background="White" CornerRadius="10" BorderBrush="#D8DBE0" BorderThickness="1" Padding="20">
+        <StackPanel>
+            <TextBlock Text="Статус агента" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                </Grid.RowDefinitions>
+                <Grid.Resources>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Margin" Value="0,4,16,4"/>
+                        <Setter Property="FontSize" Value="14"/>
+                    </Style>
+                </Grid.Resources>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Связь с сервером:" Foreground="#6B7280"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ConnectionText" FontWeight="SemiBold"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Сервер:" Foreground="#6B7280"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ServerText"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Последний опрос:" Foreground="#6B7280"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="LastPollText"/>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Последний успешный:" Foreground="#6B7280"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="LastSuccessText"/>
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Показано оповещений:" Foreground="#6B7280"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="ShownText"/>
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Версия агента:" Foreground="#6B7280"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="VersionText"/>
+            </Grid>
+
+            <TextBlock x:Name="ErrorText" Margin="0,12,0,0" FontSize="13" Foreground="#B91C1C" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+            <Button Content="Обновить" Height="36" Margin="0,16,0,0" Click="Refresh_Click"/>
+        </StackPanel>
+    </Border>
+</Window>
