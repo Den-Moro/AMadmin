@@ -5,58 +5,23 @@
 # служба/задача от SYSTEM работает в Session 0 и не может показывать окна в сессии
 # пользователя (см. AGENTS.md, "два агента, не один").
 #
-# Пока умеет только service_control (управление службами) — диспетчер задач, файлы,
-# запуск скриптов добавляются по очереди отдельными шагами.
+# Пока умеет только service_control (управление службами, см. ServiceControlHandler.ps1)
+# — диспетчер задач, файлы, запуск скриптов добавляются по очереди отдельными шагами,
+# каждый своим обработчиком в этой же папке.
 
 $scriptDir = $PSScriptRoot
-. (Join-Path $scriptDir "..\Common\Config.ps1")
-. (Join-Path $scriptDir "..\Common\Logger.ps1")
-. (Join-Path $scriptDir "..\Common\ApiClient.ps1")
+. (Join-Path $scriptDir "..\..\Core\Config.ps1")
+. (Join-Path $scriptDir "..\..\Core\Logger.ps1")
+. (Join-Path $scriptDir "..\..\Core\ApiClient.ps1")
+. (Join-Path $scriptDir "ServiceControlHandler.ps1")
 
 # Без явного включения TLS 1.2 HTTPS до сервера не поднимется на Windows 7 — там
 # в .NET Framework по умолчанию он выключен.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# Те же защищённые службы, что сервер уже отклоняет при создании команды (см.
-# AdminCommandsController::$protectedServices) — вторая линия защиты прямо в точке
-# выполнения, на случай если команда попадёт сюда в обход серверной проверки (например,
-# была создана до того, как список обновили). Список нужно пересмотреть под свою
-# инфраструктуру перед реальным использованием на кассах.
-$ProtectedServices = @('rpcss', 'dcomlaunch', 'eventlog', 'winmgmt')
-
-function Invoke-ServiceControlCommand {
-    param(
-        [Parameter(Mandatory)] $Payload
-    )
-
-    $serviceName = $Payload.service_name
-    $action = $Payload.action
-
-    if ($action -ne 'start' -and $ProtectedServices -contains $serviceName.ToLower()) {
-        return @{
-            Status = 'failed'
-            Output = "Служба '$serviceName' в защищённом списке, действие '$action' отклонено агентом"
-        }
-    }
-
-    try {
-        switch ($action) {
-            'start'   { Start-Service -Name $serviceName -ErrorAction Stop }
-            'stop'    { Stop-Service -Name $serviceName -ErrorAction Stop }
-            'restart' { Restart-Service -Name $serviceName -ErrorAction Stop }
-            default   { throw "Неизвестное действие: $action" }
-        }
-
-        $state = (Get-Service -Name $serviceName).Status
-        return @{ Status = 'success'; Output = "Служба '$serviceName': $action -> $state" }
-    } catch {
-        return @{ Status = 'failed'; Output = $_.Exception.Message }
-    }
-}
-
 $config = Get-AgentConfig
 
-Set-AgentLogPath -Path (Join-Path $scriptDir "..\management-agent.log")
+Set-AgentLogPath -Path (Join-Path $scriptDir "..\..\management-agent.log")
 
 $logLevel = if ($config.log_level) { $config.log_level } else { 'Debug' }
 Set-AgentLogLevel -Level $logLevel

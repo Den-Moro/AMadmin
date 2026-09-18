@@ -3,7 +3,7 @@
 
     document.getElementById('logoutBtn').addEventListener('click', async function () {
         await Api.post('/admin/logout');
-        window.location.href = 'login.html';
+        window.location.href = '/admin/login.html';
     });
 
     const targetTypeEl = document.getElementById('targetType');

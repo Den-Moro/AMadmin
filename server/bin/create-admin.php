@@ -3,8 +3,8 @@
 // нет и не будет — учётки панели заводятся так, руками, с доступом к серверу.
 // Запуск: php server/bin/create-admin.php <username> <password>
 
-require __DIR__ . '/../src/Config.php';
-require __DIR__ . '/../src/Db.php';
+require __DIR__ . '/../Core/Config.php';
+require __DIR__ . '/../Core/Db.php';
 
 if ($argc < 3) {
     fwrite(STDERR, "Usage: php create-admin.php <username> <password>\n");

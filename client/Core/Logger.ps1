@@ -9,7 +9,7 @@ $script:AgentMinLogLevel = 'Debug'
 
 # UiAgent.ps1 и ManagementAgent.ps1 — два разных процесса на одном ПК (см. AGENTS.md,
 # "два агента, не один"), у каждого свой лог-файл. Путь по умолчанию ниже завязан на
-# расположение самого Logger.ps1 (Common/), а не вызывающего скрипта — без явного
+# расположение самого Logger.ps1 (Core/), а не вызывающего скрипта — без явного
 # Set-AgentLogPath оба агента писали бы в один и тот же ui-agent.log.
 $script:AgentLogPath = Join-Path $PSScriptRoot "..\ui-agent.log"
 

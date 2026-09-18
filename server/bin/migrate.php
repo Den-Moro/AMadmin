@@ -5,8 +5,8 @@
 // не подхватывал новые миграции на уже существующей БД (пришлось накатывать 003 руками).
 // Запуск: php server/bin/migrate.php
 
-require __DIR__ . '/../src/Config.php';
-require __DIR__ . '/../src/Db.php';
+require __DIR__ . '/../Core/Config.php';
+require __DIR__ . '/../Core/Db.php';
 
 $db = Db::get();
 $db->exec('CREATE TABLE IF NOT EXISTS schema_migrations (filename TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)');

@@ -5,9 +5,9 @@
 # а не как служба.
 
 $scriptDir = $PSScriptRoot
-. (Join-Path $scriptDir "..\Common\Config.ps1")
-. (Join-Path $scriptDir "..\Common\Logger.ps1")
-. (Join-Path $scriptDir "..\Common\ApiClient.ps1")
+. (Join-Path $scriptDir "..\..\Core\Config.ps1")
+. (Join-Path $scriptDir "..\..\Core\Logger.ps1")
+. (Join-Path $scriptDir "..\..\Core\ApiClient.ps1")
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -71,7 +71,7 @@ function Show-NotificationWindow {
 
 $config = Get-AgentConfig
 
-Set-AgentLogPath -Path (Join-Path $scriptDir "..\ui-agent.log")
+Set-AgentLogPath -Path (Join-Path $scriptDir "..\..\ui-agent.log")
 
 # По умолчанию Debug, пока приложение в бете — больше сигнала в логах лучше, чем меньше,
 # когда баги ещё ловятся на реальных кассах, а не после стабилизации на проде.

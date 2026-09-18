@@ -2,23 +2,23 @@
 
 session_start();
 
-require __DIR__ . '/../src/Config.php';
-require __DIR__ . '/../src/Db.php';
-require __DIR__ . '/../src/Auth.php';
-require __DIR__ . '/../src/AdminAuth.php';
-require __DIR__ . '/../src/Logger.php';
-require __DIR__ . '/../src/TargetMatcher.php';
-require __DIR__ . '/../src/Router.php';
-require __DIR__ . '/../src/Controllers/OccurrencesController.php';
-require __DIR__ . '/../src/Controllers/AckController.php';
-require __DIR__ . '/../src/Controllers/AdminAuthController.php';
-require __DIR__ . '/../src/Controllers/AdminPcsController.php';
-require __DIR__ . '/../src/Controllers/AdminMetaController.php';
-require __DIR__ . '/../src/Controllers/AdminNotificationsController.php';
-require __DIR__ . '/../src/Controllers/AdminHostGroupsController.php';
-require __DIR__ . '/../src/Controllers/AdminManualsController.php';
-require __DIR__ . '/../src/Controllers/CommandsController.php';
-require __DIR__ . '/../src/Controllers/AdminCommandsController.php';
+require __DIR__ . '/../Core/Config.php';
+require __DIR__ . '/../Core/Db.php';
+require __DIR__ . '/../Core/Auth.php';
+require __DIR__ . '/../Core/AdminAuth.php';
+require __DIR__ . '/../Core/Logger.php';
+require __DIR__ . '/../Core/TargetMatcher.php';
+require __DIR__ . '/../Core/Router.php';
+require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';
+require __DIR__ . '/../Modules/Notifications/AckController.php';
+require __DIR__ . '/../Modules/Notifications/AdminNotificationsController.php';
+require __DIR__ . '/../Modules/Auth/AdminAuthController.php';
+require __DIR__ . '/../Modules/Dashboard/AdminPcsController.php';
+require __DIR__ . '/../Modules/Meta/AdminMetaController.php';
+require __DIR__ . '/../Modules/Groups/AdminHostGroupsController.php';
+require __DIR__ . '/../Modules/Manuals/AdminManualsController.php';
+require __DIR__ . '/../Modules/Commands/CommandsController.php';
+require __DIR__ . '/../Modules/Commands/AdminCommandsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
 

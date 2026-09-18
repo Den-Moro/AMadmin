@@ -38,7 +38,10 @@ async function requireAdminAuth() {
     try {
         return await Api.get('/admin/me');
     } catch (e) {
-        window.location.href = 'login.html';
+        // Абсолютный путь: api.js общий для страниц на разной глубине (корень admin/ и
+        // подпапки модулей вроде admin/notifications/) — относительный 'login.html' увёл
+        // бы со страницы модуля в несуществующий admin/notifications/login.html.
+        window.location.href = '/admin/login.html';
         throw e;
     }
 }
