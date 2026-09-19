@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -48,6 +48,7 @@ namespace AMadmin.Core
     public class ApiClient
     {
         private readonly HttpClient _http;
+        private readonly HttpClient _download;
         private readonly string _baseUrl;
 
         public ApiClient(AgentConfig config, string agentVersion)
@@ -58,6 +59,15 @@ namespace AMadmin.Core
             // HTTPS до сервера просто не поднимется.
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
 
+            // Два клиента с одинаковыми настройками, но разным таймаутом: обычные запросы
+            // должны отваливаться быстро (30 с), а скачивание файла на узком канале может
+            // законно идти десятки минут.
+            _http = CreateHttp(config, agentVersion, TimeSpan.FromSeconds(30));
+            _download = CreateHttp(config, agentVersion, TimeSpan.FromHours(2));
+        }
+
+        private static HttpClient CreateHttp(AgentConfig config, string agentVersion, TimeSpan timeout)
+        {
             var handler = new HttpClientHandler { UseProxy = true };
             if (!string.IsNullOrWhiteSpace(config.ProxyUrl))
             {
@@ -70,13 +80,14 @@ namespace AMadmin.Core
             }
             // Если proxy_url пуст — HttpClientHandler сам возьмёт системный прокси Windows.
 
-            _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", config.AgentToken);
+            var http = new HttpClient(handler) { Timeout = timeout };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", config.AgentToken);
             // Сервер по этим заголовкам обновляет карточку ПК на дашборде (версия агента,
             // hostname, текущий пользователь) — это и есть heartbeat.
-            _http.DefaultRequestHeaders.Add("X-Agent-Version", agentVersion);
-            _http.DefaultRequestHeaders.Add("X-Agent-Hostname", Environment.MachineName);
-            _http.DefaultRequestHeaders.Add("X-Agent-Username", Environment.UserName);
+            http.DefaultRequestHeaders.Add("X-Agent-Version", agentVersion);
+            http.DefaultRequestHeaders.Add("X-Agent-Hostname", Environment.MachineName);
+            http.DefaultRequestHeaders.Add("X-Agent-Username", Environment.UserName);
+            return http;
         }
 
         public async Task<List<Occurrence>> GetOccurrencesAsync()
@@ -105,6 +116,56 @@ namespace AMadmin.Core
         public Task SendCommandResultAsync(int commandId, string status, string output)
         {
             return PostJsonAsync("/commands/" + commandId + "/result", new { status = status, output = output });
+        }
+
+        // Скачивает файл для file_deploy во временный путь, считая SHA-256 на лету и
+        // ограничивая скорость (килобайт/с, 0 = без ограничения). Хеш сверяем с тем, что
+        // пришёл в команде, — файл с несовпавшим хешем не пишем на диск вовсе.
+        public async Task DownloadFileAsync(int fileId, string destinationPath, string expectedSha256, int limitKbps)
+        {
+            using (var response = await _download.GetAsync(_baseUrl + "/files/" + fileId, HttpCompletionOption.ResponseHeadersRead))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    throw new HttpRequestException("GET /files/" + fileId + " -> " + (int)response.StatusCode + ": " + body);
+                }
+
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                using (var input = await response.Content.ReadAsStreamAsync())
+                using (var output = new System.IO.FileStream(destinationPath, System.IO.FileMode.Create, System.IO.FileAccess.Write))
+                {
+                    var buffer = new byte[64 * 1024];
+                    long total = 0;
+                    var started = DateTime.UtcNow;
+                    int read;
+                    while ((read = await input.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await output.WriteAsync(buffer, 0, read);
+                        sha.TransformBlock(buffer, 0, read, null, 0);
+                        total += read;
+
+                        // Дросселирование: если качаем быстрее лимита — досыпаем паузу,
+                        // пока средняя скорость с начала загрузки не вернётся в норму.
+                        if (limitKbps > 0)
+                        {
+                            var expectedSeconds = total / 1024.0 / limitKbps;
+                            var elapsed = (DateTime.UtcNow - started).TotalSeconds;
+                            if (expectedSeconds > elapsed)
+                            {
+                                await Task.Delay(TimeSpan.FromSeconds(expectedSeconds - elapsed));
+                            }
+                        }
+                    }
+                    sha.TransformFinalBlock(new byte[0], 0, 0);
+
+                    var actual = BitConverter.ToString(sha.Hash).Replace("-", "").ToLowerInvariant();
+                    if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException("Хеш скачанного файла не совпал: ожидали " + expectedSha256 + ", получили " + actual);
+                    }
+                }
+            }
         }
 
         private async Task<string> GetStringAsync(string path)

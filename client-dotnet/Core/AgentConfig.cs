@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -30,6 +30,12 @@ namespace AMadmin.Core
 
         [JsonPropertyName("proxy_password")]
         public string ProxyPassword { get; set; }
+
+        // Потолок скорости скачивания файлов (file_deploy), килобайт в секунду. 0 — без
+        // ограничения. Нужен на узком канале за прокси: сотни касс, качающие один и тот
+        // же файл на полной скорости, забьют канал магазина целиком.
+        [JsonPropertyName("download_limit_kbps")]
+        public int DownloadLimitKbps { get; set; } = 0;
 
         public static AgentConfig Load(string path)
         {

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Агент управления: служба Windows от SYSTEM (Session 0), без окон. Выполняет команды
+       из панели: службы, процессы, скрипты, файлы. Окна показывает другой процесс —
+       UiAgent в сессии пользователя (см. AGENTS.md, "два агента, не один"). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>AMadmin.ManagementAgent</RootNamespace>
+    <AssemblyName>AMadmin.ManagementAgent</AssemblyName>
+    <Version>0.1.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\AMadmin.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ServiceBase / ServiceController — управление службами и запуск самого агента службой. -->
+    <Reference Include="System.ServiceProcess" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\config.example.json" Link="config.example.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
