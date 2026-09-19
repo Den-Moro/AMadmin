@@ -121,9 +121,9 @@ namespace AMadmin.Core
         // Скачивает файл для file_deploy во временный путь, считая SHA-256 на лету и
         // ограничивая скорость (килобайт/с, 0 = без ограничения). Хеш сверяем с тем, что
         // пришёл в команде, — файл с несовпавшим хешем не пишем на диск вовсе.
-        public async Task DownloadFileAsync(int fileId, string destinationPath, string expectedSha256, int limitKbps)
+        public async Task DownloadFileAsync(int fileId, string destinationPath, string expectedSha256, int limitKbps, System.Threading.CancellationToken ct)
         {
-            using (var response = await _download.GetAsync(_baseUrl + "/files/" + fileId, HttpCompletionOption.ResponseHeadersRead))
+            using (var response = await _download.GetAsync(_baseUrl + "/files/" + fileId, HttpCompletionOption.ResponseHeadersRead, ct))
             {
                 if (!response.IsSuccessStatusCode)
                 {
@@ -139,9 +139,9 @@ namespace AMadmin.Core
                     long total = 0;
                     var started = DateTime.UtcNow;
                     int read;
-                    while ((read = await input.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    while ((read = await input.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                     {
-                        await output.WriteAsync(buffer, 0, read);
+                        await output.WriteAsync(buffer, 0, read, ct);
                         sha.TransformBlock(buffer, 0, read, null, 0);
                         total += read;
 
@@ -153,7 +153,7 @@ namespace AMadmin.Core
                             var elapsed = (DateTime.UtcNow - started).TotalSeconds;
                             if (expectedSeconds > elapsed)
                             {
-                                await Task.Delay(TimeSpan.FromSeconds(expectedSeconds - elapsed));
+                                await Task.Delay(TimeSpan.FromSeconds(expectedSeconds - elapsed), ct);
                             }
                         }
                     }

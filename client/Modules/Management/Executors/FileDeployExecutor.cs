@@ -52,13 +52,23 @@ namespace AMadmin.ManagementAgent.Executors
                 Directory.CreateDirectory(dir);
             }
 
+            // Лимит скорости: ненулевое значение в config.json этой кассы важнее общего
+            // из панели (file_deploy_limit_kbps) — так магазину с узким каналом можно
+            // поставить свой, не трогая остальных.
+            var limitKbps = _config.DownloadLimitKbps > 0 ? _config.DownloadLimitKbps : Payload.Int(payload, "limit_kbps", 0);
+
             var temp = target + ".amadmin-download";
             var started = DateTime.UtcNow;
             try
             {
                 Logger.Info("Скачивание файла id=" + fileId + " (" + size + " байт" +
-                            (_config.DownloadLimitKbps > 0 ? ", не быстрее " + _config.DownloadLimitKbps + " КБ/с" : "") + ")");
-                await _api.DownloadFileAsync(fileId, temp, expected, _config.DownloadLimitKbps);
+                            (limitKbps > 0 ? ", не быстрее " + limitKbps + " КБ/с" : "") + ")");
+                await _api.DownloadFileAsync(fileId, temp, expected, limitKbps, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                try { File.Delete(temp); } catch { }
+                throw;
             }
             catch (Exception ex)
             {

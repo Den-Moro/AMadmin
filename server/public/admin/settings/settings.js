@@ -30,6 +30,9 @@
         protected_processes: 'text',
         script_timeout_seconds_default: 'text',
         command_ttl_hours: 'text',
+        file_deploy_async: 'bool',
+        file_deploy_max_parallel: 'text',
+        file_deploy_limit_kbps: 'text',
     };
 
     async function loadSettings() {

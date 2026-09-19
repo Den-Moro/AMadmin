@@ -26,6 +26,28 @@ class CommandsController
 
         $rows = self::commandsForPc($pc, true);
 
+        // Настройки раскатки файлов подмешиваем в момент отдачи, а не при создании
+        // команды — тот же приём, что и с настройками окна в /occurrences: админ меняет
+        // их в панели, и следующий же опрос кассы работает по-новому.
+        $deploySettings = null;
+        foreach ($rows as &$row) {
+            if ($row['type'] !== 'file_deploy') {
+                continue;
+            }
+            if ($deploySettings === null) {
+                $deploySettings = array(
+                    'async'        => self::setting('file_deploy_async', '1') === '1',
+                    'max_parallel' => max(1, (int) self::setting('file_deploy_max_parallel', 2)),
+                    'limit_kbps'   => max(0, (int) self::setting('file_deploy_limit_kbps', 0)),
+                );
+            }
+            $payload = json_decode($row['payload'], true);
+            if (is_array($payload)) {
+                $row['payload'] = json_encode($payload + $deploySettings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+        unset($row);
+
         Logger::debug('GET /commands: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
 
         echo json_encode($rows);

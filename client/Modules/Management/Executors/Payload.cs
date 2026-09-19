@@ -16,6 +16,17 @@ namespace AMadmin.ManagementAgent.Executors
             return fallback;
         }
 
+        public static bool Bool(JsonElement p, string name, bool fallback = false)
+        {
+            JsonElement v;
+            if (p.ValueKind == JsonValueKind.Object && p.TryGetProperty(name, out v))
+            {
+                if (v.ValueKind == JsonValueKind.True) return true;
+                if (v.ValueKind == JsonValueKind.False) return false;
+            }
+            return fallback;
+        }
+
         public static int Int(JsonElement p, string name, int fallback = 0)
         {
             JsonElement v;

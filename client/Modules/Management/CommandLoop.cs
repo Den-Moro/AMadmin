@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,11 +28,22 @@ namespace AMadmin.ManagementAgent
 
     // Главный цикл: опросить сервер -> для каждой команды claim -> выполнить -> result.
     // Тот же протокол, что описан в миграции 003_commands.sql на сервере.
+    //
+    // Команды выполняются по очереди, кроме загрузки файлов в асинхронном режиме
+    // (настройка file_deploy_async в панели): она уходит в фон, а цикл продолжает
+    // выполнять остальные команды и опрашивать сервер. Иначе один большой файл на
+    // узком канале на полчаса "выключал" бы кассу для всех остальных команд.
     public class CommandLoop
     {
         private readonly AgentConfig _config;
         private readonly ApiClient _api;
         private readonly Dictionary<string, IExecutor> _executors;
+
+        // Фоновые загрузки: следим за ними, чтобы при остановке службы дать им дописаться.
+        private readonly List<Task> _background = new List<Task>();
+        private readonly object _backgroundSync = new object();
+        private SemaphoreSlim _parallel;
+        private int _parallelLimit;
 
         public CommandLoop(AgentConfig config, ApiClient api)
         {
@@ -73,13 +85,30 @@ namespace AMadmin.ManagementAgent
                     break;
                 }
             }
+
+            await WaitForBackgroundAsync(TimeSpan.FromSeconds(15));
+        }
+
+        // Дать фоновым загрузкам шанс завершиться и отчитаться (после отмены токена
+        // они сами быстро завершаются с результатом "агент остановлен").
+        private async Task WaitForBackgroundAsync(TimeSpan timeout)
+        {
+            Task[] pending;
+            lock (_backgroundSync)
+            {
+                pending = _background.ToArray();
+            }
+            if (pending.Length == 0) return;
+
+            Logger.Info("Ожидание фоновых загрузок: " + pending.Length);
+            await Task.WhenAny(Task.WhenAll(pending), Task.Delay(timeout));
         }
 
         private async Task PollOnceAsync(CancellationToken ct)
         {
             Logger.Debug("Опрос " + _config.ServerUrl + "/commands");
             var commands = await _api.GetCommandsAsync();
-            Logger.Debug("Получено команд: " + commands.Count);
+            Logger.Debug("Получено команд: " + commands.Count + BackgroundSuffix());
 
             foreach (var command in commands)
             {
@@ -98,6 +127,15 @@ namespace AMadmin.ManagementAgent
                     // одна команда не должна срывать выполнение остальных из этого опроса.
                     Logger.Error("Команда id=" + command.Id + " пропущена: " + ex.Message);
                 }
+            }
+        }
+
+        private string BackgroundSuffix()
+        {
+            lock (_backgroundSync)
+            {
+                _background.RemoveAll(t => t.IsCompleted);
+                return _background.Count > 0 ? " (в фоне загрузок: " + _background.Count + ")" : "";
             }
         }
 
@@ -127,13 +165,27 @@ namespace AMadmin.ManagementAgent
                 return;
             }
 
+            JsonElement payload;
+            using (var doc = JsonDocument.Parse(command.Payload ?? "{}"))
+            {
+                payload = doc.RootElement.Clone();
+            }
+
+            if (command.Type == "file_deploy" && Payload.Bool(payload, "async", true))
+            {
+                StartInBackground(command, executor, payload, ct);
+                return;
+            }
+
+            await ExecuteAndReportAsync(command, executor, payload, ct);
+        }
+
+        private async Task ExecuteAndReportAsync(Command command, IExecutor executor, JsonElement payload, CancellationToken ct)
+        {
             Outcome outcome;
             try
             {
-                using (var doc = JsonDocument.Parse(command.Payload ?? "{}"))
-                {
-                    outcome = await executor.ExecuteAsync(doc.RootElement.Clone(), ct);
-                }
+                outcome = await executor.ExecuteAsync(payload, ct);
             }
             catch (OperationCanceledException)
             {
@@ -148,6 +200,53 @@ namespace AMadmin.ManagementAgent
 
             Logger.Info("Команда id=" + command.Id + " -> " + outcome.Status);
             await SafeReport(command.Id, outcome);
+        }
+
+        // Загрузка файла в фоне. Число одновременных загрузок ограничено семафором —
+        // предел приходит с сервера в самой команде (file_deploy_max_parallel).
+        private void StartInBackground(Command command, IExecutor executor, JsonElement payload, CancellationToken ct)
+        {
+            var limit = Math.Max(1, Payload.Int(payload, "max_parallel", 2));
+            SemaphoreSlim gate;
+            lock (_backgroundSync)
+            {
+                // Предел могли поменять в панели; пересоздаём семафор, только когда никто
+                // его не держит — иначе уже идущие загрузки потеряли бы свой слот.
+                if (_parallel == null || (_parallelLimit != limit && _background.All(t => t.IsCompleted)))
+                {
+                    _parallel = new SemaphoreSlim(limit, limit);
+                    _parallelLimit = limit;
+                }
+                gate = _parallel;
+            }
+
+            Logger.Info("Команда id=" + command.Id + " уходит в фон (загрузка файла, не более " + _parallelLimit + " одновременно)");
+
+            var task = Task.Run(async () =>
+            {
+                await gate.WaitAsync(ct);
+                try
+                {
+                    await ExecuteAndReportAsync(command, executor, payload, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Результат уже отправлен внутри ExecuteAndReportAsync.
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Фоновая загрузка id=" + command.Id + " упала: " + ex.Message);
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            });
+
+            lock (_backgroundSync)
+            {
+                _background.Add(task);
+            }
         }
 
         private async Task SafeReport(int commandId, Outcome outcome)
