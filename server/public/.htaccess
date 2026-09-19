@@ -1,4 +1,9 @@
 RewriteEngine On
+
+# Папки панели (admin/stores, admin/commands, ...) совпадают с путями API
+# (/admin/stores, /admin/commands). Без DirectorySlash Off Apache отвечал бы на API-запрос
+# редиректом 301 на /admin/stores/ вместо JSON. Поэтому: реальный файл — отдать как есть,
+# всё остальное (включая имена папок) — в index.php.
+DirectorySlash Off
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [QSA,L]

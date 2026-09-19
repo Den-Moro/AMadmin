@@ -29,6 +29,9 @@ class Router
     public function dispatch($method, $uri)
     {
         $path = parse_url($uri, PHP_URL_PATH);
+        // /admin/stores/ и /admin/stores — один маршрут: браузер мог запомнить редирект
+        // со слэшем от веб-сервера (301 кэшируется навсегда), а прокси любят добавлять его сами.
+        $path = rtrim($path, '/') ?: '/';
 
         foreach ($this->routes as $route) {
             if ($route['method'] !== $method) {
