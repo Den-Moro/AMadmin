@@ -8,6 +8,10 @@ FROM php:8.3-cli-alpine
 RUN apk add --no-cache sqlite-dev libzip-dev \
     && docker-php-ext-install pdo_sqlite zip
 
+# Лимиты на загрузку файлов для раскатки (POST /admin/files). Умолчание PHP — 2 МБ,
+# этого мало даже для одного установщика. На Windows-сервере — те же две строки в php.ini.
+RUN printf 'upload_max_filesize = 512M\npost_max_size = 520M\n' > /usr/local/etc/php/conf.d/uploads.ini
+
 WORKDIR /app
 
 COPY . .

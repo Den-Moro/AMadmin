@@ -2,6 +2,9 @@
 
 class CommandsController
 {
+    // Потолок на вывод одной команды с одного ПК (байт) — см. result().
+    const MAX_OUTPUT_BYTES = 65536;
+
     // GET /commands
     // Команды для этого ПК (по Bearer-токену — тот же agent_token, что и у UI-агента,
     // токен привязан к ПК, а не к конкретному процессу на нём), на которые от этого ПК
@@ -17,15 +20,29 @@ class CommandsController
             return;
         }
 
-        // Таргетинг похож на TargetMatcher, но commands хранит target_type/target_id
-        // прямо на своей строке (не через отдельную join-таблицу, как
-        // notification_targets), поэтому условие здесь своё, не переиспользует класс.
+        $rows = self::commandsForPc($pc, true);
+
+        Logger::debug('GET /commands: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
+
+        echo json_encode($rows);
+    }
+
+    // Команды, адресованные этому ПК. $onlyPending = true — только те, на которые от
+    // этого ПК ещё нет строки в command_results (то, что отдаём агенту на выполнение);
+    // false — все адресованные, включая уже застолблённые (нужно, например, чтобы
+    // проверить право агента скачать файл из уже взятой в работу команды).
+    //
+    // Таргетинг похож на TargetMatcher, но commands хранит target_type/target_id
+    // прямо на своей строке (не через отдельную join-таблицу, как
+    // notification_targets), поэтому условие здесь своё, не переиспользует класс.
+    public static function commandsForPc($pc, $onlyPending)
+    {
         $sql = "
             SELECT c.id, c.type, c.payload, c.created_at
             FROM commands c
             LEFT JOIN command_results r ON r.command_id = c.id AND r.pc_id = :pc_id1
             LEFT JOIN host_group_members hgm ON hgm.pc_id = :pc_id2 AND hgm.group_id = c.target_id
-            WHERE r.id IS NULL
+            WHERE " . ($onlyPending ? 'r.id IS NULL' : '1 = 1') . "
               AND (
                     c.target_type = 'all'
                  OR (c.target_type = 'store' AND c.target_id = :store_id)
@@ -44,11 +61,8 @@ class CommandsController
             'store_id'       => $pc['store_id'],
             'device_type_id' => $pc['device_type_id'],
         ));
-        $rows = $stmt->fetchAll();
 
-        Logger::debug('GET /commands: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
-
-        echo json_encode($rows);
+        return $stmt->fetchAll();
     }
 
     // POST /commands/{id}/claim
@@ -113,6 +127,12 @@ class CommandsController
             http_response_code(400);
             echo json_encode(array('error' => 'invalid_status'));
             return;
+        }
+
+        // Вывод скрипта или список процессов может быть большим; хранить мегабайты на
+        // каждую из 3000 касс в SQLite незачем — обрезаем с пометкой, начало важнее.
+        if ($output !== null && strlen($output) > self::MAX_OUTPUT_BYTES) {
+            $output = substr($output, 0, self::MAX_OUTPUT_BYTES) . "\n… [вывод обрезан сервером]";
         }
 
         $stmt = Db::get()->prepare("

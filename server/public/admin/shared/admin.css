@@ -199,6 +199,19 @@ th {
     margin: 0;
 }
 
+/* Вывод команд (списки служб/процессов, stdout скриптов) — моноширинный, со скроллом,
+   чтобы длинный список не растягивал таблицу на весь экран. */
+pre.output {
+    margin: 0;
+    max-height: 240px;
+    max-width: 520px;
+    overflow: auto;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .login-page {
     display: flex;
     align-items: center;

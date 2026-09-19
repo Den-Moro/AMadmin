@@ -2,14 +2,6 @@
 
 class AdminCommandsController
 {
-    // Защита от массовой ошибки (см. AGENTS.md, "Управление службами"): эти службы нельзя
-    // остановить/перезапустить через это средство, даже случайно. Список провизорный —
-    // это тот самый "список согласовать на этапе реализации", который в ТЗ явно оставлен
-    // на усмотрение реализации; пересмотрите его под свою инфраструктуру перед реальным
-    // использованием на кассах. RpcSs/DcomLaunch/EventLog/Winmgmt — базовые системные
-    // службы Windows, без которых ОС становится нестабильна.
-    private static $protectedServices = array('rpcss', 'dcomlaunch', 'eventlog', 'winmgmt');
-
     // GET /admin/commands — последние команды со сводкой по статусам среди уже
     // поступивших command_results (агенты узнают о команде только на следующем опросе,
     // поэтому сразу после создания результатов обычно ещё нет — это нормально).
@@ -20,10 +12,12 @@ class AdminCommandsController
         $sql = "
             SELECT
                 c.id, c.type, c.payload, c.target_type, c.target_id, c.created_at,
+                u.username AS created_by_username,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'in_progress') AS in_progress_count,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'success') AS success_count,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status IN ('failed', 'timeout')) AS failed_count
             FROM commands c
+            LEFT JOIN admin_users u ON u.id = c.created_by
             ORDER BY c.created_at DESC
             LIMIT 100
         ";
@@ -53,9 +47,17 @@ class AdminCommandsController
         echo json_encode($stmt->fetchAll());
     }
 
-    // POST /admin/commands   body: { type: 'service_control', payload: {...}, target: {type, id} }
-    // Пока принимает только type='service_control' — диспетчер задач/файлы/скрипты
-    // добавляются по очереди отдельными шагами (см. AGENTS.md, "Порядок работы", п.7).
+    // POST /admin/commands   body: { type, payload: {...}, target: {type, id} }
+    //
+    // Четыре стандартных типа (см. AGENTS.md, "Удалённое администрирование"):
+    //   service_control — { service_name, action: start|stop|restart|list }
+    //   process_action  — { action: kill|list, process_name?, pid? }
+    //   script_run      — { engine: powershell|cmd, script? | path?, args?, timeout_seconds }
+    //   file_deploy     — { file_id, target_path }  (файл заранее загружен через /admin/files)
+    //
+    // Сервер только проверяет форму команды и защитные списки; исполняет её агент
+    // управления на ПК. Что бы ни пришло в payload сверх описанного — отбрасывается:
+    // в БД и агенту уходит только то, что собрано валидатором руками.
     public static function store()
     {
         // Самое рискованное действие в панели — удалённое выполнение команд на кассах —
@@ -64,33 +66,31 @@ class AdminCommandsController
 
         $body = json_decode(file_get_contents('php://input'), true);
         $type = isset($body['type']) ? $body['type'] : '';
+        $payload = isset($body['payload']) && is_array($body['payload']) ? $body['payload'] : array();
 
-        if ($type !== 'service_control') {
+        $validators = array(
+            'service_control' => 'validateServiceControl',
+            'process_action'  => 'validateProcessAction',
+            'script_run'      => 'validateScriptRun',
+            'file_deploy'     => 'validateFileDeploy',
+        );
+
+        if (!isset($validators[$type])) {
             http_response_code(400);
             echo json_encode(array('error' => 'unsupported_type'));
             return;
         }
 
-        $payload = isset($body['payload']) && is_array($body['payload']) ? $body['payload'] : array();
-        $serviceName = isset($payload['service_name']) ? trim($payload['service_name']) : '';
-        $action = isset($payload['action']) ? $payload['action'] : '';
-
-        if ($serviceName === '') {
+        // Валидатор возвращает либо array('payload' => ..., 'summary' => 'для лога'),
+        // либо array('error' => 'код') — тогда отвечаем 400 и ничего не создаём.
+        $method = $validators[$type];
+        $checked = self::$method($payload);
+        if (isset($checked['error'])) {
+            if (isset($checked['warn'])) {
+                Logger::warning($checked['warn'] . " автор='{$_SESSION['admin_username']}' — отклонено");
+            }
             http_response_code(400);
-            echo json_encode(array('error' => 'service_name_required'));
-            return;
-        }
-
-        if (!in_array($action, array('start', 'stop', 'restart'), true)) {
-            http_response_code(400);
-            echo json_encode(array('error' => 'invalid_action'));
-            return;
-        }
-
-        if ($action !== 'start' && in_array(strtolower($serviceName), self::$protectedServices, true)) {
-            Logger::warning("Попытка {$action} защищённой службы '{$serviceName}' автором='{$_SESSION['admin_username']}' — отклонено");
-            http_response_code(400);
-            echo json_encode(array('error' => 'protected_service'));
+            echo json_encode(array('error' => $checked['error']));
             return;
         }
 
@@ -110,7 +110,13 @@ class AdminCommandsController
             return;
         }
 
-        $payloadJson = json_encode(array('service_name' => $serviceName, 'action' => $action));
+        // Завершение по PID имеет смысл только на одном конкретном ПК: на разных
+        // машинах под одним PID живут разные процессы.
+        if ($type === 'process_action' && isset($checked['payload']['pid']) && $targetType !== 'pc') {
+            http_response_code(400);
+            echo json_encode(array('error' => 'pid_requires_single_pc_target'));
+            return;
+        }
 
         $stmt = Db::get()->prepare('
             INSERT INTO commands (type, payload, target_type, target_id, created_by)
@@ -118,7 +124,7 @@ class AdminCommandsController
         ');
         $stmt->execute(array(
             'type'        => $type,
-            'payload'     => $payloadJson,
+            'payload'     => json_encode($checked['payload'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'target_type' => $targetType,
             'target_id'   => $targetType === 'all' ? null : $targetId,
             'created_by'  => $_SESSION['admin_id'],
@@ -130,10 +136,187 @@ class AdminCommandsController
         // "Безопасность и аудит") — сама строка в commands уже это гарантирует, лог
         // дополнительно дублирует для быстрого разбора без похода в БД.
         Logger::info(
-            "Команда создана: id={$id} тип=service_control служба='{$serviceName}' действие={$action} " .
+            "Команда создана: id={$id} тип={$type} {$checked['summary']} " .
             "таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " автор='{$_SESSION['admin_username']}'"
         );
 
         echo json_encode(array('status' => 'ok', 'id' => $id));
+    }
+
+    // ---- Валидаторы по типам ------------------------------------------------------
+
+    private static function validateServiceControl($p)
+    {
+        $serviceName = isset($p['service_name']) ? trim($p['service_name']) : '';
+        $action = isset($p['action']) ? $p['action'] : '';
+
+        if (!in_array($action, array('start', 'stop', 'restart', 'list'), true)) {
+            return array('error' => 'invalid_action');
+        }
+
+        if ($action === 'list') {
+            return array('payload' => array('action' => 'list'), 'summary' => 'список служб');
+        }
+
+        if ($serviceName === '') {
+            return array('error' => 'service_name_required');
+        }
+
+        // Защита от массовой ошибки: эти службы нельзя остановить/перезапустить через
+        // панель, даже случайно. Список — настройка protected_services (см. миграцию 008).
+        if ($action !== 'start' && self::inProtectedList('protected_services', $serviceName)) {
+            return array(
+                'error' => 'protected_service',
+                'warn'  => "Попытка {$action} защищённой службы '{$serviceName}'",
+            );
+        }
+
+        return array(
+            'payload' => array('service_name' => $serviceName, 'action' => $action),
+            'summary' => "служба='{$serviceName}' действие={$action}",
+        );
+    }
+
+    private static function validateProcessAction($p)
+    {
+        $action = isset($p['action']) ? $p['action'] : '';
+        $processName = isset($p['process_name']) ? trim($p['process_name']) : '';
+        $pid = (!empty($p['pid'])) ? (int) $p['pid'] : null;
+
+        if (!in_array($action, array('kill', 'list'), true)) {
+            return array('error' => 'invalid_action');
+        }
+
+        if ($action === 'list') {
+            return array('payload' => array('action' => 'list'), 'summary' => 'список процессов');
+        }
+
+        if ($processName === '' && !$pid) {
+            return array('error' => 'process_name_or_pid_required');
+        }
+
+        // "explorer" и "Explorer.exe" — один и тот же процесс, храним без расширения.
+        $processName = preg_replace('/\.exe$/i', '', $processName);
+
+        if ($processName !== '' && self::inProtectedList('protected_processes', $processName)) {
+            return array(
+                'error' => 'protected_process',
+                'warn'  => "Попытка завершить защищённый процесс '{$processName}'",
+            );
+        }
+
+        $payload = array('action' => 'kill');
+        if ($processName !== '') {
+            $payload['process_name'] = $processName;
+        }
+        if ($pid) {
+            $payload['pid'] = $pid;
+        }
+
+        return array(
+            'payload' => $payload,
+            'summary' => 'завершить процесс ' . ($processName !== '' ? "'{$processName}'" : '') . ($pid ? " pid={$pid}" : ''),
+        );
+    }
+
+    private static function validateScriptRun($p)
+    {
+        $engine = isset($p['engine']) ? $p['engine'] : 'powershell';
+        $script = isset($p['script']) ? (string) $p['script'] : '';
+        $path = isset($p['path']) ? trim($p['path']) : '';
+        $args = isset($p['args']) ? trim((string) $p['args']) : '';
+        $timeout = isset($p['timeout_seconds']) && (int) $p['timeout_seconds'] > 0
+            ? (int) $p['timeout_seconds']
+            : (int) self::setting('script_timeout_seconds_default', 60);
+
+        if (!in_array($engine, array('powershell', 'cmd'), true)) {
+            return array('error' => 'invalid_engine');
+        }
+
+        // Либо текст скрипта, либо путь к уже лежащему на ПК файлу/программе — не оба.
+        if (trim($script) === '' && $path === '') {
+            return array('error' => 'script_or_path_required');
+        }
+        if (trim($script) !== '' && $path !== '') {
+            return array('error' => 'script_and_path_are_exclusive');
+        }
+
+        // Верхняя граница — синхронный запуск с таймаутом; дольше 10 минут агент всё
+        // равно ждать не будет (см. AGENTS.md: долгие скрипты не поддерживаем).
+        $timeout = min($timeout, 600);
+
+        $payload = array(
+            'engine'          => $engine,
+            'script'          => trim($script) !== '' ? $script : null,
+            'path'            => $path !== '' ? $path : null,
+            'args'            => $args,
+            'timeout_seconds' => $timeout,
+        );
+
+        // В лог — только первая строка, а не весь текст: полный скрипт и так лежит в БД.
+        $firstLine = strtok(trim($script) !== '' ? trim($script) : $path, "\r\n");
+        return array(
+            'payload' => $payload,
+            'summary' => "{$engine} '" . mb_substr($firstLine, 0, 80) . "' таймаут={$timeout}с",
+        );
+    }
+
+    private static function validateFileDeploy($p)
+    {
+        $fileId = (!empty($p['file_id'])) ? (int) $p['file_id'] : 0;
+        $targetPath = isset($p['target_path']) ? trim($p['target_path']) : '';
+
+        if (!$fileId) {
+            return array('error' => 'file_id_required');
+        }
+
+        // Полный путь Windows вместе с именем файла: C:\... или \\server\share\...
+        if ($targetPath === '' || !preg_match('#^([A-Za-z]:\\\\|\\\\\\\\)#', $targetPath)) {
+            return array('error' => 'target_path_must_be_absolute_windows_path');
+        }
+
+        $stmt = Db::get()->prepare('SELECT id, original_name, sha256, size FROM deploy_files WHERE id = :id');
+        $stmt->execute(array('id' => $fileId));
+        $file = $stmt->fetch();
+        if (!$file) {
+            return array('error' => 'file_not_found');
+        }
+
+        // Хеш и размер кладём прямо в команду: агент по ним решает, качать ли файл
+        // вообще, не делая лишнего запроса на сервер.
+        return array(
+            'payload' => array(
+                'file_id'       => (int) $file['id'],
+                'original_name' => $file['original_name'],
+                'sha256'        => $file['sha256'],
+                'size'          => (int) $file['size'],
+                'target_path'   => $targetPath,
+            ),
+            'summary' => "файл='{$file['original_name']}' -> '{$targetPath}'",
+        );
+    }
+
+    // ---- Помощники ----------------------------------------------------------------
+
+    private static function setting($key, $default)
+    {
+        $stmt = Db::get()->prepare('SELECT value FROM settings WHERE key = :key');
+        $stmt->execute(array('key' => $key));
+        $row = $stmt->fetch();
+        return $row ? $row['value'] : $default;
+    }
+
+    // Списки в настройках — через запятую, регистр не важен, ".exe" у процессов
+    // отбрасываем с обеих сторон, чтобы "explorer" и "Explorer.exe" считались одним.
+    private static function inProtectedList($settingKey, $name)
+    {
+        $needle = strtolower(preg_replace('/\.exe$/i', '', trim($name)));
+        foreach (explode(',', self::setting($settingKey, '')) as $item) {
+            $item = strtolower(preg_replace('/\.exe$/i', '', trim($item)));
+            if ($item !== '' && $item === $needle) {
+                return true;
+            }
+        }
+        return false;
     }
 }

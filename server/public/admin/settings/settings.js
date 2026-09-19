@@ -26,6 +26,9 @@
         sound_on_important: 'bool',
         brand_name: 'text',
         brand_contact: 'text',
+        protected_services: 'text',
+        protected_processes: 'text',
+        script_timeout_seconds_default: 'text',
     };
 
     async function loadSettings() {

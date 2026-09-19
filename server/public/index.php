@@ -25,6 +25,9 @@ require __DIR__ . '/../Modules/Groups/AdminHostGroupsController.php';
 require __DIR__ . '/../Modules/Manuals/AdminManualsController.php';
 require __DIR__ . '/../Modules/Commands/CommandsController.php';
 require __DIR__ . '/../Modules/Commands/AdminCommandsController.php';
+require __DIR__ . '/../Modules/Commands/FileStorage.php';
+require __DIR__ . '/../Modules/Commands/FilesController.php';
+require __DIR__ . '/../Modules/Commands/AdminFilesController.php';
 require __DIR__ . '/../Modules/Settings/AdminSettingsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -39,6 +42,7 @@ $router->post('/occurrences/{id}/ack', array('AckController', 'store'));
 $router->get('/commands', array('CommandsController', 'index'));
 $router->post('/commands/{id}/claim', array('CommandsController', 'claim'));
 $router->post('/commands/{id}/result', array('CommandsController', 'result'));
+$router->get('/files/{id}', array('FilesController', 'download'));
 
 // Админ-панель (сессия, см. AdminAuth)
 $router->post('/admin/login', array('AdminAuthController', 'login'));
@@ -68,6 +72,9 @@ $router->delete('/admin/manuals/{id}', array('AdminManualsController', 'destroy'
 $router->get('/admin/commands', array('AdminCommandsController', 'index'));
 $router->post('/admin/commands', array('AdminCommandsController', 'store'));
 $router->get('/admin/commands/{id}/results', array('AdminCommandsController', 'results'));
+$router->get('/admin/files', array('AdminFilesController', 'index'));
+$router->post('/admin/files', array('AdminFilesController', 'store'));
+$router->delete('/admin/files/{id}', array('AdminFilesController', 'destroy'));
 
 $router->get('/admin/settings', array('AdminSettingsController', 'index'));
 $router->put('/admin/settings', array('AdminSettingsController', 'update'));
