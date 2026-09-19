@@ -26,10 +26,7 @@ class FilesController
         $fileId = (int) $fileId;
 
         $allowed = false;
-        foreach (CommandsController::commandsForPc($pc, false) as $command) {
-            if ($command['type'] !== 'file_deploy') {
-                continue;
-            }
+        foreach (CommandsController::commandsForPc($pc, false, null, 'file_deploy') as $command) {
             $payload = json_decode($command['payload'], true);
             if (isset($payload['file_id']) && (int) $payload['file_id'] === $fileId) {
                 $allowed = true;

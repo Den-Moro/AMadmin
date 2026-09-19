@@ -84,7 +84,20 @@ namespace AMadmin.ManagementAgent
             foreach (var command in commands)
             {
                 ct.ThrowIfCancellationRequested();
-                await HandleAsync(command, ct);
+                try
+                {
+                    await HandleAsync(command, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Сервер отказал в claim (403: команда устарела или не нам) или сеть моргнула —
+                    // одна команда не должна срывать выполнение остальных из этого опроса.
+                    Logger.Error("Команда id=" + command.Id + " пропущена: " + ex.Message);
+                }
             }
         }
 

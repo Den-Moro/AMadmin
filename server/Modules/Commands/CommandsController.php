@@ -20,6 +20,10 @@ class CommandsController
             return;
         }
 
+        // Heartbeat и отсюда тоже: если в сессии никто не залогинен, UI-агента нет, и без
+        // этого касса на дашборде выглядела бы офлайн, хотя служба управления на связи.
+        Auth::heartbeat($pc, false);
+
         $rows = self::commandsForPc($pc, true);
 
         Logger::debug('GET /commands: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
@@ -27,22 +31,26 @@ class CommandsController
         echo json_encode($rows);
     }
 
-    // Команды, адресованные этому ПК. $onlyPending = true — только те, на которые от
-    // этого ПК ещё нет строки в command_results (то, что отдаём агенту на выполнение);
-    // false — все адресованные, включая уже застолблённые (нужно, например, чтобы
-    // проверить право агента скачать файл из уже взятой в работу команды).
+    // Команды, адресованные этому ПК и не старше command_ttl_hours (см. миграцию 009).
+    //   $onlyPending — только те, на которые от этого ПК ещё нет строки в command_results
+    //                  (то, что отдаём агенту на выполнение); false — все адресованные.
+    //   $commandId   — ограничить одной командой (проверка "а этому ли ПК она адресована").
+    //   $type        — ограничить типом (например, только file_deploy для скачивания файла).
     //
     // Таргетинг похож на TargetMatcher, но commands хранит target_type/target_id
     // прямо на своей строке (не через отдельную join-таблицу, как
     // notification_targets), поэтому условие здесь своё, не переиспользует класс.
-    public static function commandsForPc($pc, $onlyPending)
+    public static function commandsForPc($pc, $onlyPending, $commandId = null, $type = null)
     {
+        $ttlHours = (int) self::setting('command_ttl_hours', 24);
+
         $sql = "
             SELECT c.id, c.type, c.payload, c.created_at
             FROM commands c
             LEFT JOIN command_results r ON r.command_id = c.id AND r.pc_id = :pc_id1
             LEFT JOIN host_group_members hgm ON hgm.pc_id = :pc_id2 AND hgm.group_id = c.target_id
             WHERE " . ($onlyPending ? 'r.id IS NULL' : '1 = 1') . "
+              AND c.created_at >= datetime('now', :ttl)
               AND (
                     c.target_type = 'all'
                  OR (c.target_type = 'store' AND c.target_id = :store_id)
@@ -50,19 +58,47 @@ class CommandsController
                  OR (c.target_type = 'device_type' AND c.target_id = :device_type_id)
                  OR (c.target_type = 'group' AND hgm.pc_id IS NOT NULL)
               )
-            ORDER BY c.created_at ASC
         ";
-
-        $stmt = Db::get()->prepare($sql);
-        $stmt->execute(array(
+        $params = array(
             'pc_id1'         => $pc['id'],
             'pc_id2'         => $pc['id'],
             'pc_id3'         => $pc['id'],
             'store_id'       => $pc['store_id'],
             'device_type_id' => $pc['device_type_id'],
-        ));
+            'ttl'            => '-' . max(1, $ttlHours) . ' hours',
+        );
+
+        if ($commandId !== null) {
+            $sql .= ' AND c.id = :command_id';
+            $params['command_id'] = (int) $commandId;
+        }
+        if ($type !== null) {
+            $sql .= ' AND c.type = :type';
+            $params['type'] = $type;
+        }
+
+        $sql .= ' ORDER BY c.created_at ASC';
+
+        $stmt = Db::get()->prepare($sql);
+        $stmt->execute($params);
 
         return $stmt->fetchAll();
+    }
+
+    // Адресована ли команда этому ПК (и не протухла ли). Claim без этой проверки
+    // позволял бы кассе с любым валидным токеном "отчитаться" за чужую команду и
+    // замусорить аудит.
+    private static function isTargeted($pc, $commandId)
+    {
+        return count(self::commandsForPc($pc, false, $commandId)) > 0;
+    }
+
+    private static function setting($key, $default)
+    {
+        $stmt = Db::get()->prepare('SELECT value FROM settings WHERE key = :key');
+        $stmt->execute(array('key' => $key));
+        $row = $stmt->fetch();
+        return $row ? $row['value'] : $default;
     }
 
     // POST /commands/{id}/claim
@@ -80,6 +116,13 @@ class CommandsController
         }
 
         $commandId = (int) $commandId;
+
+        if (!self::isTargeted($pc, $commandId)) {
+            Logger::warning('POST /commands/' . $commandId . '/claim: команда не адресована pc_id=' . $pc['id'] . ' (или устарела) — отказано');
+            http_response_code(403);
+            echo json_encode(array('error' => 'command_not_targeted_to_this_pc'));
+            return;
+        }
 
         try {
             $stmt = Db::get()->prepare('

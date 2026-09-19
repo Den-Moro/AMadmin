@@ -16,24 +16,9 @@ class OccurrencesController
             return;
         }
 
-        // Одновременно и heartbeat: last_seen обновляется на каждом опросе. Агент шлёт
-        // свою версию, hostname и текущего пользователя заголовками — сохраняем их, так
-        // дашборд знает, что реально стоит на кассе (старый PowerShell-агент заголовков
-        // не шлёт — тогда поля просто не трогаем).
-        $update = Db::get()->prepare('
-            UPDATE pcs SET
-                last_seen = CURRENT_TIMESTAMP,
-                agent_version = COALESCE(:version, agent_version),
-                hostname = COALESCE(:hostname, hostname),
-                username = COALESCE(:username, username)
-            WHERE id = :id
-        ');
-        $update->execute(array(
-            'id'       => $pc['id'],
-            'version'  => isset($_SERVER['HTTP_X_AGENT_VERSION']) ? $_SERVER['HTTP_X_AGENT_VERSION'] : null,
-            'hostname' => isset($_SERVER['HTTP_X_AGENT_HOSTNAME']) ? $_SERVER['HTTP_X_AGENT_HOSTNAME'] : null,
-            'username' => isset($_SERVER['HTTP_X_AGENT_USERNAME']) ? $_SERVER['HTTP_X_AGENT_USERNAME'] : null,
-        ));
+        // Одновременно и heartbeat: last_seen, версия агента, hostname и текущий
+        // пользователь — с этого опроса дашборд знает, что реально стоит на кассе.
+        Auth::heartbeat($pc, true);
 
         $sql = "
             SELECT DISTINCT

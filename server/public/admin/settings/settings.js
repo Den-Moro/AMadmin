@@ -29,6 +29,7 @@
         protected_services: 'text',
         protected_processes: 'text',
         script_timeout_seconds_default: 'text',
+        command_ttl_hours: 'text',
     };
 
     async function loadSettings() {

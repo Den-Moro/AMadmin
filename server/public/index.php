@@ -1,5 +1,19 @@
 <?php
 
+// Любая PHP-ошибка/предупреждение — в лог, а не в тело ответа: иначе одна Deprecated-
+// строка ломает JSON у клиента и заодно показывает пути на сервере.
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
+// Кука сессии панели: недоступна из JS (HttpOnly), не уходит с чужих сайтов (SameSite),
+// по HTTPS — только по HTTPS. Это защита сессии администратора, через которого
+// выполняется код на всех кассах.
+session_set_cookie_params(array(
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    'path'     => '/',
+));
 session_start();
 
 // Всё, что пишется в базу, храним в UTC: SQLite CURRENT_TIMESTAMP всегда UTC, и если бы
@@ -13,6 +27,10 @@ require __DIR__ . '/../Core/Db.php';
 require __DIR__ . '/../Core/Auth.php';
 require __DIR__ . '/../Core/AdminAuth.php';
 require __DIR__ . '/../Core/Logger.php';
+set_error_handler(function ($severity, $message, $file, $line) {
+    Logger::warning("PHP: {$message} в {$file}:{$line}");
+    return true;
+});
 require __DIR__ . '/../Core/TargetMatcher.php';
 require __DIR__ . '/../Core/Router.php';
 require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';

@@ -225,7 +225,7 @@ class AdminPcsController
 
         // server_url для конфигов берём из адреса, по которому открыта панель: именно он
         // точно доступен снаружи (сам сервер за прокси своего внешнего адреса не знает).
-        $serverUrl = isset($_GET['server_url']) && $_GET['server_url'] !== ''
+        $serverUrl = isset($_GET['server_url']) && preg_match('#^https?://[^\s/]+$#i', rtrim($_GET['server_url'], '/'))
             ? rtrim($_GET['server_url'], '/')
             : (isset($_SERVER['HTTP_HOST']) ? 'http://' . $_SERVER['HTTP_HOST'] : 'http://localhost:8000');
 
