@@ -227,7 +227,7 @@ class AdminCommandsController
         $args = isset($p['args']) ? trim((string) $p['args']) : '';
         $timeout = isset($p['timeout_seconds']) && (int) $p['timeout_seconds'] > 0
             ? (int) $p['timeout_seconds']
-            : (int) self::setting('script_timeout_seconds_default', 60);
+            : Settings::int('script_timeout_seconds_default', 60);
 
         if (!in_array($engine, array('powershell', 'cmd'), true)) {
             return array('error' => 'invalid_engine');
@@ -298,20 +298,13 @@ class AdminCommandsController
 
     // ---- Помощники ----------------------------------------------------------------
 
-    private static function setting($key, $default)
-    {
-        $stmt = Db::get()->prepare('SELECT value FROM settings WHERE key = :key');
-        $stmt->execute(array('key' => $key));
-        $row = $stmt->fetch();
-        return $row ? $row['value'] : $default;
-    }
 
     // Списки в настройках — через запятую, регистр не важен, ".exe" у процессов
     // отбрасываем с обеих сторон, чтобы "explorer" и "Explorer.exe" считались одним.
     private static function inProtectedList($settingKey, $name)
     {
         $needle = strtolower(preg_replace('/\.exe$/i', '', trim($name)));
-        foreach (explode(',', self::setting($settingKey, '')) as $item) {
+        foreach (explode(',', (string) Settings::get($settingKey, '')) as $item) {
             $item = strtolower(preg_replace('/\.exe$/i', '', trim($item)));
             if ($item !== '' && $item === $needle) {
                 return true;

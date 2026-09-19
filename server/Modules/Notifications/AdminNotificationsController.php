@@ -128,6 +128,39 @@ class AdminNotificationsController
         echo json_encode(array('status' => 'ok', 'notification_id' => $notificationId, 'occurrence_id' => $occurrenceId));
     }
 
+    // GET /admin/notifications/{id}/acks — кто из ПК уже подтвердил (по всем показам).
+    public static function acks($id)
+    {
+        AdminAuth::requireLogin();
+        $stmt = Db::get()->prepare('
+            SELECT a.acked_at, a.reacted, p.id AS pc_id, p.hostname, p.display_name, s.name AS store_name
+            FROM notification_acks a
+            JOIN notification_occurrences o ON o.id = a.occurrence_id
+            JOIN pcs p ON p.id = a.pc_id
+            JOIN stores s ON s.id = p.store_id
+            WHERE o.notification_id = :id
+            ORDER BY a.acked_at DESC
+        ');
+        $stmt->execute(array('id' => (int) $id));
+        echo json_encode($stmt->fetchAll());
+    }
+
+    // DELETE /admin/notifications/{id} — отозвать: кассы, которые ещё не показали окно,
+    // его уже не получат; история подтверждений тех, кто успел, удаляется вместе с ним.
+    public static function destroy($id)
+    {
+        AdminAuth::requireLogin();
+        $stmt = Db::get()->prepare('DELETE FROM notifications WHERE id = :id');
+        $stmt->execute(array('id' => (int) $id));
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(array('error' => 'not_found'));
+            return;
+        }
+        Logger::info("Оповещение id={$id} отозвано автором='{$_SESSION['admin_username']}'");
+        echo json_encode(array('status' => 'ok'));
+    }
+
     private static function targetExists($type, $id)
     {
         // Фиксированный список — $type уже проверен через in_array выше, но имя таблицы

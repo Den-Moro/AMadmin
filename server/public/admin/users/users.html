@@ -4,19 +4,22 @@
 <meta charset="utf-8">
 <title>Пользователи — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
+    <div class="page-head" data-super><div>
     <h1>Пользователи панели</h1>
     <p class="muted">
         Кто может входить в эту панель и что ему разрешено. Оператор — смотрит и отправляет
         оповещения; администратор — ещё и команды на кассы, файлы, настройки, заведение ПК;
         суперадмин — всё то же плюс эта страница.
     </p>
+    </div></div>
 
-    <form id="createForm" class="card">
+    <form id="createForm" class="card" data-super>
         <h2>Новый пользователь</h2>
         <div class="row">
             <label>Логин
@@ -42,12 +45,12 @@
         <p id="createSuccess" class="success"></p>
     </form>
 
-    <h1>Все пользователи</h1>
-    <p class="muted">
+    <h1 data-super>Все пользователи</h1>
+    <p class="muted" data-super>
         Смена роли применяется сразу — даже если человек сейчас в панели. «Сбросить пароль»
         задаёт новый пароль и снимает блокировку после неудачных попыток входа.
     </p>
-    <table id="usersTable">
+    <table id="usersTable" data-super>
         <thead>
             <tr>
                 <th>Логин</th>
@@ -59,7 +62,7 @@
         </thead>
         <tbody></tbody>
     </table>
-    <p id="tableError" class="error"></p>
+    <p id="tableError" class="error" data-super></p>
 
     <h1>Мой пароль</h1>
     <form id="ownPasswordForm" class="card">

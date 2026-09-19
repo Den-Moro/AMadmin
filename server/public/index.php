@@ -5,6 +5,17 @@
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
 
+
+// Всё, что пишется в базу, храним в UTC: SQLite CURRENT_TIMESTAMP всегда UTC, и если бы
+// PHP писал время в местной зоне, часть колонок разъехалась бы с другой частью. Местное
+// время появляется только там, где его видит человек: в панели (переводится в браузере)
+// и в тихих часах (переводятся по настройке timezone).
+date_default_timezone_set('UTC');
+
+require __DIR__ . '/../Core/Config.php';
+require __DIR__ . '/../Core/Db.php';
+require __DIR__ . '/../Core/Settings.php';
+
 // Кука сессии панели: недоступна из JS (HttpOnly), не уходит с чужих сайтов (SameSite),
 // по HTTPS — только по HTTPS. Это защита сессии администратора, через которого
 // выполняется код на всех кассах.
@@ -13,6 +24,7 @@ session_set_cookie_params(array(
     'samesite' => 'Lax',
     'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
     'path'     => '/',
+    'lifetime' => max(1, Settings::int('session_lifetime_hours', 12)) * 3600,
 ));
 // Файлы сессий — рядом с базой, а не в системном /tmp: тогда сессии администраторов
 // переживают перезапуск/пересборку контейнера и переезд PHP на другую версию.
@@ -23,16 +35,10 @@ if (!is_dir($sessionDir)) {
 if (is_writable($sessionDir)) {
     ini_set('session.save_path', $sessionDir);
 }
+// Время жизни сессии — из настроек панели (вкладка «Сервер»).
+$sessionLifetime = max(1, Settings::int('session_lifetime_hours', 12)) * 3600;
+ini_set('session.gc_maxlifetime', $sessionLifetime);
 session_start();
-
-// Всё, что пишется в базу, храним в UTC: SQLite CURRENT_TIMESTAMP всегда UTC, и если бы
-// PHP писал время в местной зоне, часть колонок разъехалась бы с другой частью. Местное
-// время появляется только там, где его видит человек: в панели (переводится в браузере)
-// и в тихих часах (переводятся по настройке timezone).
-date_default_timezone_set('UTC');
-
-require __DIR__ . '/../Core/Config.php';
-require __DIR__ . '/../Core/Db.php';
 require __DIR__ . '/../Core/Auth.php';
 require __DIR__ . '/../Core/AdminAuth.php';
 require __DIR__ . '/../Core/Logger.php';
@@ -86,13 +92,25 @@ $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->post('/admin/pcs', array('AdminPcsController', 'store'));
 $router->post('/admin/pcs/bulk', array('AdminPcsController', 'bulkStore'));
 $router->get('/admin/pcs/configs.zip', array('AdminPcsController', 'exportConfigs'));
+$router->put('/admin/pcs/{id}', array('AdminPcsController', 'update'));
+$router->delete('/admin/pcs/{id}', array('AdminPcsController', 'destroy'));
+$router->post('/admin/pcs/{id}/token', array('AdminPcsController', 'regenerateToken'));
 $router->get('/admin/stores', array('AdminMetaController', 'stores'));
+$router->post('/admin/stores', array('AdminMetaController', 'storeStore'));
+$router->put('/admin/stores/{id}', array('AdminMetaController', 'updateStore'));
+$router->delete('/admin/stores/{id}', array('AdminMetaController', 'destroyStore'));
 $router->get('/admin/device-types', array('AdminMetaController', 'deviceTypes'));
+$router->post('/admin/device-types', array('AdminMetaController', 'storeDeviceType'));
+$router->put('/admin/device-types/{id}', array('AdminMetaController', 'updateDeviceType'));
+$router->delete('/admin/device-types/{id}', array('AdminMetaController', 'destroyDeviceType'));
 $router->get('/admin/notifications', array('AdminNotificationsController', 'index'));
 $router->post('/admin/notifications', array('AdminNotificationsController', 'store'));
+$router->get('/admin/notifications/{id}/acks', array('AdminNotificationsController', 'acks'));
+$router->delete('/admin/notifications/{id}', array('AdminNotificationsController', 'destroy'));
 
 $router->get('/admin/host-groups', array('AdminHostGroupsController', 'index'));
 $router->post('/admin/host-groups', array('AdminHostGroupsController', 'store'));
+$router->put('/admin/host-groups/{id}', array('AdminHostGroupsController', 'update'));
 $router->delete('/admin/host-groups/{id}', array('AdminHostGroupsController', 'destroy'));
 $router->get('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'members'));
 $router->post('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'addMember'));

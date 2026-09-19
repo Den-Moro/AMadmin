@@ -2,201 +2,188 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Удалённое администрирование — AMadmin</title>
+<title>Команды — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
-    <h1>Новая команда</h1>
-    <p class="muted">
-        Команду выполняет агент управления на каждой кассе при следующем опросе сервера
-        (обычно в пределах минуты). Результат с каждой кассы появится в таблице ниже.
-        Защищённые службы и процессы (см. Настройки) отклоняются ещё на сервере.
-    </p>
-    <form id="createForm" class="card">
-        <label>Что сделать
-            <span class="hint">Тип команды. От него зависит, какие поля появятся ниже.</span>
-            <select id="type">
-                <option value="service_control">Служба Windows: запустить / остановить / перезапустить / список</option>
-                <option value="process_action">Процесс (диспетчер задач): завершить / список</option>
-                <option value="script_run">Скрипт или программа: выполнить</option>
-                <option value="file_deploy">Файл: разложить по кассам</option>
-            </select>
-        </label>
-
-        <!-- service_control -->
-        <div class="type-fields" data-type="service_control">
-            <div class="row">
-                <label>Действие
-                    <span class="hint">«Список» вернёт все службы с состоянием, имя службы тогда не нужно.</span>
-                    <select id="serviceAction">
-                        <option value="restart">Перезапустить</option>
-                        <option value="start">Запустить</option>
-                        <option value="stop">Остановить</option>
-                        <option value="list">Список служб</option>
-                    </select>
-                </label>
-                <label>Имя службы
-                    <span class="hint">Системное имя, как в services.msc (например, Spooler), не отображаемое.</span>
-                    <input type="text" id="serviceName" placeholder="например, Spooler">
-                </label>
-            </div>
+    <div class="page-head">
+        <div>
+            <h1>Удалённое администрирование</h1>
+            <p class="muted">Команды выполняет агент управления на кассе при следующем опросе (обычно в пределах минуты). Результат с каждой кассы — в строке команды.</p>
         </div>
-
-        <!-- process_action -->
-        <div class="type-fields" data-type="process_action" style="display:none">
-            <div class="row">
-                <label>Действие
-                    <span class="hint">«Список» вернёт процессы с PID и памятью — удобно посмотреть перед завершением.</span>
-                    <select id="processAction">
-                        <option value="kill">Завершить процесс</option>
-                        <option value="list">Список процессов</option>
-                    </select>
-                </label>
-                <label>Имя процесса
-                    <span class="hint">Без .exe, например notepad. Завершатся все процессы с таким именем на каждой кассе.</span>
-                    <input type="text" id="processName" placeholder="например, notepad">
-                </label>
-                <label>PID (необязательно)
-                    <span class="hint">Только для одного конкретного ПК: на разных кассах под одним PID разные процессы.</span>
-                    <input type="number" id="processPid" min="1" placeholder="например, 4321">
-                </label>
-            </div>
+        <div class="actions" id="adminActions" hidden>
+            <button type="button" id="newBtn" class="primary">＋ Новая команда</button>
         </div>
+    </div>
 
-        <!-- script_run -->
-        <div class="type-fields" data-type="script_run" style="display:none">
-            <div class="row">
-                <label>Чем выполнять
-                    <span class="hint">PowerShell запускается с обходом Execution Policy только для этого запуска.</span>
-                    <select id="scriptEngine">
-                        <option value="powershell">PowerShell</option>
-                        <option value="cmd">CMD (bat)</option>
-                    </select>
-                </label>
-                <label>Таймаут, секунд
-                    <span class="hint">Если скрипт не завершится за это время — агент его убьёт и вернёт «timeout». Максимум 600.</span>
-                    <input type="number" id="scriptTimeout" min="1" max="600" placeholder="60">
-                </label>
-            </div>
-            <label>Текст скрипта
-                <span class="hint">Выполнится от SYSTEM на каждой кассе. Вывод (stdout/stderr, код возврата) вернётся в результаты. Либо текст, либо путь ниже — не оба.</span>
-                <textarea id="scriptText" rows="6" placeholder="Get-Date&#10;Get-Service Spooler | Select-Object Status"></textarea>
-            </label>
-            <div class="row">
-                <label>…или путь к программе/скрипту на ПК
-                    <span class="hint">Полный путь к файлу, который уже лежит на кассе, например C:\Tools\fix.ps1 или C:\Windows\System32\ipconfig.exe.</span>
-                    <input type="text" id="scriptPath" placeholder="C:\Tools\fix.ps1">
-                </label>
-                <label>Аргументы
-                    <span class="hint">Одной строкой, как в командной строке. Только для варианта с путём.</span>
-                    <input type="text" id="scriptArgs" placeholder="/all">
-                </label>
-            </div>
-        </div>
+    <div class="tabs">
+        <button type="button" class="active" data-tab="commands">Команды</button>
+        <button type="button" data-tab="files">Файлы для раскатки</button>
+    </div>
 
-        <!-- file_deploy -->
-        <div class="type-fields" data-type="file_deploy" style="display:none">
-            <div class="row">
-                <label>Файл с сервера
-                    <span class="hint">Сначала загрузите его в разделе «Файлы для раскатки» ниже.</span>
-                    <select id="deployFileId"></select>
-                </label>
-                <label>Куда положить на ПК
-                    <span class="hint">Полный путь вместе с именем файла, например C:\ProfiT\config.ini. Старый файл сохранится рядом как .bak.</span>
-                    <input type="text" id="deployTargetPath" placeholder="C:\ProfiT\config.ini">
-                </label>
-            </div>
-            <p class="muted">
-                Агент сравнит хеш файла на кассе с хешем на сервере и скачает только если они
-                отличаются — на узком канале это экономит трафик.
-            </p>
-        </div>
-
-        <div class="row">
-            <label>Кому
-                <span class="hint">Перед отправкой панель спросит подтверждение с числом хостов.</span>
-                <select id="targetType">
-                    <option value="all">Всем</option>
-                    <option value="store">Магазину</option>
-                    <option value="group">Группе хостов</option>
-                    <option value="device_type">Типу устройства</option>
-                    <option value="pc">Конкретному ПК</option>
+    <section class="tab-panel" data-panel="commands">
+        <form id="createForm" class="card" hidden>
+            <label>Что сделать
+                <span class="hint">Тип команды. От него зависит, какие поля появятся ниже.</span>
+                <select id="type">
+                    <option value="service_control">Служба Windows: запустить / остановить / перезапустить / список</option>
+                    <option value="process_action">Процесс (диспетчер задач): завершить / список</option>
+                    <option value="script_run">Скрипт или программа: выполнить</option>
+                    <option value="file_deploy">Файл: разложить по кассам</option>
                 </select>
             </label>
-            <label id="targetIdWrap" style="display:none">Кто именно
-                <select id="targetId"></select>
-            </label>
+
+            <div class="type-fields" data-type="service_control">
+                <div class="row">
+                    <label>Действие
+                        <span class="hint">«Список» вернёт все службы с состоянием, имя службы тогда не нужно.</span>
+                        <select id="serviceAction">
+                            <option value="restart">Перезапустить</option>
+                            <option value="start">Запустить</option>
+                            <option value="stop">Остановить</option>
+                            <option value="list">Список служб</option>
+                        </select>
+                    </label>
+                    <label>Имя службы
+                        <span class="hint">Системное имя, как в services.msc (например, Spooler), не отображаемое.</span>
+                        <input type="text" id="serviceName" placeholder="например, Spooler">
+                    </label>
+                </div>
+            </div>
+
+            <div class="type-fields" data-type="process_action" style="display:none">
+                <div class="row">
+                    <label>Действие
+                        <span class="hint">«Список» вернёт процессы с PID и памятью — удобно посмотреть перед завершением.</span>
+                        <select id="processAction">
+                            <option value="kill">Завершить процесс</option>
+                            <option value="list">Список процессов</option>
+                        </select>
+                    </label>
+                    <label>Имя процесса
+                        <span class="hint">Без .exe, например notepad. Завершатся все процессы с таким именем на каждой кассе.</span>
+                        <input type="text" id="processName" placeholder="например, notepad">
+                    </label>
+                    <label>PID (необязательно)
+                        <span class="hint">Только для одного конкретного ПК: на разных кассах под одним PID разные процессы.</span>
+                        <input type="number" id="processPid" min="1" placeholder="например, 4321">
+                    </label>
+                </div>
+            </div>
+
+            <div class="type-fields" data-type="script_run" style="display:none">
+                <div class="row">
+                    <label>Чем выполнять
+                        <span class="hint">PowerShell запускается с обходом Execution Policy только для этого запуска.</span>
+                        <select id="scriptEngine">
+                            <option value="powershell">PowerShell</option>
+                            <option value="cmd">CMD (bat)</option>
+                        </select>
+                    </label>
+                    <label>Таймаут, секунд
+                        <span class="hint">Если скрипт не завершится за это время — агент его убьёт и вернёт «timeout». Максимум 600.</span>
+                        <input type="number" id="scriptTimeout" min="1" max="600" placeholder="60">
+                    </label>
+                </div>
+                <label>Текст скрипта
+                    <span class="hint">Выполнится от SYSTEM на каждой кассе. Вывод (stdout/stderr, код возврата) вернётся в результаты. Либо текст, либо путь ниже — не оба.</span>
+                    <textarea id="scriptText" rows="6" placeholder="Get-Date&#10;Get-Service Spooler | Select-Object Status"></textarea>
+                </label>
+                <div class="row">
+                    <label>…или путь к программе/скрипту на ПК
+                        <span class="hint">Полный путь к файлу, который уже лежит на кассе, например C:\Tools\fix.ps1 или C:\Windows\System32\ipconfig.exe.</span>
+                        <input type="text" id="scriptPath" placeholder="C:\Tools\fix.ps1">
+                    </label>
+                    <label>Аргументы
+                        <span class="hint">Одной строкой, как в командной строке. Только для варианта с путём.</span>
+                        <input type="text" id="scriptArgs" placeholder="/all">
+                    </label>
+                </div>
+            </div>
+
+            <div class="type-fields" data-type="file_deploy" style="display:none">
+                <div class="row">
+                    <label>Файл с сервера
+                        <span class="hint">Сначала загрузите его на вкладке «Файлы для раскатки».</span>
+                        <select id="deployFileId"></select>
+                    </label>
+                    <label>Куда положить на ПК
+                        <span class="hint">Полный путь вместе с именем файла, например C:\ProfiT\config.ini. Старый файл сохранится рядом как .bak.</span>
+                        <input type="text" id="deployTargetPath" placeholder="C:\ProfiT\config.ini">
+                    </label>
+                </div>
+                <p class="note">Касса сравнит хеш файла у себя с хешем на сервере и скачает только если они отличаются. Скорость и фоновый режим — в Настройках → Команды и файлы.</p>
+            </div>
+
+            <div class="row">
+                <label>Кому
+                    <span class="hint">Перед отправкой панель спросит подтверждение с числом хостов.</span>
+                    <select id="targetType">
+                        <option value="all">Всем</option>
+                        <option value="store">Магазину</option>
+                        <option value="group">Группе хостов</option>
+                        <option value="device_type">Типу устройства</option>
+                        <option value="pc">Конкретному ПК</option>
+                    </select>
+                </label>
+                <label id="targetIdWrap" style="display:none">Кто именно
+                    <select id="targetId"></select>
+                </label>
+            </div>
+
+            <div class="row">
+                <button type="submit">Отправить команду</button>
+                <button type="button" class="ghost" id="cancelNewBtn">Отмена</button>
+            </div>
+        </form>
+
+        <div class="toolbar">
+            <input type="search" id="search" placeholder="Поиск по команде…">
+            <select id="typeFilter">
+                <option value="">Все типы</option>
+                <option value="service_control">Службы</option>
+                <option value="process_action">Процессы</option>
+                <option value="script_run">Скрипты</option>
+                <option value="file_deploy">Файлы</option>
+            </select>
+            <button type="button" id="refreshBtn" class="ghost" title="Обновить">↻ Обновить</button>
         </div>
-
-        <button type="submit">Отправить команду</button>
-        <p id="error" class="error"></p>
-        <p id="success" class="success"></p>
-    </form>
-
-    <h1>Файлы для раскатки</h1>
-    <p class="muted">
-        Загрузите файл один раз — потом его можно разложить по кассам любым числом команд.
-        Удаляйте файл только когда команды с ним уже выполнены, иначе они завершатся ошибкой.
-    </p>
-    <form id="uploadForm" class="card">
-        <label>Файл
-            <span class="hint">Любой файл: конфиг, установщик, dll. Лимит размера задаётся в php.ini сервера (см. ADMIN.md).</span>
-            <input type="file" id="uploadFile" required>
-        </label>
-        <button type="submit">Загрузить</button>
-        <p id="uploadError" class="error"></p>
-        <p id="uploadSuccess" class="success"></p>
-    </form>
-    <table id="filesTable">
-        <thead>
-            <tr>
-                <th>Имя</th>
-                <th>Размер</th>
-                <th>SHA-256</th>
-                <th>Загружен</th>
-                <th>Кем</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-
-    <h1>Последние команды</h1>
-    <table id="commandsTable">
-        <thead>
-            <tr>
-                <th>Когда</th>
-                <th>Команда</th>
-                <th>Кому</th>
-                <th>Кто отправил</th>
-                <th>В процессе</th>
-                <th>Успех</th>
-                <th>Ошибка</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-
-    <div id="detail" class="card" style="display:none">
-        <h2 id="detailTitle"></h2>
-        <table id="resultsTable">
+        <table id="commandsTable">
             <thead>
                 <tr>
-                    <th>Магазин</th>
-                    <th>Хост</th>
-                    <th>Статус</th>
-                    <th>Результат</th>
-                    <th>Застолблено</th>
-                    <th>Выполнено</th>
+                    <th>Когда</th>
+                    <th>Команда</th>
+                    <th>Кому</th>
+                    <th>Автор</th>
+                    <th>Результаты</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody></tbody>
         </table>
-    </div>
+        <p class="muted">Нажмите на строку — результат с каждой кассы. Таблица обновляется сама каждые 15 секунд.</p>
+    </section>
+
+    <section class="tab-panel" data-panel="files" hidden>
+        <form id="uploadForm" class="card" data-admin hidden>
+            <div class="row end">
+                <label>Файл
+                    <span class="hint">Любой файл: конфиг, установщик, dll. Загружается один раз — потом раскладывается любым числом команд. Лимит размера — в php.ini сервера.</span>
+                    <input type="file" id="uploadFile" required>
+                </label>
+                <button type="submit">Загрузить</button>
+            </div>
+        </form>
+        <table id="filesTable">
+            <thead><tr><th>Имя</th><th>Размер</th><th>SHA-256</th><th>Загружен</th><th>Кем</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <p class="muted">Удаляйте файл только когда команды с ним уже выполнены, иначе они завершатся ошибкой на кассах.</p>
+    </section>
 </main>
 
 <script src="/admin/shared/api.js"></script>

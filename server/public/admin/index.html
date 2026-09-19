@@ -4,104 +4,103 @@
 <meta charset="utf-8">
 <title>Дашборд — AMadmin</title>
 <link rel="stylesheet" href="shared/admin.css">
+<script src="shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
-    <h1>ПК магазинов</h1>
-    <p class="muted">
-        Все кассы и ПК, заведённые в системе. «Онлайн» — агент выходил на связь за последние
-        три минуты. Ключ любого ПК можно посмотреть кнопкой в строке — например, при переустановке.
-    </p>
-    <div class="filters">
-        <input type="text" id="search" placeholder="Поиск: hostname, пользователь, магазин…">
-        <select id="storeFilter"><option value="">Все магазины</option></select>
-        <select id="deviceTypeFilter"><option value="">Все типы устройств</option></select>
-        <button type="button" id="exportConfigsBtn">Выгрузить конфиги архивом</button>
+    <div class="page-head">
+        <div>
+            <h1>ПК магазинов</h1>
+            <p class="muted">Все кассы и ПК. «Онлайн» — агент выходил на связь недавно (окно задаётся в Настройках → Сервер).</p>
+        </div>
+        <div class="actions" id="adminActions" hidden>
+            <button type="button" id="addPcBtn" class="primary">＋ Добавить ПК</button>
+            <button type="button" id="exportConfigsBtn" title="Архив с config.json для каждого ПК из списка (с учётом фильтров)">Выгрузить конфиги</button>
+        </div>
     </div>
-    <p class="muted">
-        «Выгрузить конфиги» соберёт архив с готовым config.json для каждой кассы из списка
-        ниже (с учётом фильтров) — внутри лежат ключи доступа, разложите их по хостам
-        своими средствами. Архив храните как пароли.
-    </p>
+
+    <div class="stats">
+        <div class="stat"><div class="label">Всего ПК</div><div class="value" id="statTotal">—</div></div>
+        <div class="stat ok"><div class="label">Онлайн</div><div class="value" id="statOnline">—</div></div>
+        <div class="stat bad"><div class="label">Офлайн</div><div class="value" id="statOffline">—</div></div>
+        <div class="stat"><div class="label">Магазинов</div><div class="value" id="statStores">—</div></div>
+    </div>
+
+    <div id="addPanel" class="card" hidden>
+        <div class="tabs">
+            <button type="button" class="active" data-tab="one">Один ПК</button>
+            <button type="button" data-tab="many">Списком на весь магазин</button>
+        </div>
+
+        <form id="createPcForm" class="tab-panel" data-panel="one">
+            <div class="row">
+                <label>Магазин <select id="pcStoreId" required></select></label>
+                <label>Тип устройства <select id="pcDeviceTypeId" required></select></label>
+            </div>
+            <div class="row">
+                <label>Hostname
+                    <span class="hint">Имя компьютера в Windows (как в «Свойствах системы»).</span>
+                    <input type="text" id="pcHostname" placeholder="например, KASSA-05" required>
+                </label>
+                <label>Понятное имя (необязательно)
+                    <span class="hint">Показывается вместо hostname везде в панели.</span>
+                    <input type="text" id="pcDisplayName" placeholder="например, Касса 5">
+                </label>
+            </div>
+            <div class="row">
+                <button type="submit">Создать и показать конфиг</button>
+                <button type="button" class="ghost" data-close-add>Отмена</button>
+            </div>
+        </form>
+
+        <form id="bulkPcForm" class="tab-panel" data-panel="many" hidden>
+            <div class="row">
+                <label>Магазин <select id="bulkStoreId" required></select></label>
+                <label>Тип устройства <select id="bulkDeviceTypeId" required></select></label>
+            </div>
+            <label>Список hostname
+                <span class="hint">По одному в строке, можно через запятую. Каждому сразу выдастся ключ; уже заведённые пропускаются.</span>
+                <textarea id="bulkHostnames" rows="5" placeholder="KASSA-01&#10;KASSA-02&#10;KASSA-03" required></textarea>
+            </label>
+            <div class="row">
+                <button type="submit">Создать все</button>
+                <button type="button" class="ghost" data-close-add>Отмена</button>
+            </div>
+            <p class="muted">Ключи потом выгружаются одним архивом кнопкой «Выгрузить конфиги» (с учётом фильтров списка).</p>
+        </form>
+    </div>
+
+    <div class="toolbar">
+        <input type="search" id="search" placeholder="Поиск: hostname, пользователь, магазин…">
+        <select id="storeFilter"><option value="">Все магазины</option></select>
+        <select id="deviceTypeFilter"><option value="">Все типы</option></select>
+        <select id="stateFilter">
+            <option value="">Любой статус</option>
+            <option value="online">Только онлайн</option>
+            <option value="offline">Только офлайн</option>
+        </select>
+    </div>
+
     <table id="pcsTable">
         <thead>
             <tr>
                 <th>Статус</th>
+                <th>Хост</th>
                 <th>Магазин</th>
-                <th>Хост \ Пользователь</th>
-                <th>Тип устройства</th>
-                <th>Версия агента</th>
-                <th>Последний раз на связи</th>
+                <th>Тип</th>
+                <th>Агент</th>
+                <th>На связи</th>
                 <th></th>
             </tr>
         </thead>
         <tbody></tbody>
     </table>
-
-    <h1>Новый ПК</h1>
-    <p class="muted">
-        Заводит запись о кассе/ПК и сразу выдаёт токен для клиента — ничего руками в базе
-        править не нужно.
-    </p>
-    <form id="createPcForm" class="card">
-        <div class="row">
-            <label>Магазин
-                <select id="pcStoreId" required></select>
-            </label>
-            <label>Тип устройства
-                <select id="pcDeviceTypeId" required></select>
-            </label>
-        </div>
-        <div class="row">
-            <label>Hostname
-                <input type="text" id="pcHostname" placeholder="например, KASSA-05" required>
-            </label>
-            <label>Понятное имя (необязательно)
-                <input type="text" id="pcDisplayName" placeholder="например, Касса 5">
-            </label>
-        </div>
-        <button type="submit">Создать</button>
-        <p id="createPcError" class="error"></p>
-    </form>
-
-    <h1>Сразу много ПК</h1>
-    <p class="muted">
-        Когда разворачиваете целый магазин: впишите список имён хостов, по одному в строке.
-        Каждому сразу выдастся свой ключ. Имена, которые уже заведены, будут пропущены.
-    </p>
-    <form id="bulkPcForm" class="card">
-        <div class="row">
-            <label>Магазин
-                <select id="bulkStoreId" required></select>
-            </label>
-            <label>Тип устройства
-                <select id="bulkDeviceTypeId" required></select>
-            </label>
-        </div>
-        <label>Список хостов
-            <span class="hint">По одному в строке. Можно и через запятую.</span>
-            <textarea id="bulkHostnames" rows="5" placeholder="KASSA-01&#10;KASSA-02&#10;KASSA-03" required></textarea>
-        </label>
-        <button type="submit">Создать все</button>
-        <p id="bulkResult" class="success"></p>
-        <p id="bulkError" class="error"></p>
-    </form>
-
-    <div id="newPcConfig" class="card" style="display:none">
-        <h2>Готовый конфиг для нового ПК</h2>
-        <p class="muted">
-            Скопируйте это содержимое в <code>client/config.json</code> на новом ПК —
-            больше ничего вписывать не нужно.
-        </p>
-        <textarea id="newPcConfigText" rows="8" readonly style="width:100%; font-family: ui-monospace, Consolas, monospace; font-size: 13px;"></textarea>
-        <button type="button" id="copyConfigBtn">Скопировать</button>
-    </div>
 </main>
 
 <script src="shared/api.js"></script>
-<script src="/admin/shared/nav.js"></script>
+<script src="shared/nav.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

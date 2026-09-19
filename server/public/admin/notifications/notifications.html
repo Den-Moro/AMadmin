@@ -4,13 +4,23 @@
 <meta charset="utf-8">
 <title>Оповещения — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
-    <h1>Новое оповещение</h1>
-    <form id="createForm" class="card">
+    <div class="page-head">
+        <div>
+            <h1>Оповещения</h1>
+            <p class="muted">Сообщение кассирам поверх кассовой программы. Как окно ведёт себя на кассе — в Настройках.</p>
+        </div>
+        <div class="actions">
+            <button type="button" id="newBtn" class="primary">＋ Новое оповещение</button>
+        </div>
+    </div>
+
+    <form id="createForm" class="card" hidden>
         <label>Текст
             <span class="hint">То, что увидит кассир. Пишите просто и по делу: что происходит,
             как это его касается и что делать. Человек читает это между покупателями.</span>
@@ -70,24 +80,28 @@
             <textarea id="manualUrl" rows="2"></textarea>
         </label>
 
-        <button type="submit">Отправить</button>
-        <p id="error" class="error"></p>
-        <p id="success" class="success"></p>
+        <div class="row">
+            <button type="submit">Отправить</button>
+            <button type="button" class="ghost" id="cancelNewBtn">Отмена</button>
+        </div>
     </form>
 
-    <h1>История оповещений</h1>
+    <div class="toolbar">
+        <input type="search" id="search" placeholder="Поиск по тексту…">
+    </div>
     <table id="notificationsTable">
         <thead>
             <tr>
-                <th>Когда создано</th>
+                <th>Когда</th>
                 <th>Текст</th>
                 <th>Важность</th>
-                <th>Показов</th>
-                <th>Подтверждений</th>
+                <th>Подтвердили</th>
+                <th></th>
             </tr>
         </thead>
         <tbody></tbody>
     </table>
+    <p class="muted">Нажмите на строку — увидите, какие кассы уже подтвердили. «Отозвать» — кассы, которые ещё не показали окно, его не получат.</p>
 </main>
 
 <script src="/admin/shared/api.js"></script>

@@ -4,53 +4,27 @@
 <meta charset="utf-8">
 <title>Группы хостов — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
-    <h1>Новая группа</h1>
-    <form id="createForm" class="card">
-        <label>Название
-            <input type="text" id="name" required>
-        </label>
-        <button type="submit">Создать</button>
-        <p id="createError" class="error"></p>
-    </form>
+    <div class="page-head">
+        <div>
+            <h1>Группы хостов</h1>
+            <p class="muted">Свои наборы ПК поверх структуры «магазин» — например, «Кассы 1 этажа» или «Пилот нового релиза». Группа — цель и для оповещений, и для команд.</p>
+        </div>
+        <div class="actions">
+            <button type="button" id="addGroupBtn" class="primary">＋ Группа</button>
+        </div>
+    </div>
 
-    <h1>Группы</h1>
     <table id="groupsTable">
-        <thead>
-            <tr>
-                <th>Название</th>
-                <th>Участников</th>
-                <th></th>
-            </tr>
-        </thead>
+        <thead><tr><th>Название</th><th>Участников</th><th></th></tr></thead>
         <tbody></tbody>
     </table>
-
-    <div id="detail" class="card" style="display:none">
-        <h2 id="detailTitle"></h2>
-
-        <div class="row">
-            <label>Добавить ПК
-                <select id="addPcSelect"></select>
-            </label>
-            <button type="button" id="addPcBtn" style="align-self:flex-end">Добавить</button>
-        </div>
-
-        <table id="membersTable">
-            <thead>
-                <tr>
-                    <th>Магазин</th>
-                    <th>Хост</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
+    <p class="muted">Нажмите на строку, чтобы открыть состав группы.</p>
 </main>
 
 <script src="/admin/shared/api.js"></script>

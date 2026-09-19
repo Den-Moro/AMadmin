@@ -38,6 +38,22 @@ class AdminSettingsController
 
         $existing = Db::get()->query('SELECT key FROM settings')->fetchAll(PDO::FETCH_COLUMN);
 
+        // Серверные ключи (уровень лога, блокировка входа, сессии) — только superadmin:
+        // они влияют на безопасность самой панели, а не на поведение касс.
+        foreach ($body as $key => $value) {
+            if (in_array($key, Settings::$serverKeys, true) && $_SESSION['admin_role'] !== 'superadmin') {
+                http_response_code(403);
+                echo json_encode(array('error' => 'server_settings_require_superadmin', 'key' => $key));
+                return;
+            }
+        }
+
+        if (isset($body['log_level']) && !in_array($body['log_level'], array('debug', 'info', 'warning', 'error'), true)) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'invalid_log_level'));
+            return;
+        }
+
         $stmt = Db::get()->prepare('UPDATE settings SET value = :value WHERE key = :key');
         foreach ($body as $key => $value) {
             if (!in_array($key, $existing, true)) {
@@ -45,6 +61,7 @@ class AdminSettingsController
             }
             $stmt->execute(array('key' => $key, 'value' => (string) $value));
         }
+        Settings::forget();
 
         Logger::info("Настройки обновлены автором='{$_SESSION['admin_username']}'");
 

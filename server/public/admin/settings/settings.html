@@ -4,18 +4,28 @@
 <meta charset="utf-8">
 <title>Настройки — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
-    <h1>Настройки оповещений</h1>
-    <p class="muted">
-        Применяются ко всем новым оповещениям. Изменения подхватываются кассами при
-        следующем опросе сервера — переустанавливать агент не нужно.
-    </p>
+    <div class="page-head">
+        <div>
+            <h1>Настройки</h1>
+            <p class="muted">Всё поведение касс и самого сервера — отсюда, без правки файлов. Кассы подхватывают изменения при следующем опросе.</p>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button type="button" class="active" data-tab="notifications">Оповещения</button>
+        <button type="button" data-tab="commands">Команды и файлы</button>
+        <button type="button" data-tab="server" id="serverTab" hidden>Сервер</button>
+    </div>
+
 
     <form id="settingsForm">
+        <section class="tab-panel" data-panel="notifications">
         <div class="card">
             <h2>Как показывать</h2>
 
@@ -57,7 +67,6 @@
                 <input type="number" id="max_windows_per_poll" min="1" max="20">
             </label>
         </div>
-
         <div class="card">
             <h2>Защита от случайного закрытия</h2>
             <p class="muted" style="margin-top:0">
@@ -92,7 +101,6 @@
                 <input type="number" id="accidental_tap_guard_ms" min="0" max="5000" step="100">
             </label>
         </div>
-
         <div class="card">
             <h2>Когда показывать</h2>
 
@@ -136,7 +144,6 @@
                 шумном торговом зале, даже если смотрели не на экран.</span>
             </label>
         </div>
-
         <div class="card">
             <h2>Ваши контакты в окне у кассира</h2>
 
@@ -152,7 +159,9 @@
                 <input type="text" id="brand_contact" placeholder="например, +7 900 000-00-00">
             </label>
         </div>
+        </section>
 
+        <section class="tab-panel" data-panel="commands" hidden>
         <div class="card">
             <h2>Удалённое администрирование: защита от массовой ошибки</h2>
 
@@ -170,20 +179,12 @@
                 <input type="text" id="protected_processes">
             </label>
 
-            <label>Срок жизни команды, часов
-                <span class="hint">Касса, которая была выключена дольше этого срока, старые команды уже
-                не получит — чтобы после месяца простоя на неё не обрушились все рестарты и
-                скрипты за это время. В истории панели команды остаются.</span>
-                <input type="number" id="command_ttl_hours" min="1" max="720">
-            </label>
-
             <label>Таймаут скрипта по умолчанию, секунд
                 <span class="hint">Сколько агент ждёт завершения скрипта, если в самой команде время не
                 указано. Потом процесс убивается и приходит статус «timeout». Не больше 600.</span>
                 <input type="number" id="script_timeout_seconds_default" min="1" max="600">
             </label>
         </div>
-
         <div class="card">
             <h2>Раскатка файлов на кассы</h2>
 
@@ -208,13 +209,70 @@
                 <input type="number" id="file_deploy_limit_kbps" min="0" max="1000000">
             </label>
         </div>
+        </section>
+
+        <section class="tab-panel" data-panel="server" hidden>
+            <p class="note warn">Эти настройки меняют поведение самого сервера и защиту входа в панель — доступны только суперадмину.</p>
+        <div class="card">
+            <h2>Журнал и мониторинг</h2>
+            <label>Уровень логирования сервера
+                <span class="hint">debug — всё подряд (пока идёт обкатка). На проде с тысячами касс лог на debug
+                растёт на десятки мегабайт в час — переключите на info. warning/error — только проблемы.</span>
+                <select id="log_level">
+                    <option value="debug">debug — всё подряд</option>
+                    <option value="info">info — важные события</option>
+                    <option value="warning">warning — только подозрительное</option>
+                    <option value="error">error — только сбои</option>
+                </select>
+            </label>
+            <label>Окно «онлайн», секунд
+                <span class="hint">Сколько секунд с последнего опроса касса считается онлайн на дашборде. Должно быть
+                заметно больше интервала опроса агентов (обычно 30 с), иначе статусы будут мигать.</span>
+                <input type="number" id="online_window_seconds" min="30" max="86400">
+            </label>
+        </div>
 
         <div class="card">
-            <button type="submit">Сохранить настройки</button>
-            <p id="error" class="error"></p>
-            <p id="success" class="success"></p>
+            <h2>Вход в панель</h2>
+            <label>Неудачных попыток входа до блокировки
+                <span class="hint">Защита от подбора пароля. После стольких неверных паролей подряд логин блокируется.</span>
+                <input type="number" id="login_max_attempts" min="1" max="100">
+            </label>
+            <label>Блокировка, минут
+                <span class="hint">На сколько блокируется логин. Снять раньше — на странице «Пользователи».</span>
+                <input type="number" id="login_lockout_minutes" min="1" max="1440">
+            </label>
+            <label>Время жизни сессии, часов
+                <span class="hint">Через сколько часов бездействия панель попросит войти заново. Применяется к новым входам.</span>
+                <input type="number" id="session_lifetime_hours" min="1" max="720">
+            </label>
+        </div>
+
+        <div class="card">
+            <h2>Команды</h2>
+            <label>Срок жизни команды, часов
+                <span class="hint">Касса, которая была выключена дольше этого срока, старые команды уже
+                не получит — чтобы после месяца простоя на неё не обрушились все рестарты и
+                скрипты за это время. В истории панели команды остаются.</span>
+                <input type="number" id="command_ttl_hours" min="1" max="720">
+            </label>
+
+            <label>Потолок вывода одной команды, КБ
+                <span class="hint">Списки процессов и вывод скриптов длиннее этого обрезаются при сохранении. Хранить
+                мегабайты вывода с каждой из 3000 касс незачем.</span>
+                <input type="number" id="command_output_max_kb" min="1" max="10240">
+            </label>
+        </div>
+        </section>
+
+        <div class="card" id="saveBar">
+            <div class="row" style="align-items:center">
+                <button type="submit">Сохранить</button>
+                <span class="muted" id="saveHint">Сохраняются настройки открытой вкладки.</span>
+            </div>
         </div>
     </form>
+
 </main>
 
 <script src="/admin/shared/api.js"></script>

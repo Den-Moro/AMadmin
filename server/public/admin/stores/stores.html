@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Справочники — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="page-head">
+        <div>
+            <h1>Справочники</h1>
+            <p class="muted">Магазины и типы устройств — то, к чему привязан каждый ПК и на что можно нацелить оповещение или команду.</p>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button type="button" class="active" data-tab="stores">Магазины</button>
+        <button type="button" data-tab="types">Типы устройств</button>
+    </div>
+
+    <section class="tab-panel" data-panel="stores">
+        <div class="toolbar">
+            <input type="search" id="storeSearch" placeholder="Поиск по названию…">
+            <button type="button" id="addStoreBtn" class="primary" data-admin hidden>＋ Магазин</button>
+        </div>
+        <table id="storesTable">
+            <thead><tr><th>Название</th><th>Пилот</th><th>ПК</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <p class="muted">«Пилот» — магазин для обкатки: удобно сначала отправлять новое только ему, а потом всем.</p>
+    </section>
+
+    <section class="tab-panel" data-panel="types" hidden>
+        <div class="toolbar">
+            <span class="grow"></span>
+            <button type="button" id="addTypeBtn" class="primary" data-admin hidden>＋ Тип устройства</button>
+        </div>
+        <table id="typesTable">
+            <thead><tr><th>Название</th><th>ПК</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <p class="muted">Например: касса, ПК менеджера, ПК администратора. По типу удобно слать оповещения только кассам.</p>
+    </section>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="stores.js"></script>
+</body>
+</html>

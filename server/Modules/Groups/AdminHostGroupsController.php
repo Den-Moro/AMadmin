@@ -44,6 +44,21 @@ class AdminHostGroupsController
     // DELETE /admin/host-groups/{id} — участники удаляются каскадом (ON DELETE CASCADE
     // на host_group_members), оповещения, уже нацеленные на эту группу, не трогаем —
     // они просто перестанут кому-либо попадать, это история, а не живая настройка.
+    // PUT /admin/host-groups/{id}   body: { name }
+    public static function update($id)
+    {
+        AdminAuth::requireLogin();
+        $body = json_decode(file_get_contents('php://input'), true);
+        $name = isset($body['name']) ? trim($body['name']) : '';
+        if ($name === '') {
+            http_response_code(400);
+            echo json_encode(array('error' => 'name_required'));
+            return;
+        }
+        Db::get()->prepare('UPDATE host_groups SET name = :name WHERE id = :id')->execute(array('name' => $name, 'id' => (int) $id));
+        echo json_encode(array('status' => 'ok'));
+    }
+
     public static function destroy($id)
     {
         AdminAuth::requireLogin();
@@ -81,9 +96,19 @@ class AdminHostGroupsController
         AdminAuth::requireLogin();
 
         $body = json_decode(file_get_contents('php://input'), true);
-        $pcId = isset($body['pc_id']) ? (int) $body['pc_id'] : 0;
+        // Один pc_id или сразу список pc_ids — группу обычно наполняют пачкой.
+        $ids = array();
+        if (!empty($body['pc_id'])) {
+            $ids[] = (int) $body['pc_id'];
+        }
+        if (!empty($body['pc_ids']) && is_array($body['pc_ids'])) {
+            foreach ($body['pc_ids'] as $pcId) {
+                $ids[] = (int) $pcId;
+            }
+        }
+        $ids = array_values(array_unique(array_filter($ids)));
 
-        if (!$pcId) {
+        if (!$ids) {
             http_response_code(400);
             echo json_encode(array('error' => 'pc_id_required'));
             return;
@@ -92,9 +117,11 @@ class AdminHostGroupsController
         // INSERT OR IGNORE — добавление уже состоящего в группе ПК просто ничего не делает,
         // а не падает на PRIMARY KEY (group_id, pc_id).
         $stmt = Db::get()->prepare('INSERT OR IGNORE INTO host_group_members (group_id, pc_id) VALUES (:group_id, :pc_id)');
-        $stmt->execute(array('group_id' => (int) $id, 'pc_id' => $pcId));
+        foreach ($ids as $pcId) {
+            $stmt->execute(array('group_id' => (int) $id, 'pc_id' => $pcId));
+        }
 
-        echo json_encode(array('status' => 'ok'));
+        echo json_encode(array('status' => 'ok', 'added' => count($ids)));
     }
 
     // DELETE /admin/host-groups/{id}/members/{pcId}

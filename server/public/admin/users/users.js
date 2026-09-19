@@ -32,11 +32,7 @@
     // но блок «Мой пароль» им всё равно нужен, поэтому не редиректим, а прячем лишнее.
     const isSuper = me.role === 'superadmin';
     if (!isSuper) {
-        $('createForm').style.display = 'none';
-        $('usersTable').style.display = 'none';
-        document.querySelectorAll('main > h1, main > p.muted').forEach(function (el, i) {
-            if (i < 4) el.style.display = 'none';
-        });
+        document.querySelectorAll('[data-super]').forEach(function (el) { el.hidden = true; });
     }
 
     async function loadUsers() {
@@ -109,13 +105,15 @@
         $('tableError').textContent = '';
         try {
             if (t.getAttribute('data-reset')) {
-                const pwd = prompt('Новый пароль (не короче 8 символов):');
+                const pwd = await Ui.prompt('Новый пароль', { title: 'Сбросить пароль', type: 'password', okLabel: 'Сбросить',
+                    hint: 'Не короче 8 символов. Блокировка после подбора снимется.',
+                    validate: function (v) { return v.length >= 8 ? null : 'Не короче 8 символов.'; } });
                 if (pwd === null) return;
                 await Api.request('PUT', '/admin/users/' + t.getAttribute('data-reset'), { password: pwd });
             } else if (t.getAttribute('data-unlock')) {
                 await Api.post('/admin/users/' + t.getAttribute('data-unlock') + '/unlock');
             } else if (t.getAttribute('data-delete')) {
-                if (!confirm('Удалить пользователя ' + t.getAttribute('data-name') + '? История его команд останется, но без автора.')) return;
+                if (!await Ui.confirm('Удалить пользователя ' + t.getAttribute('data-name') + '? История его команд останется, но без автора.', { danger: true, okLabel: 'Удалить' })) return;
                 await Api.request('DELETE', '/admin/users/' + t.getAttribute('data-delete'));
             } else {
                 return;

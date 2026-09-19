@@ -69,7 +69,7 @@ class AdminPcsController
         $rows = $stmt->fetchAll();
 
         foreach ($rows as &$row) {
-            $row['online'] = $row['last_seen'] !== null && $row['seconds_since_seen'] <= self::ONLINE_WINDOW_SECONDS;
+            $row['online'] = $row['last_seen'] !== null && $row['seconds_since_seen'] <= Settings::int('online_window_seconds', self::ONLINE_WINDOW_SECONDS);
             unset($row['seconds_since_seen']);
         }
         unset($row);
@@ -119,6 +119,84 @@ class AdminPcsController
         Logger::info("ПК создан вручную из панели: id={$id} hostname='{$hostname}' автор='{$_SESSION['admin_username']}'");
 
         echo json_encode(array('status' => 'ok', 'id' => $id, 'agent_token' => $token));
+    }
+
+    // PUT /admin/pcs/{id}   body: { display_name?, store_id?, device_type_id? }
+    public static function update($id)
+    {
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
+
+        $id = (int) $id;
+        $body = json_decode(file_get_contents('php://input'), true);
+        $fields = array();
+        $params = array('id' => $id);
+
+        if (array_key_exists('display_name', $body)) {
+            $fields[] = 'display_name = :display_name';
+            $params['display_name'] = trim((string) $body['display_name']) !== '' ? trim($body['display_name']) : null;
+        }
+        if (!empty($body['store_id'])) {
+            $fields[] = 'store_id = :store_id';
+            $params['store_id'] = (int) $body['store_id'];
+        }
+        if (!empty($body['device_type_id'])) {
+            $fields[] = 'device_type_id = :device_type_id';
+            $params['device_type_id'] = (int) $body['device_type_id'];
+        }
+        if (!$fields) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'nothing_to_update'));
+            return;
+        }
+
+        $stmt = Db::get()->prepare('UPDATE pcs SET ' . implode(', ', $fields) . ' WHERE id = :id');
+        $stmt->execute($params);
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(array('error' => 'not_found'));
+            return;
+        }
+
+        Logger::info("ПК id={$id} изменён (" . implode(', ', array_keys(array_diff_key($params, array('id' => 1)))) . ") автор='{$_SESSION['admin_username']}'");
+        echo json_encode(array('status' => 'ok'));
+    }
+
+    // POST /admin/pcs/{id}/token — выдать ПК новый ключ. Старый перестаёт работать сразу:
+    // это способ «отозвать доступ», если конфиг с ключом утёк или касса ушла из парка.
+    public static function regenerateToken($id)
+    {
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
+
+        $id = (int) $id;
+        $token = bin2hex(random_bytes(32));
+        $stmt = Db::get()->prepare('UPDATE pcs SET agent_token = :token WHERE id = :id');
+        $stmt->execute(array('token' => $token, 'id' => $id));
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(array('error' => 'not_found'));
+            return;
+        }
+
+        Logger::warning("ПК id={$id}: ключ перевыпущен, старый отозван автором='{$_SESSION['admin_username']}'");
+        echo json_encode(array('status' => 'ok', 'agent_token' => $token));
+    }
+
+    // DELETE /admin/pcs/{id} — вместе с историей подтверждений/результатов (ON DELETE CASCADE).
+    public static function destroy($id)
+    {
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
+
+        $id = (int) $id;
+        $stmt = Db::get()->prepare('DELETE FROM pcs WHERE id = :id');
+        $stmt->execute(array('id' => $id));
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(array('error' => 'not_found'));
+            return;
+        }
+
+        Logger::warning("ПК id={$id} удалён автором='{$_SESSION['admin_username']}'");
+        echo json_encode(array('status' => 'ok'));
     }
 
     // POST /admin/pcs/bulk   body: { store_id, device_type_id, hostnames: "KASSA-01\nKASSA-02..." }

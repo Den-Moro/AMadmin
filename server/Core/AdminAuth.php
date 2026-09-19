@@ -80,8 +80,11 @@ class AdminAuth
         $attempts = $user['failed_attempts'] + 1;
         $lockedUntil = null;
 
-        if ($attempts >= self::MAX_ATTEMPTS) {
-            $lockedUntil = date('Y-m-d H:i:s', time() + self::LOCKOUT_MINUTES * 60);
+        // Пороги — из настроек панели (вкладка «Сервер»), константы — запасные значения.
+        $maxAttempts = max(1, Settings::int('login_max_attempts', self::MAX_ATTEMPTS));
+        $lockoutMinutes = max(1, Settings::int('login_lockout_minutes', self::LOCKOUT_MINUTES));
+        if ($attempts >= $maxAttempts) {
+            $lockedUntil = date('Y-m-d H:i:s', time() + $lockoutMinutes * 60);
         }
 
         $stmt = Db::get()->prepare('UPDATE admin_users SET failed_attempts = :attempts, locked_until = :locked WHERE id = :id');

@@ -57,7 +57,11 @@ class Logger
     private static function minLevel()
     {
         if (self::$minLevel === null) {
-            $configured = strtolower((string) Config::get('log_level'));
+            // Сначала настройка из панели (Settings), затем config.php, затем debug.
+            $configured = class_exists('Settings') ? strtolower((string) Settings::get('log_level', '')) : '';
+            if (!isset(self::$levels[$configured])) {
+                $configured = strtolower((string) Config::get('log_level'));
+            }
             self::$minLevel = isset(self::$levels[$configured]) ? self::$levels[$configured] : self::$levels['debug'];
         }
 

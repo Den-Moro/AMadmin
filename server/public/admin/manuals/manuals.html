@@ -4,37 +4,27 @@
 <meta charset="utf-8">
 <title>Мануалы — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
-    <h1 id="formTitle">Новый мануал</h1>
-    <form id="manualForm" class="card">
-        <input type="hidden" id="editId" value="">
-        <label>Название
-            <input type="text" id="title" required>
-        </label>
-        <label>Текст или ссылка
-            <textarea id="urlOrText" rows="4" required></textarea>
-        </label>
-        <div class="row">
-            <button type="submit" id="submitBtn">Сохранить</button>
-            <button type="button" id="cancelEditBtn" style="display:none">Отменить редактирование</button>
+    <div class="page-head">
+        <div>
+            <h1>Библиотека мануалов</h1>
+            <p class="muted">Готовые инструкции для кассиров, которые прикладываются к оповещениям. Текст копируется в оповещение при отправке — поздняя правка мануала уже отправленное не меняет.</p>
         </div>
-        <p id="error" class="error"></p>
-    </form>
+        <div class="actions">
+            <button type="button" id="addBtn" class="primary">＋ Мануал</button>
+        </div>
+    </div>
 
-    <h1>Библиотека мануалов</h1>
+    <div class="toolbar">
+        <input type="search" id="search" placeholder="Поиск по названию и тексту…">
+    </div>
     <table id="manualsTable">
-        <thead>
-            <tr>
-                <th>Название</th>
-                <th>Текст/ссылка</th>
-                <th>Обновлён</th>
-                <th></th>
-            </tr>
-        </thead>
+        <thead><tr><th>Название</th><th>Текст / ссылка</th><th>Обновлён</th><th></th></tr></thead>
         <tbody></tbody>
     </table>
 </main>

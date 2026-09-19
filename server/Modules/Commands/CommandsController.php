@@ -36,9 +36,9 @@ class CommandsController
             }
             if ($deploySettings === null) {
                 $deploySettings = array(
-                    'async'        => self::setting('file_deploy_async', '1') === '1',
-                    'max_parallel' => max(1, (int) self::setting('file_deploy_max_parallel', 2)),
-                    'limit_kbps'   => max(0, (int) self::setting('file_deploy_limit_kbps', 0)),
+                    'async'        => Settings::bool('file_deploy_async', true),
+                    'max_parallel' => max(1, Settings::int('file_deploy_max_parallel', 2)),
+                    'limit_kbps'   => max(0, Settings::int('file_deploy_limit_kbps', 0)),
                 );
             }
             $payload = json_decode($row['payload'], true);
@@ -64,7 +64,7 @@ class CommandsController
     // notification_targets), поэтому условие здесь своё, не переиспользует класс.
     public static function commandsForPc($pc, $onlyPending, $commandId = null, $type = null)
     {
-        $ttlHours = (int) self::setting('command_ttl_hours', 24);
+        $ttlHours = (int) Settings::int('command_ttl_hours', 24);
 
         $sql = "
             SELECT c.id, c.type, c.payload, c.created_at
@@ -115,13 +115,6 @@ class CommandsController
         return count(self::commandsForPc($pc, false, $commandId)) > 0;
     }
 
-    private static function setting($key, $default)
-    {
-        $stmt = Db::get()->prepare('SELECT value FROM settings WHERE key = :key');
-        $stmt->execute(array('key' => $key));
-        $row = $stmt->fetch();
-        return $row ? $row['value'] : $default;
-    }
 
     // POST /commands/{id}/claim
     // "Застолбить" команду перед выполнением — см. пояснение про идемпотентность
@@ -196,8 +189,9 @@ class CommandsController
 
         // Вывод скрипта или список процессов может быть большим; хранить мегабайты на
         // каждую из 3000 касс в SQLite незачем — обрезаем с пометкой, начало важнее.
-        if ($output !== null && strlen($output) > self::MAX_OUTPUT_BYTES) {
-            $output = substr($output, 0, self::MAX_OUTPUT_BYTES) . "\n… [вывод обрезан сервером]";
+        $maxBytes = max(1, Settings::int('command_output_max_kb', self::MAX_OUTPUT_BYTES / 1024)) * 1024;
+        if ($output !== null && strlen($output) > $maxBytes) {
+            $output = substr($output, 0, $maxBytes) . "\n… [вывод обрезан сервером]";
         }
 
         $stmt = Db::get()->prepare("
