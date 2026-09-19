@@ -14,6 +14,15 @@ session_set_cookie_params(array(
     'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
     'path'     => '/',
 ));
+// Файлы сессий — рядом с базой, а не в системном /tmp: тогда сессии администраторов
+// переживают перезапуск/пересборку контейнера и переезд PHP на другую версию.
+$sessionDir = __DIR__ . '/../data/sessions';
+if (!is_dir($sessionDir)) {
+    @mkdir($sessionDir, 0700, true);
+}
+if (is_writable($sessionDir)) {
+    ini_set('session.save_path', $sessionDir);
+}
 session_start();
 
 // Всё, что пишется в базу, храним в UTC: SQLite CURRENT_TIMESTAMP всегда UTC, и если бы
@@ -37,6 +46,7 @@ require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';
 require __DIR__ . '/../Modules/Notifications/AckController.php';
 require __DIR__ . '/../Modules/Notifications/AdminNotificationsController.php';
 require __DIR__ . '/../Modules/Auth/AdminAuthController.php';
+require __DIR__ . '/../Modules/Auth/AdminUsersController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminPcsController.php';
 require __DIR__ . '/../Modules/Meta/AdminMetaController.php';
 require __DIR__ . '/../Modules/Groups/AdminHostGroupsController.php';
@@ -66,6 +76,12 @@ $router->get('/files/{id}', array('FilesController', 'download'));
 $router->post('/admin/login', array('AdminAuthController', 'login'));
 $router->post('/admin/logout', array('AdminAuthController', 'logout'));
 $router->get('/admin/me', array('AdminAuthController', 'me'));
+$router->post('/admin/me/password', array('AdminUsersController', 'changeOwnPassword'));
+$router->get('/admin/users', array('AdminUsersController', 'index'));
+$router->post('/admin/users', array('AdminUsersController', 'store'));
+$router->put('/admin/users/{id}', array('AdminUsersController', 'update'));
+$router->post('/admin/users/{id}/unlock', array('AdminUsersController', 'unlock'));
+$router->delete('/admin/users/{id}', array('AdminUsersController', 'destroy'));
 $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->post('/admin/pcs', array('AdminPcsController', 'store'));
 $router->post('/admin/pcs/bulk', array('AdminPcsController', 'bulkStore'));

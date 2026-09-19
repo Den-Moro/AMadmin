@@ -14,6 +14,20 @@ class AdminAuth
             echo json_encode(array('error' => 'auth_required'));
             exit;
         }
+
+        // Роль и само существование учётки сверяем с базой на каждом запросе, а не
+        // верим сессии: удалённый или пониженный из панели пользователь теряет права
+        // сразу, а не когда сам соизволит выйти. Один индексный SELECT — дёшево.
+        $stmt = Db::get()->prepare('SELECT role FROM admin_users WHERE id = :id');
+        $stmt->execute(array('id' => $_SESSION['admin_id']));
+        $role = $stmt->fetchColumn();
+        if ($role === false) {
+            $_SESSION = array();
+            http_response_code(401);
+            echo json_encode(array('error' => 'auth_required'));
+            exit;
+        }
+        $_SESSION['admin_role'] = $role;
     }
 
     // Как requireLogin(), но ещё и проверяет роль — для самых рискованных действий

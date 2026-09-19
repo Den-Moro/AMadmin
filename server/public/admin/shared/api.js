@@ -49,7 +49,11 @@ function formatServerTime(value) {
 // на логин, дальше страница не выполняется.
 async function requireAdminAuth() {
     try {
-        return await Api.get('/admin/me');
+        const me = await Api.get('/admin/me');
+        // Боковая панель подставляет имя/роль и прячет разделы не по роли (см. nav.js).
+        // const из nav.js не попадает в window — проверяем через typeof.
+        if (typeof Nav !== 'undefined') Nav.setUser(me);
+        return me;
     } catch (e) {
         // Абсолютный путь: api.js общий для страниц на разной глубине (корень admin/ и
         // подпапки модулей вроде admin/notifications/) — относительный 'login.html' увёл

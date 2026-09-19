@@ -1,10 +1,6 @@
 (async function () {
     await requireAdminAuth();
 
-    document.getElementById('logoutBtn').addEventListener('click', async function () {
-        await Api.post('/admin/logout');
-        window.location.href = '/admin/login.html';
-    });
 
     function escapeHtml(s) {
         const div = document.createElement('div');

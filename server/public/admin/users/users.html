@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пользователи — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <h1>Пользователи панели</h1>
+    <p class="muted">
+        Кто может входить в эту панель и что ему разрешено. Оператор — смотрит и отправляет
+        оповещения; администратор — ещё и команды на кассы, файлы, настройки, заведение ПК;
+        суперадмин — всё то же плюс эта страница.
+    </p>
+
+    <form id="createForm" class="card">
+        <h2>Новый пользователь</h2>
+        <div class="row">
+            <label>Логин
+                <span class="hint">Латиница, цифры, точка, дефис, подчёркивание. Изменить потом нельзя.</span>
+                <input type="text" id="newUsername" autocomplete="off" required>
+            </label>
+            <label>Пароль
+                <span class="hint">Не короче 8 символов. Через эту учётку выполняется код на всех кассах —
+                «1234» тут не место.</span>
+                <input type="password" id="newPassword" autocomplete="new-password" required>
+            </label>
+            <label>Роль
+                <span class="hint">Начните с оператора — повысить можно в любой момент в таблице ниже.</span>
+                <select id="newRole">
+                    <option value="operator">Оператор</option>
+                    <option value="administrator">Администратор</option>
+                    <option value="superadmin">Суперадмин</option>
+                </select>
+            </label>
+        </div>
+        <button type="submit">Создать</button>
+        <p id="createError" class="error"></p>
+        <p id="createSuccess" class="success"></p>
+    </form>
+
+    <h1>Все пользователи</h1>
+    <p class="muted">
+        Смена роли применяется сразу — даже если человек сейчас в панели. «Сбросить пароль»
+        задаёт новый пароль и снимает блокировку после неудачных попыток входа.
+    </p>
+    <table id="usersTable">
+        <thead>
+            <tr>
+                <th>Логин</th>
+                <th>Роль</th>
+                <th>Состояние</th>
+                <th>Создан</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <p id="tableError" class="error"></p>
+
+    <h1>Мой пароль</h1>
+    <form id="ownPasswordForm" class="card">
+        <div class="row">
+            <label>Текущий пароль
+                <input type="password" id="currentPassword" autocomplete="current-password" required>
+            </label>
+            <label>Новый пароль
+                <span class="hint">Не короче 8 символов.</span>
+                <input type="password" id="ownNewPassword" autocomplete="new-password" required>
+            </label>
+        </div>
+        <button type="submit">Сменить пароль</button>
+        <p id="ownError" class="error"></p>
+        <p id="ownSuccess" class="success"></p>
+    </form>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="users.js"></script>
+</body>
+</html>

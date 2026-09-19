@@ -5,22 +5,41 @@
 <title>Дашборд — AMadmin</title>
 <link rel="stylesheet" href="shared/admin.css">
 </head>
-<body>
-<header class="topbar">
-    <div class="brand">AMadmin</div>
-    <nav>
-        <a href="/admin/index.html" class="active">Дашборд</a>
-        <a href="/admin/notifications/notifications.html">Оповещения</a>
-        <a href="/admin/groups/groups.html">Группы</a>
-        <a href="/admin/manuals/manuals.html">Мануалы</a>
-        <a href="/admin/commands/commands.html">Команды</a>
-        <a href="/admin/settings/settings.html">Настройки</a>
-    </nav>
-    <span id="roleLabel" class="muted" style="margin-right:12px"></span>
-    <button id="logoutBtn">Выйти</button>
-</header>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
 
 <main>
+    <h1>ПК магазинов</h1>
+    <p class="muted">
+        Все кассы и ПК, заведённые в системе. «Онлайн» — агент выходил на связь за последние
+        три минуты. Ключ любого ПК можно посмотреть кнопкой в строке — например, при переустановке.
+    </p>
+    <div class="filters">
+        <input type="text" id="search" placeholder="Поиск: hostname, пользователь, магазин…">
+        <select id="storeFilter"><option value="">Все магазины</option></select>
+        <select id="deviceTypeFilter"><option value="">Все типы устройств</option></select>
+        <button type="button" id="exportConfigsBtn">Выгрузить конфиги архивом</button>
+    </div>
+    <p class="muted">
+        «Выгрузить конфиги» соберёт архив с готовым config.json для каждой кассы из списка
+        ниже (с учётом фильтров) — внутри лежат ключи доступа, разложите их по хостам
+        своими средствами. Архив храните как пароли.
+    </p>
+    <table id="pcsTable">
+        <thead>
+            <tr>
+                <th>Статус</th>
+                <th>Магазин</th>
+                <th>Хост \ Пользователь</th>
+                <th>Тип устройства</th>
+                <th>Версия агента</th>
+                <th>Последний раз на связи</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
     <h1>Новый ПК</h1>
     <p class="muted">
         Заводит запись о кассе/ПК и сразу выдаёт токен для клиента — ничего руками в базе
@@ -79,36 +98,10 @@
         <textarea id="newPcConfigText" rows="8" readonly style="width:100%; font-family: ui-monospace, Consolas, monospace; font-size: 13px;"></textarea>
         <button type="button" id="copyConfigBtn">Скопировать</button>
     </div>
-
-    <h1>ПК магазинов</h1>
-    <div class="filters">
-        <input type="text" id="search" placeholder="Поиск: hostname, пользователь, магазин…">
-        <select id="storeFilter"><option value="">Все магазины</option></select>
-        <select id="deviceTypeFilter"><option value="">Все типы устройств</option></select>
-        <button type="button" id="exportConfigsBtn">Выгрузить конфиги архивом</button>
-    </div>
-    <p class="muted">
-        «Выгрузить конфиги» соберёт архив с готовым config.json для каждой кассы из списка
-        ниже (с учётом фильтров) — внутри лежат ключи доступа, разложите их по хостам
-        своими средствами. Архив храните как пароли.
-    </p>
-    <table id="pcsTable">
-        <thead>
-            <tr>
-                <th>Статус</th>
-                <th>Магазин</th>
-                <th>Хост \ Пользователь</th>
-                <th>Тип устройства</th>
-                <th>Версия агента</th>
-                <th>Последний раз на связи</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
 </main>
 
 <script src="shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

@@ -5,19 +5,8 @@
 <title>Удалённое администрирование — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
 </head>
-<body>
-<header class="topbar">
-    <div class="brand">AMadmin</div>
-    <nav>
-        <a href="/admin/index.html">Дашборд</a>
-        <a href="/admin/notifications/notifications.html">Оповещения</a>
-        <a href="/admin/groups/groups.html">Группы</a>
-        <a href="/admin/manuals/manuals.html">Мануалы</a>
-        <a href="/admin/commands/commands.html" class="active">Команды</a>
-        <a href="/admin/settings/settings.html">Настройки</a>
-    </nav>
-    <button id="logoutBtn">Выйти</button>
-</header>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
 
 <main>
     <h1>Новая команда</h1>
@@ -211,6 +200,7 @@
 </main>
 
 <script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
 <script src="commands.js"></script>
 </body>
 </html>

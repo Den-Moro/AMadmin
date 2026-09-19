@@ -1,10 +1,6 @@
 (async function () {
     await requireAdminAuth();
 
-    document.getElementById('logoutBtn').addEventListener('click', async function () {
-        await Api.post('/admin/logout');
-        window.location.href = '/admin/login.html';
-    });
 
     // Все поля настроек: имя ключа в базе -> тип поля. Один список вместо ручного
     // перечисления в двух местах, чтобы добавление новой настройки не требовало

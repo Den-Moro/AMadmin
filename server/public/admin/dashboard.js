@@ -1,12 +1,6 @@
 (async function () {
     const me = await requireAdminAuth();
 
-    document.getElementById('roleLabel').textContent = me.username + ' (' + me.role + ')';
-
-    document.getElementById('logoutBtn').addEventListener('click', async function () {
-        await Api.post('/admin/logout');
-        window.location.href = '/admin/login.html';
-    });
 
     const searchEl = document.getElementById('search');
     const storeEl = document.getElementById('storeFilter');
