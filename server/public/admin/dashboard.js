@@ -89,6 +89,10 @@
             agent_token: token,
             poll_interval_seconds: 30,
             log_level: 'debug',
+            proxy_url: '',
+            proxy_username: '',
+            proxy_password: '',
+            download_limit_kbps: 0,
         };
         return JSON.stringify(config, null, 4);
     }
@@ -153,7 +157,8 @@
                 '<td>' + escapeHtml(pc.device_type_name) + '</td>' +
                 '<td>' + escapeHtml(pc.agent_version || '—') + '</td>' +
                 '<td>' + escapeHtml(formatLastSeen(pc.last_seen)) + '</td>' +
-                '<td><button type="button" data-token="' + escapeHtml(pc.agent_token) + '">Показать конфиг</button></td>';
+                // Оператору сервер ключи не отдаёт — кнопки конфига у него нет.
+                '<td>' + (pc.agent_token ? '<button type="button" data-token="' + escapeHtml(pc.agent_token) + '">Показать конфиг</button>' : '') + '</td>';
             tbody.appendChild(tr);
         });
     }

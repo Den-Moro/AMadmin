@@ -18,6 +18,15 @@ class AdminPcsController
             isset($_GET['search']) ? trim($_GET['search']) : ''
         );
 
+        // agent_token — это пароль кассы. Оператору список нужен, а ключи — нет: их
+        // видят только те, кто может заводить ПК и выгружать конфиги (administrator+).
+        if ($_SESSION['admin_role'] === 'operator') {
+            foreach ($rows as &$row) {
+                unset($row['agent_token']);
+            }
+            unset($row);
+        }
+
         echo json_encode($rows);
     }
 
@@ -75,7 +84,8 @@ class AdminPcsController
     // сразу показывает готовый config.json, копировать вручную из БД не нужно.
     public static function store()
     {
-        AdminAuth::requireLogin();
+        // Заведение ПК выдаёт ключ доступа — тот же уровень, что и команды на кассы.
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         $body = json_decode(file_get_contents('php://input'), true);
         $storeId = isset($body['store_id']) ? (int) $body['store_id'] : 0;
@@ -117,7 +127,7 @@ class AdminPcsController
     // список обычно составляют вручную, и повтор в нём — норма, а не повод отменять всё.
     public static function bulkStore()
     {
-        AdminAuth::requireLogin();
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         $body = json_decode(file_get_contents('php://input'), true);
         $storeId = isset($body['store_id']) ? (int) $body['store_id'] : 0;
@@ -191,7 +201,8 @@ class AdminPcsController
     // на сами хосты: фильтры те же, что в списке ПК, — что видите, то и выгружается.
     public static function exportConfigs()
     {
-        AdminAuth::requireLogin();
+        // Архив содержит ключи всех касс — только administrator+.
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         if (!class_exists('ZipArchive')) {
             http_response_code(500);
@@ -242,6 +253,7 @@ class AdminPcsController
                 'proxy_url'             => '',
                 'proxy_username'        => '',
                 'proxy_password'        => '',
+                'download_limit_kbps'   => 0,
             );
 
             // Имя папки — hostname, чтобы было очевидно, какой конфиг на какую кассу.
