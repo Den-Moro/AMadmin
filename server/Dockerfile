@@ -3,8 +3,10 @@
 # гонять сервер в изолированной, воспроизводимой среде вместо `php -S` прямо на хосте.
 FROM php:8.3-cli-alpine
 
-RUN apk add --no-cache sqlite-dev \
-    && docker-php-ext-install pdo_sqlite
+# zip — для выгрузки конфигов всех касс одним архивом (см. AdminPcsController::exportConfigs).
+# На Windows-сервере это расширение идёт в комплекте с PHP, нужно лишь включить в php.ini.
+RUN apk add --no-cache sqlite-dev libzip-dev \
+    && docker-php-ext-install pdo_sqlite zip
 
 WORKDIR /app
 

@@ -46,6 +46,8 @@ $router->post('/admin/logout', array('AdminAuthController', 'logout'));
 $router->get('/admin/me', array('AdminAuthController', 'me'));
 $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->post('/admin/pcs', array('AdminPcsController', 'store'));
+$router->post('/admin/pcs/bulk', array('AdminPcsController', 'bulkStore'));
+$router->get('/admin/pcs/configs.zip', array('AdminPcsController', 'exportConfigs'));
 $router->get('/admin/stores', array('AdminMetaController', 'stores'));
 $router->get('/admin/device-types', array('AdminMetaController', 'deviceTypes'));
 $router->get('/admin/notifications', array('AdminNotificationsController', 'index'));

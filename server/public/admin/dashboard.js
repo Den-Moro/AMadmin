@@ -13,6 +13,8 @@
     const deviceTypeEl = document.getElementById('deviceTypeFilter');
     const pcStoreIdEl = document.getElementById('pcStoreId');
     const pcDeviceTypeIdEl = document.getElementById('pcDeviceTypeId');
+    const bulkStoreIdEl = document.getElementById('bulkStoreId');
+    const bulkDeviceTypeIdEl = document.getElementById('bulkDeviceTypeId');
     const tbody = document.querySelector('#pcsTable tbody');
 
     function debounce(fn, ms) {
@@ -40,6 +42,11 @@
             formOpt.value = store.id;
             formOpt.textContent = label;
             pcStoreIdEl.appendChild(formOpt);
+
+            const bulkOpt = document.createElement('option');
+            bulkOpt.value = store.id;
+            bulkOpt.textContent = label;
+            bulkStoreIdEl.appendChild(bulkOpt);
         });
 
         deviceTypes.forEach(function (dt) {
@@ -52,6 +59,11 @@
             formOpt.value = dt.id;
             formOpt.textContent = dt.name;
             pcDeviceTypeIdEl.appendChild(formOpt);
+
+            const bulkOpt = document.createElement('option');
+            bulkOpt.value = dt.id;
+            bulkOpt.textContent = dt.name;
+            bulkDeviceTypeIdEl.appendChild(bulkOpt);
         });
     }
 
@@ -151,6 +163,48 @@
         if (token) {
             showConfig(token);
         }
+    });
+
+    // Массовое создание: сервер возвращает списки созданных и пропущенных хостов, а не
+    // одно число, — при развёртывании магазина важно видеть, какие именно имена уже были.
+    document.getElementById('bulkPcForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const resultEl = document.getElementById('bulkResult');
+        const errorEl = document.getElementById('bulkError');
+        resultEl.textContent = '';
+        errorEl.textContent = '';
+
+        const body = {
+            store_id: bulkStoreIdEl.value,
+            device_type_id: bulkDeviceTypeIdEl.value,
+            hostnames: document.getElementById('bulkHostnames').value,
+        };
+
+        try {
+            const result = await Api.post('/admin/pcs/bulk', body);
+            let text = 'Создано: ' + result.created.length + '.';
+            if (result.skipped.length) {
+                text += ' Пропущено (уже были): ' + result.skipped.join(', ') + '.';
+            }
+            text += ' Ключи выгрузите архивом в списке ниже.';
+            resultEl.textContent = text;
+            document.getElementById('bulkHostnames').value = '';
+            await loadPcs();
+        } catch (err) {
+            errorEl.textContent = 'Не удалось создать ПК — проверьте магазин, тип устройства и список хостов.';
+        }
+    });
+
+    // Выгрузка архива — обычная ссылка на скачивание с теми же фильтрами, что в списке.
+    // server_url передаём с клиента: сервер за прокси своего внешнего адреса не знает, а
+    // адрес, по которому открыта панель, гарантированно рабочий.
+    document.getElementById('exportConfigsBtn').addEventListener('click', function () {
+        const params = new URLSearchParams();
+        if (searchEl.value) params.set('search', searchEl.value);
+        if (storeEl.value) params.set('store_id', storeEl.value);
+        if (deviceTypeEl.value) params.set('device_type_id', deviceTypeEl.value);
+        params.set('server_url', window.location.origin);
+        window.location.href = '/admin/pcs/configs.zip?' + params.toString();
     });
 
     searchEl.addEventListener('input', debounce(loadPcs, 300));

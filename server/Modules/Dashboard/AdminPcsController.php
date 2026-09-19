@@ -12,10 +12,20 @@ class AdminPcsController
     {
         AdminAuth::requireLogin();
 
-        $storeId = isset($_GET['store_id']) && $_GET['store_id'] !== '' ? (int) $_GET['store_id'] : null;
-        $deviceTypeId = isset($_GET['device_type_id']) && $_GET['device_type_id'] !== '' ? (int) $_GET['device_type_id'] : null;
-        $search = isset($_GET['search']) ? trim($_GET['search']) : '';
+        $rows = self::query(
+            isset($_GET['store_id']) && $_GET['store_id'] !== '' ? (int) $_GET['store_id'] : null,
+            isset($_GET['device_type_id']) && $_GET['device_type_id'] !== '' ? (int) $_GET['device_type_id'] : null,
+            isset($_GET['search']) ? trim($_GET['search']) : ''
+        );
 
+        echo json_encode($rows);
+    }
+
+    // Общий запрос списка ПК: используется и для таблицы на дашборде, и для выгрузки
+    // конфигов архивом — чтобы "что вижу в списке, то и выгружается" выполнялось само
+    // собой, а фильтры не разъехались между двумя копиями одного SQL.
+    private static function query($storeId, $deviceTypeId, $search)
+    {
         $sql = "
             SELECT
                 p.id, p.hostname, p.username, p.display_name, p.last_seen, p.agent_version,
@@ -53,8 +63,9 @@ class AdminPcsController
             $row['online'] = $row['last_seen'] !== null && $row['seconds_since_seen'] <= self::ONLINE_WINDOW_SECONDS;
             unset($row['seconds_since_seen']);
         }
+        unset($row);
 
-        echo json_encode($rows);
+        return $rows;
     }
 
     // POST /admin/pcs   body: { store_id, device_type_id, hostname, display_name? }
@@ -98,5 +109,157 @@ class AdminPcsController
         Logger::info("ПК создан вручную из панели: id={$id} hostname='{$hostname}' автор='{$_SESSION['admin_username']}'");
 
         echo json_encode(array('status' => 'ok', 'id' => $id, 'agent_token' => $token));
+    }
+
+    // POST /admin/pcs/bulk   body: { store_id, device_type_id, hostnames: "KASSA-01\nKASSA-02..." }
+    // Заводит сразу пачку ПК: при развёртывании на магазин их десятки, по одному через
+    // форму — это долго. Уже существующие hostname пропускаем, а не падаем на середине:
+    // список обычно составляют вручную, и повтор в нём — норма, а не повод отменять всё.
+    public static function bulkStore()
+    {
+        AdminAuth::requireLogin();
+
+        $body = json_decode(file_get_contents('php://input'), true);
+        $storeId = isset($body['store_id']) ? (int) $body['store_id'] : 0;
+        $deviceTypeId = isset($body['device_type_id']) ? (int) $body['device_type_id'] : 0;
+        $raw = isset($body['hostnames']) ? (string) $body['hostnames'] : '';
+
+        if (!$storeId || !$deviceTypeId) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'store_id_and_device_type_id_required'));
+            return;
+        }
+
+        $hostnames = array();
+        foreach (preg_split('/[\r\n,;]+/', $raw) as $line) {
+            $line = trim($line);
+            if ($line !== '') {
+                $hostnames[] = $line;
+            }
+        }
+
+        if (empty($hostnames)) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'hostnames_required'));
+            return;
+        }
+
+        $db = Db::get();
+        $existingStmt = $db->prepare('SELECT id FROM pcs WHERE hostname = :hostname AND store_id = :store_id');
+        $insertStmt = $db->prepare('
+            INSERT INTO pcs (store_id, device_type_id, hostname, agent_token)
+            VALUES (:store_id, :device_type_id, :hostname, :token)
+        ');
+
+        $created = array();
+        $skipped = array();
+
+        $db->beginTransaction();
+        try {
+            foreach ($hostnames as $hostname) {
+                $existingStmt->execute(array('hostname' => $hostname, 'store_id' => $storeId));
+                if ($existingStmt->fetch()) {
+                    $skipped[] = $hostname;
+                    continue;
+                }
+
+                $insertStmt->execute(array(
+                    'store_id'       => $storeId,
+                    'device_type_id' => $deviceTypeId,
+                    'hostname'       => $hostname,
+                    'token'          => bin2hex(random_bytes(32)),
+                ));
+                $created[] = $hostname;
+            }
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollBack();
+            throw $e;
+        }
+
+        Logger::info(
+            'Массовое создание ПК: добавлено ' . count($created) . ', пропущено (уже были) ' .
+            count($skipped) . ", автор='{$_SESSION['admin_username']}'"
+        );
+
+        echo json_encode(array('status' => 'ok', 'created' => $created, 'skipped' => $skipped));
+    }
+
+    // GET /admin/pcs/configs.zip?store_id=&device_type_id=&search=
+    // Отдаёт архив с готовыми config.json для каждой кассы (внутри — токен этой кассы).
+    // Нужен, чтобы разложить конфиги по хостам своими средствами, не устанавливая ничего
+    // на сами хосты: фильтры те же, что в списке ПК, — что видите, то и выгружается.
+    public static function exportConfigs()
+    {
+        AdminAuth::requireLogin();
+
+        if (!class_exists('ZipArchive')) {
+            http_response_code(500);
+            echo json_encode(array('error' => 'zip_extension_missing'));
+            Logger::error('Выгрузка конфигов невозможна: в PHP не включено расширение zip');
+            return;
+        }
+
+        $pcs = self::query(
+            isset($_GET['store_id']) && $_GET['store_id'] !== '' ? (int) $_GET['store_id'] : null,
+            isset($_GET['device_type_id']) && $_GET['device_type_id'] !== '' ? (int) $_GET['device_type_id'] : null,
+            isset($_GET['search']) ? trim($_GET['search']) : ''
+        );
+
+        if (empty($pcs)) {
+            http_response_code(404);
+            echo json_encode(array('error' => 'no_pcs_match_filter'));
+            return;
+        }
+
+        // server_url для конфигов берём из адреса, по которому открыта панель: именно он
+        // точно доступен снаружи (сам сервер за прокси своего внешнего адреса не знает).
+        $serverUrl = isset($_GET['server_url']) && $_GET['server_url'] !== ''
+            ? rtrim($_GET['server_url'], '/')
+            : (isset($_SERVER['HTTP_HOST']) ? 'http://' . $_SERVER['HTTP_HOST'] : 'http://localhost:8000');
+
+        $tmp = tempnam(sys_get_temp_dir(), 'amadmin-configs');
+        $zip = new ZipArchive();
+        $zip->open($tmp, ZipArchive::OVERWRITE);
+
+        $readme = "Здесь лежат готовые config.json для касс.\n\n" .
+            "Как использовать: положите файл config.json из папки с именем кассы\n" .
+            "рядом с программой агента на этой кассе. Больше ничего заполнять не нужно.\n\n" .
+            "ВАЖНО: внутри лежат ключи доступа (agent_token) — по одному на кассу.\n" .
+            "Храните архив как пароли и не пересылайте его открытыми каналами.\n\n" .
+            "Сервер: {$serverUrl}\n" .
+            'Выгружено: ' . gmdate('Y-m-d H:i:s') . " UTC\n";
+        // BOM в начале: без него Блокнот на Windows читает UTF-8 как ANSI и вместо
+        // русского текста показывает кракозябры — а эту записку читает человек.
+        $zip->addFromString('ПРОЧТИ_МЕНЯ.txt', "ï»¿" . $readme);
+
+        foreach ($pcs as $pc) {
+            $config = array(
+                'server_url'            => $serverUrl,
+                'agent_token'           => $pc['agent_token'],
+                'poll_interval_seconds' => 30,
+                'log_level'             => 'debug',
+                'proxy_url'             => '',
+                'proxy_username'        => '',
+                'proxy_password'        => '',
+            );
+
+            // Имя папки — hostname, чтобы было очевидно, какой конфиг на какую кассу.
+            $folder = preg_replace('/[^A-Za-z0-9_.\-]/', '_', $pc['hostname']);
+            $zip->addFromString(
+                $folder . '/config.json',
+                json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            );
+        }
+
+        $zip->close();
+
+        Logger::info('Выгрузка конфигов: ' . count($pcs) . " шт., автор='{$_SESSION['admin_username']}'");
+
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="amadmin-configs.zip"');
+        header('Content-Length: ' . filesize($tmp));
+        readfile($tmp);
+        unlink($tmp);
     }
 }
