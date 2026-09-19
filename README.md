@@ -4,9 +4,9 @@
 SQLite) с веб-панелью; на каждой кассе два маленьких агента на C# (.NET Framework 4.8 —
 единственный .NET, работающий на Windows 7): один показывает оповещения кассиру, второй
 выполняет команды администратора (службы, процессы, скрипты, файлы). Полное ТЗ — в
-[AGENTS.md](AGENTS.md). Инструкции для людей: [ADMIN.md](ADMIN.md) (администратору,
-включая развёртывание) и [INSTRUCTIONS.md](INSTRUCTIONS.md) (сотруднику магазина); у
-обеих есть готовые HTML-версии рядом.
+[AGENTS.md](AGENTS.md). Инструкции для людей: [INSTALL.md](INSTALL.md) (установка в один
+запуск), [ADMIN.md](ADMIN.md) (администратору) и [INSTRUCTIONS.md](INSTRUCTIONS.md)
+(сотруднику магазина); у всех есть готовые HTML-версии рядом.
 
 ## Статус
 
@@ -31,7 +31,12 @@ SQLite) с веб-панелью; на каждой кассе два мален
   сравнением по SHA-256, резервная копия старого файла, ограничение скорости скачивания)
 - [x] Агент управления на C# — настоящая служба Windows (`AMadminAgent`), с защитой от
   повторного выполнения команды после сбоя и защищёнными списками служб/процессов
-- [ ] Инсталлятор клиента и самообновление агентов
+- [x] Развёртывание в один запуск: `deploy/server/install-server.ps1` (Docker: Apache +
+  PHP, или без Docker), `deploy/client/build-client.ps1` → `install-client.ps1` /
+  `deploy-clients.ps1` (массово по SMB + WinRM/schtasks)
+- [x] Справочники (магазины, типы устройств), редактирование/удаление ПК и перевыпуск
+  ключа, отзыв оповещений и подтверждения по кассам, настройки сервера из панели
+- [ ] Самообновление агентов без повторной раскатки
 - [ ] Просмотр серверного лога прямо из панели
 - [ ] Повторяющиеся оповещения и догон пропущенных
 - [ ] Нагрузочная проверка SQLite на 3000+ опрашивающих касс
@@ -51,16 +56,19 @@ Windows 7 ставится через Windows Update или отдельным �
 доступ до сервера по HTTP/HTTPS (через прокси — поддерживается). UI-агент — в сессии
 пользователя; агент управления — служба от SYSTEM.
 
-## Быстрый старт (сервер, через Docker — так тестируется в этом проекте)
+## Быстрый старт
 
-```bash
-docker compose up -d --build
-docker compose exec server php -r "(new PDO('sqlite:/app/data/amadmin.sqlite'))->exec(file_get_contents('/app/dev-seed.sql'));"
-docker compose exec server php bin/create-admin.php admin <пароль>
+Один запуск на всё — см. [INSTALL.md](INSTALL.md). Коротко:
+
+```powershell
+.\deploy\server\install-server.ps1          # сервер (Docker: Apache + PHP 8.3), спросит пароль admin
+.\deploy\client\build-client.ps1            # комплект агентов в dist\client
+.\deploy\client\deploy-clients.ps1 -ConfigsDir <архив конфигов из панели>   # на все кассы
 ```
 
-Сервер: `http://localhost:8000`, админ-панель: `http://localhost:8000/admin/login.html`.
-Миграции накатываются автоматически при каждом старте контейнера.
+Вручную то же самое: `docker compose up -d --build`, затем
+`docker compose exec server php bin/create-admin.php admin <пароль> superadmin`
+(`php bin/seed.php` — тестовые данные). Панель: `http://localhost:8000/admin/login.html`.
 
 ### Без Docker
 
@@ -72,9 +80,9 @@ docker compose exec server php bin/create-admin.php admin <пароль>
    (`router.php` обязателен — без него встроенный сервер отдаёт `admin/index.html` вместо
    API; на Apache/IIS его роль играет `.htaccess`/правила перезаписи).
 
-## Быстрый старт (клиент)
+## Клиент вручную (без скриптов)
 
-Нужен .NET SDK 8 (только для сборки; на кассах SDK не нужен — только .NET Framework 4.8).
+Нужен .NET SDK 8 только для сборки; на кассах — .NET Framework 4.8.
 
 ```bash
 cd client
@@ -82,14 +90,9 @@ dotnet build Modules/Notifications/AMadmin.UiAgent.csproj -c Release
 dotnet build Modules/Management/AMadmin.ManagementAgent.csproj -c Release
 ```
 
-1. В панели на дашборде заведите ПК — панель покажет готовый `config.json`. Положите его
-   рядом с `.exe` (оба агента читают один и тот же файл, ключ один на ПК). Файл можно
-   читать как есть: каждое поле подписано комментарием (`client/config.example.json`).
-2. UI-агент (оповещения): `AMadmin.UiAgent.exe` в сессии пользователя — автозапуск через
-   планировщик или папку «Автозагрузка».
-3. Агент управления (команды): `AMadmin.ManagementAgent.exe --install` из консоли
-   администратора — регистрирует и запускает службу `AMadminAgent`. Для отладки —
-   `AMadmin.ManagementAgent.exe --console`.
+`config.json` из панели — рядом с `.exe` (один на ПК, каждое поле подписано).
+`AMadmin.ManagementAgent.exe --install` (администратор) ставит службу; `--console` —
+отладка в окне. `AMadmin.UiAgent.exe` — в сессии пользователя.
 
 ## Структура
 
@@ -113,6 +116,10 @@ client/
 │   ├── Notifications/   (AMadmin.UiAgent: WPF-окно оповещения, трей, статус)
 │   └── Management/      (AMadmin.ManagementAgent: служба Windows + Executors/ по типу команды)
 └── config.example.json  (с комментариями к каждому полю)
+
+deploy/
+├── server/   (install-server.ps1 / .sh — сервер одним запуском)
+└── client/   (build-client.ps1, install-client.ps1, deploy-clients.ps1, uninstall-client.ps1)
 ```
 
 `server/migrations/` намеренно НЕ разложены по модулям — история схемы БД единая

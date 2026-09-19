@@ -2,9 +2,12 @@ services:
   server:
     build: ./server
     ports:
-      - "8000:8000"
+      - "${AMADMIN_PORT:-8000}:80"
+    restart: unless-stopped
     volumes:
       - amadmin_data:/app/data
+      - amadmin_logs:/app/logs
 
 volumes:
   amadmin_data:
+  amadmin_logs:

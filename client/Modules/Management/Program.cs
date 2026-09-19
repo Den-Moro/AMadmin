@@ -90,6 +90,18 @@ namespace AMadmin.ManagementAgent
         private static int Install(string baseDir)
         {
             var exe = Path.Combine(baseDir, "AMadmin.ManagementAgent.exe");
+
+            // Повторный --install (обновление агента поверх старого) — штатный случай:
+            // останавливаем и снимаем старую регистрацию, потом создаём заново.
+            if (Sc("query " + ServiceName) == 0)
+            {
+                Console.WriteLine("Служба " + ServiceName + " уже есть — переустанавливаю.");
+                Sc("stop " + ServiceName);
+                Thread.Sleep(2000);
+                Sc("delete " + ServiceName);
+                Thread.Sleep(1000);
+            }
+
             // sc.exe требует пробел после "=" — это не опечатка.
             var create = Sc("create " + ServiceName + " binPath= \"" + exe + "\" start= auto DisplayName= \"" + DisplayName + "\"");
             if (create != 0) return create;

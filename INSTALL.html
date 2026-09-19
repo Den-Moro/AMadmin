@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Установка AMadmin — AMadmin</title>
+<style>
+    :root {
+        --bg: #f4f5f7;
+        --card-bg: #ffffff;
+        --text: #1f2430;
+        --muted: #6b7280;
+        --border: #d8dbe0;
+        --primary: #2563eb;
+        --code-bg: #f1f2f5;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.6;
+    }
+    main {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+    }
+    .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 28px 32px;
+    }
+    h1 {
+        font-size: 26px;
+        margin: 0 0 4px;
+    }
+    .subtitle {
+        color: var(--muted);
+        margin: 0 0 28px;
+        font-size: 15px;
+    }
+    h2 {
+        font-size: 19px;
+        margin: 32px 0 12px;
+        border-top: 1px solid var(--border);
+        padding-top: 24px;
+    }
+    h2:first-of-type {
+        border-top: none;
+        padding-top: 0;
+    }
+    h3 {
+        font-size: 15.5px;
+        margin: 20px 0 8px;
+    }
+    p, li {
+        font-size: 15px;
+    }
+    ol, ul {
+        padding-left: 22px;
+    }
+    a {
+        color: var(--primary);
+    }
+    code {
+        background: var(--code-bg);
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+        font-family: ui-monospace, Consolas, monospace;
+    }
+    pre {
+        background: var(--code-bg);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-size: 13px;
+        font-family: ui-monospace, Consolas, monospace;
+    }
+    pre code {
+        background: none;
+        padding: 0;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+    }
+    th, td {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+    }
+    .backlog {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 14px 18px;
+        font-size: 14px;
+    }
+    .backlog li {
+        margin-bottom: 4px;
+    }
+    @media print {
+        body { background: white; }
+        .card { border: none; }
+    }
+</style>
+</head>
+<body>
+<main>
+    <div class="card">
+<h1>Установка AMadmin</h1>
+<p>Развёртывание в один запуск: сервер — один скрипт, кассы — один скрипт на кассе или
+один скрипт на все кассы сразу с ПК администратора. Что здесь описано, проверено на
+Windows 11 (сервер в Docker) и на тестовой кассе. Эксплуатация после установки —
+в <a href="ADMIN.html">ADMIN.md</a>.</p>
+<h2>Что нужно заранее</h2>
+<table>
+<thead>
+<tr>
+<th>Где</th>
+<th>Что</th>
+<th>Зачем</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Сервер</td>
+<td>Windows 10/11 или Linux с <strong>Docker</strong> (Docker Desktop / Docker Engine)</td>
+<td>всё остальное внутри образа</td>
+</tr>
+<tr>
+<td>Сервер без Docker</td>
+<td>Windows + PowerShell; PHP поставится сам через winget</td>
+<td>пилот и до ~100 касс</td>
+</tr>
+<tr>
+<td>ПК администратора</td>
+<td>PowerShell 5.1 (есть в Windows); для сборки клиента — .NET SDK 8</td>
+<td>сборка и раскатка</td>
+</tr>
+<tr>
+<td>Кассы</td>
+<td>Windows 7+, <strong>.NET Framework 4.8</strong>, доступ до сервера по сети (можно через прокси)</td>
+<td>агенты</td>
+</tr>
+<tr>
+<td>Массовая раскатка</td>
+<td>админ-права на кассах, доступ к <code>\\касса\C$</code> (SMB); WinRM — если включён, иначе schtasks</td>
+<td>copy + install</td>
+</tr>
+</tbody>
+</table>
+<h2>1. Сервер — один запуск</h2>
+<h3>Вариант A: Docker (рекомендуется, годится для 3000 касс)</h3>
+<p>Windows (PowerShell, из папки репозитория):</p>
+<pre><code class="language-powershell">.\deploy\server\install-server.ps1
+</code></pre>
+<p>Linux:</p>
+<pre><code class="language-bash">./deploy/server/install-server.sh
+</code></pre>
+<p>Скрипт соберёт образ (Apache + PHP 8.3, несколько рабочих процессов), поднимет
+контейнер на порту 8000 (<code>-Port</code> / первый аргумент), накатит миграции, при первом
+запуске спросит пароль для суперадмина <code>admin</code> и напечатает адрес панели и адрес
+для касс. База, файлы для раскатки, сессии и логи лежат на docker-томах и переживают
+обновление образа. Контейнер стартует сам после перезагрузки хоста.</p>
+<p>Обновление сервера потом — тот же скрипт (или <code>docker compose up -d --build</code>).</p>
+<h3>Вариант B: без Docker, только Windows</h3>
+<pre><code class="language-powershell">.\deploy\server\install-server.ps1 -Mode Native
+</code></pre>
+<p>Из консоли администратора. Установит PHP 8.3 через winget (если нет), включит
+расширения и лимиты в <code>php.ini</code>, накатит миграции, создаст суперадмина, зарегистрирует
+сервер задачей планировщика «при загрузке» от SYSTEM и откроет порт в брандмауэре.</p>
+<blockquote>
+<p>Встроенный веб-сервер PHP на Windows обрабатывает <strong>один запрос за раз</strong>. Для пилота и
+до ~100 касс этого достаточно; для полного парка используйте Docker или разверните
+PHP под IIS (FastCGI) / Apache — папка <code>server/public</code> — это DocumentRoot, все
+«несуществующие» пути должны уходить в <code>public/index.php</code> (<code>.htaccess</code> уже есть).</p>
+</blockquote>
+<h3>Сразу после установки</h3>
+<ol>
+<li>Открыть <code>http://&lt;сервер&gt;:8000/admin/login.html</code>, войти как <code>admin</code>.</li>
+<li><strong>Справочники</strong> → добавить магазины (типы устройств уже есть).</li>
+<li><strong>Пользователи</strong> → завести коллег с нужными ролями; сменить свой пароль.</li>
+<li><strong>Настройки → Сервер</strong> → уровень лога, окно «онлайн», защита входа.</li>
+</ol>
+<h2>2. Клиент — сборка комплекта (один раз на ПК администратора)</h2>
+<pre><code class="language-powershell">.\deploy\client\build-client.ps1
+</code></pre>
+<p>Получится <code>dist\client\</code> (оба агента + установщик) и <code>dist\AMadmin-client-&lt;версия&gt;.zip</code>.
+Этот комплект одинаковый для всех касс — отличается только <code>config.json</code>.</p>
+<h2>3. Ключи касс — из панели</h2>
+<ul>
+<li>Одна касса: <strong>Дашборд → ＋ Добавить ПК</strong> → панель покажет <code>config.json</code>
+  (кнопки «Скопировать» / «Скачать»).</li>
+<li>Весь магазин: <strong>Дашборд → ＋ Добавить ПК → Списком</strong> → вставить hostname'ы →
+  <strong>Выгрузить конфиги</strong> → архив с папкой на каждую кассу и <code>config.json</code> внутри.</li>
+</ul>
+<p>Внутри — ключи доступа. Храните архив как пароли.</p>
+<h2>4. Установка на кассу</h2>
+<h3>Одна касса, руками</h3>
+<p>Скопировать <code>dist\client</code> на кассу (например, в <code>C:\AMadmin</code>), положить рядом её
+<code>config.json</code> и запустить от администратора:</p>
+<pre><code class="language-powershell">.\install-client.ps1
+</code></pre>
+<p>или без файла конфига:</p>
+<pre><code class="language-powershell">.\install-client.ps1 -ServerUrl http://192.168.1.10:8000 -Token &lt;ключ из панели&gt;
+</code></pre>
+<p>Скрипт проверит .NET Framework 4.8, скопирует файлы в <code>C:\AMadmin</code>, поставит службу
+<code>AMadminAgent</code> (агент управления, от SYSTEM, автозапуск, авторестарт при сбое) и
+задачу планировщика «AMadmin UiAgent» (окно оповещений при входе любого пользователя,
+без прав администратора). Через минуту касса появится онлайн на дашборде.</p>
+<p>Повторный запуск = обновление агента (конфиг сохраняется). Снять всё:
+<code>.\uninstall-client.ps1</code> (<code>-KeepConfig</code> — оставить ключ).</p>
+<h3>Все кассы сразу, с ПК администратора</h3>
+<p>Распаковать архив конфигов (например, в <code>C:\Temp\amadmin-configs</code>) и:</p>
+<pre><code class="language-powershell">.\deploy\client\deploy-clients.ps1 -ConfigsDir C:\Temp\amadmin-configs
+</code></pre>
+<p>Для каждой папки-hostname скрипт: проверит доступность, скопирует комплект и её
+<code>config.json</code> в <code>\\HOST\C$\AMadmin</code>, запустит там <code>install-client.ps1</code> через WinRM
+(если включён) или разовой задачей планировщика от SYSTEM, и проверит, что служба
+появилась. В конце — таблица «касса → OK/ошибка». Параметры: <code>-Hosts</code> (подмножество),
+<code>-Credential</code> (если нужны отдельные админ-учётки), <code>-Parallel</code> (по умолчанию 8).</p>
+<h2>5. Проверка</h2>
+<ul>
+<li>Дашборд: касса <strong>онлайн</strong>, версия агента заполнена.</li>
+<li>Оповещения → отправить тестовое «всем» → окно на кассе → в строке оповещения
+  появилось подтверждение.</li>
+<li>Команды → «Процесс → список» на эту кассу → через минуту результат в строке.</li>
+</ul>
+<p>Если касса не появляется: <code>C:\AMadmin\management-agent.log</code> на кассе (доходит ли
+опрос: адрес сервера, прокси, TLS), затем лог сервера
+(<code>docker compose logs</code> или Настройки → Сервер → уровень <code>debug</code>).</p>
+<h2>6. Обновление</h2>
+<ul>
+<li><strong>Сервер</strong>: <code>git pull</code> (или новая копия папки) → <code>install-server.ps1</code> снова.
+  Миграции накатываются сами, данные на месте.</li>
+<li><strong>Кассы</strong>: <code>build-client.ps1</code> → <code>deploy-clients.ps1 -ConfigsDir ...</code> с тем же
+  архивом конфигов (ключи не меняются) — агенты переустановятся поверх.</li>
+</ul>
+    </div>
+</main>
+</body>
+</html>
