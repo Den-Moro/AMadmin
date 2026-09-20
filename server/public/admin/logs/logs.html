@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Логи — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+<style>
+    .log-toolbar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-bottom: 8px; }
+    .log-view {
+        background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        font-family: var(--mono); font-size: 12.5px; line-height: 1.5; height: calc(100vh - 230px); min-height: 320px;
+        overflow: auto; padding: 8px 0;
+    }
+    .log-line { display: grid; grid-template-columns: 150px 72px 1fr; gap: 10px; padding: 2px 14px; white-space: pre-wrap; word-break: break-word; }
+    .log-line:hover { background: var(--surface-2); }
+    .log-line .ts { color: var(--muted); }
+    .log-line .lvl { font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; padding-top: 2px; }
+    .log-line.debug .lvl { color: var(--muted); }
+    .log-line.info .lvl { color: var(--accent); }
+    .log-line.warning .lvl { color: var(--warning); }
+    .log-line.warning { background: rgba(251, 191, 36, 0.05); }
+    .log-line.error .lvl { color: var(--danger); }
+    .log-line.error { background: var(--danger-soft); }
+    .log-line.raw .lvl { color: var(--muted); }
+    .log-line mark { background: var(--accent-soft); color: var(--accent-strong); border-radius: 3px; padding: 0 2px; }
+    .log-status { display: flex; gap: 14px; align-items: center; margin-top: 8px; }
+    .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); margin-right: 6px; animation: pulse 1.6s infinite; }
+    .live-dot.paused { background: var(--muted); animation: none; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .lvl-chip { cursor: pointer; user-select: none; }
+    .lvl-chip.off { opacity: 0.35; text-decoration: line-through; }
+</style>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="page-head">
+        <div>
+            <h1>Лог сервера</h1>
+            <p class="muted">Живой хвост <code>logs/app.log</code>: новые строки появляются сами. Что попадает в лог, задаёт уровень в Настройках → Сервер (сейчас: <b id="curLevel">…</b>).</p>
+        </div>
+        <div class="actions">
+            <button type="button" id="pauseBtn">⏸ Пауза</button>
+            <button type="button" id="olderBtn" title="Показать предыдущий файл лога (после ротации)">Старый файл</button>
+            <button type="button" id="downloadBtn">⬇ Скачать</button>
+        </div>
+    </div>
+
+    <div class="toolbar log-toolbar">
+        <input type="search" id="search" placeholder="Фильтр по тексту (например, hostname или pc_id=4)…">
+        <span class="badge badge-neutral lvl-chip" data-level="debug">debug</span>
+        <span class="badge badge-accent lvl-chip" data-level="info">info</span>
+        <span class="badge badge-warn lvl-chip" data-level="warning">warning</span>
+        <span class="badge badge-danger lvl-chip" data-level="error">error</span>
+        <button type="button" class="ghost small" id="clearBtn" title="Очистить экран (файл не трогается)">Очистить экран</button>
+    </div>
+
+    <div class="log-view" id="logView"></div>
+    <div class="log-status muted">
+        <span><span class="live-dot" id="liveDot"></span><span id="liveText">обновляется каждые 2 с</span></span>
+        <span id="counter"></span>
+        <span id="fileInfo"></span>
+    </div>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="logs.js"></script>
+</body>
+</html>

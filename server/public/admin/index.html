@@ -22,10 +22,30 @@
     </div>
 
     <div class="stats">
-        <div class="stat"><div class="label">Всего ПК</div><div class="value" id="statTotal">—</div></div>
-        <div class="stat ok"><div class="label">Онлайн</div><div class="value" id="statOnline">—</div></div>
-        <div class="stat bad"><div class="label">Офлайн</div><div class="value" id="statOffline">—</div></div>
-        <div class="stat"><div class="label">Магазинов</div><div class="value" id="statStores">—</div></div>
+        <div class="stat"><div class="label">Всего ПК</div><div class="value" id="statTotal">—</div><div class="sub muted" id="statNever"></div></div>
+        <div class="stat ok"><div class="label">Онлайн</div><div class="value" id="statOnline">—</div><div class="sub muted" id="statOnlinePct"></div></div>
+        <div class="stat bad"><div class="label">Офлайн</div><div class="value" id="statOffline">—</div><div class="sub muted" id="statSilent"></div></div>
+        <div class="stat"><div class="label">Магазинов</div><div class="value" id="statStores">—</div><div class="sub muted" id="statGroups"></div></div>
+    </div>
+
+    <div class="stats stats-small">
+        <div class="stat"><div class="label">Оповещений за сутки</div><div class="value" id="actNotif">—</div><div class="sub muted" id="actAcks"></div></div>
+        <div class="stat"><div class="label">Команд за сутки</div><div class="value" id="actCmd">—</div><div class="sub muted" id="actCmdRes"></div></div>
+        <div class="stat"><div class="label">В работе на кассах</div><div class="value" id="actInProgress">—</div><div class="sub muted">команд ещё выполняются</div></div>
+        <div class="stat"><div class="label">Файлы для раскатки</div><div class="value" id="actFiles">—</div><div class="sub muted" id="actFilesSize"></div></div>
+    </div>
+
+    <div class="row-2">
+        <div class="card compact">
+            <h2>По магазинам</h2>
+            <div id="storeBars" class="bars"></div>
+        </div>
+        <div class="card compact">
+            <h2>Версии агента</h2>
+            <div id="versionBars" class="bars"></div>
+            <h2 style="margin-top:10px">Последние события</h2>
+            <div id="events" class="events"></div>
+        </div>
     </div>
 
     <div id="addPanel" class="card" hidden>

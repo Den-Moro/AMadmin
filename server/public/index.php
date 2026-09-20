@@ -54,6 +54,8 @@ require __DIR__ . '/../Modules/Notifications/AdminNotificationsController.php';
 require __DIR__ . '/../Modules/Auth/AdminAuthController.php';
 require __DIR__ . '/../Modules/Auth/AdminUsersController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminPcsController.php';
+require __DIR__ . '/../Modules/Dashboard/AdminStatsController.php';
+require __DIR__ . '/../Modules/Logs/AdminLogsController.php';
 require __DIR__ . '/../Modules/Meta/AdminMetaController.php';
 require __DIR__ . '/../Modules/Groups/AdminHostGroupsController.php';
 require __DIR__ . '/../Modules/Manuals/AdminManualsController.php';
@@ -66,7 +68,11 @@ require __DIR__ . '/../Modules/Settings/AdminSettingsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-Logger::debug($_SERVER['REQUEST_METHOD'] . ' ' . $_SERVER['REQUEST_URI']);
+// Опрос страницы «Логи» сам в лог не пишем — иначе каждый открытый просмотр добавлял бы
+// по строке каждые две секунды, и живой хвост состоял бы из самого себя.
+if (strpos($_SERVER['REQUEST_URI'], '/admin/logs') !== 0) {
+    Logger::debug($_SERVER['REQUEST_METHOD'] . ' ' . $_SERVER['REQUEST_URI']);
+}
 
 $router = new Router();
 
@@ -88,6 +94,9 @@ $router->post('/admin/users', array('AdminUsersController', 'store'));
 $router->put('/admin/users/{id}', array('AdminUsersController', 'update'));
 $router->post('/admin/users/{id}/unlock', array('AdminUsersController', 'unlock'));
 $router->delete('/admin/users/{id}', array('AdminUsersController', 'destroy'));
+$router->get('/admin/stats', array('AdminStatsController', 'index'));
+$router->get('/admin/logs', array('AdminLogsController', 'index'));
+$router->get('/admin/logs/download', array('AdminLogsController', 'download'));
 $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->post('/admin/pcs', array('AdminPcsController', 'store'));
 $router->post('/admin/pcs/bulk', array('AdminPcsController', 'bulkStore'));

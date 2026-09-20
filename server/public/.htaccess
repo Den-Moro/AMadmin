@@ -1,5 +1,9 @@
 RewriteEngine On
 
+# Пробросить Authorization: Bearer <token> агентов в PHP — mod_php/FastCGI его отбрасывают.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # Папки панели (admin/stores, admin/commands, ...) совпадают с путями API
 # (/admin/stores, /admin/commands). Без DirectorySlash Off Apache отвечал бы на API-запрос
 # редиректом 301 на /admin/stores/ вместо JSON. Поэтому: реальный файл — отдать как есть,

@@ -37,7 +37,6 @@
         fillSelect($('bulkStoreId'), stores, storeLabel);
         fillSelect($('pcDeviceTypeId'), deviceTypes, typeLabel);
         fillSelect($('bulkDeviceTypeId'), deviceTypes, typeLabel);
-        $('statStores').textContent = stores.length;
     }
 
     // ---- Конфиг ПК ------------------------------------------------------------------
@@ -144,13 +143,63 @@
         return p;
     }
 
+    // ---- Сводка ------------------------------------------------------------------------
+
+    function bar(name, value, total, bad) {
+        const pct = total ? Math.round(value / total * 100) : 0;
+        return '<div class="bar"><span class="name">' + esc(name) + '</span><span class="val">' + value + ' / ' + total + ' · ' + pct + '%</span>' +
+            '<div class="track"><div class="fill' + (bad ? ' bad' : '') + '" style="width:' + pct + '%"></div></div></div>';
+    }
+
+    function describeEvent(ev) {
+        if (ev.kind === 'notification') {
+            return (ev.extra === 'important' ? '❗ ' : '🔔 ') + 'Оповещение: ' + ev.title;
+        }
+        let p = {};
+        try { p = JSON.parse(ev.extra); } catch (e) { /* — */ }
+        const names = { service_control: 'Служба', process_action: 'Процесс', script_run: 'Скрипт', file_deploy: 'Файл' };
+        const detail = p.service_name || p.process_name || p.original_name || (p.script ? p.script.split(/\r?\n/)[0] : p.path) || p.action || '';
+        return '⌘ ' + (names[ev.title] || ev.title) + (detail ? ': ' + detail : '');
+    }
+
+    async function loadStats() {
+        let st;
+        try { st = await Api.get('/admin/stats'); } catch (e) { return; }
+        const p = st.pcs, a = st.activity;
+        const total = +p.total, online = +p.online;
+        $('statTotal').textContent = total;
+        $('statNever').textContent = +p.never_seen ? 'ни разу не выходили на связь: ' + p.never_seen : 'все выходили на связь';
+        $('statOnline').textContent = online;
+        $('statOnlinePct').textContent = total ? Math.round(online / total * 100) + '% парка' : '';
+        $('statOffline').textContent = total - online;
+        $('statSilent').textContent = +p.silent_day ? 'молчат больше суток: ' + p.silent_day : '';
+        $('statStores').textContent = st.stores.length;
+        $('statGroups').textContent = 'групп: ' + a.groups + ', администраторов: ' + a.admins;
+
+        $('actNotif').textContent = a.notifications_24h;
+        $('actAcks').textContent = 'подтверждений: ' + a.acks_24h;
+        $('actCmd').textContent = a.commands_24h;
+        $('actCmdRes').textContent = 'ок ' + a.results_success_24h + ' · ошибок ' + a.results_failed_24h;
+        $('actInProgress').textContent = a.results_in_progress;
+        $('actFiles').textContent = a.files_count;
+        $('actFilesSize').textContent = Ui.formatSize(a.files_bytes);
+
+        $('storeBars').innerHTML = st.stores.length
+            ? st.stores.map(function (s) { return bar(s.name + (s.is_pilot ? ' (пилот)' : ''), +s.online, +s.total, s.total > 0 && +s.online === 0); }).join('')
+            : '<div class="muted">Магазинов пока нет — добавьте в Справочниках.</div>';
+        $('versionBars').innerHTML = st.versions.length
+            ? st.versions.map(function (v) { return bar(v.version === '—' ? 'агент ещё не отчитался' : 'v' + v.version, +v.count, total, v.version === '—'); }).join('')
+            : '<div class="muted">—</div>';
+        $('events').innerHTML = st.events.length
+            ? st.events.map(function (ev) {
+                return '<div class="event"><span class="when">' + esc(formatServerTime(ev.at)) + '</span><span class="what" title="' + esc(describeEvent(ev)) + '">' +
+                    esc(describeEvent(ev)) + (ev.author ? ' <span class="muted">— ' + esc(ev.author) + '</span>' : '') + '</span></div>';
+            }).join('')
+            : '<div class="muted">Пока ничего не отправляли.</div>';
+    }
+
     async function loadPcs() {
         pcs = await Api.get('/admin/pcs?' + params().toString());
-
-        const online = pcs.filter(function (p) { return p.online; }).length;
-        $('statTotal').textContent = pcs.length;
-        $('statOnline').textContent = online;
-        $('statOffline').textContent = pcs.length - online;
 
         const visible = pcs.filter(function (p) {
             return !stateEl.value || (stateEl.value === 'online') === !!p.online;
@@ -268,7 +317,7 @@
     stateEl.addEventListener('change', loadPcs);
 
     await loadFilters();
-    await loadPcs();
+    await Promise.all([loadStats(), loadPcs()]);
     // Дашборд живёт открытым — обновляем статусы сами, без F5.
-    setInterval(loadPcs, 30000);
+    setInterval(function () { if (!document.hidden) { loadStats(); loadPcs(); } }, 30000);
 })();

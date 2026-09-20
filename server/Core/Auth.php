@@ -6,7 +6,24 @@ class Auth
     // иначе он оседает в логах веб-сервера/прокси, через которые проходит запрос.
     public static function getBearerToken()
     {
-        $header = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : '';
+        // Apache (mod_php) и IIS/FastCGI не кладут Authorization в $_SERVER по умолчанию —
+        // берём его отовсюду, где он может оказаться. Без этого все агенты получали бы 401
+        // на проде, хотя на php -S всё работало.
+        $header = '';
+        foreach (array('HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION') as $key) {
+            if (!empty($_SERVER[$key])) {
+                $header = $_SERVER[$key];
+                break;
+            }
+        }
+        if ($header === '' && function_exists('getallheaders')) {
+            foreach (getallheaders() as $name => $value) {
+                if (strcasecmp($name, 'Authorization') === 0) {
+                    $header = $value;
+                    break;
+                }
+            }
+        }
         if (preg_match('/^Bearer\s+(.+)$/i', $header, $matches)) {
             return trim($matches[1]);
         }
