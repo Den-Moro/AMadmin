@@ -185,7 +185,21 @@ else {
         $phpExe = Find-Php
         if (-not $phpExe) { throw 'PHP распакован, но php.exe не найден в C:\php — проверьте архив.' }
     }
+    # winget кладёт в PATH только ссылку (…\WinGet\Links\php.exe), а php.ini-production и
+    # папка ext\ лежат в настоящей папке пакета — раскрываем ссылку до неё.
+    $phpItem = Get-Item $phpExe
+    if ($phpItem.LinkType -and $phpItem.Target) {
+        $resolved = @($phpItem.Target)[0]
+        if ($resolved -and (Test-Path $resolved)) { $phpExe = (Resolve-Path $resolved).Path }
+    }
+    if (-not (Test-Path (Join-Path (Split-Path $phpExe) 'php.ini-production'))) {
+        # Ссылка не раскрылась (или это другой alias) — ищем php.exe в папке пакета winget.
+        $pkg = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Directory -Filter 'PHP.*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-ChildItem $_.FullName -Filter php.exe -Recurse -Depth 2 -ErrorAction SilentlyContinue } | Select-Object -First 1
+        if ($pkg) { $phpExe = $pkg.FullName }
+    }
     $phpDir = Split-Path $phpExe
+    Write-Host "PHP (папка пакета): $phpDir"
 
     # PHP из zip требует Visual C++ Redistributable 2015-2022 (x64); без него php.exe молча
     # падает с VCRUNTIME140.dll. Проверяем по реестру и при необходимости ставим.
