@@ -1,24 +1,25 @@
 @echo off
 rem =====================================================================================
-rem  Стартовый скрипт для GPO (Computer Configuration -> Policies -> Windows Settings ->
-rem  Scripts -> Startup). Запускается при загрузке каждой кассы от SYSTEM.
+rem  GPO computer startup script (Computer Configuration -> Policies -> Windows Settings
+rem  -> Scripts -> Startup). Runs at every boot of every till as SYSTEM.
 rem
-rem  Что делает: берёт комплект агентов и config.json этой кассы с сетевой папки и
-rem  запускает install-client.ps1 -OnlyIfChanged. Если версия и конфиг не менялись -
-rem  выходит за секунду; если на шаре новая версия - обновляет; если кассы нет в
-rem  configs\<HOSTNAME> - ничего не ставит (касса ещё не заведена в панели).
+rem  What it does: takes the agent kit and this till's config.json from a network share
+rem  and runs install-client.ps1 -OnlyIfChanged. Unchanged version + config -> exits in
+rem  a second; new version on the share -> updates; no configs\<HOSTNAME> -> does nothing
+rem  (the till is not registered in the panel yet).
 rem
-rem  Раскладка на шаре (доступ на чтение для "Domain Computers"):
-rem    \сервер\AMadmin\client\    - содержимое dist\client (build-client.ps1)
-rem    \сервер\AMadmin\configs\   - распакованный архив "Выгрузить конфиги" из панели
-rem    \сервер\AMadmin\AMadmin-Startup.cmd  - этот файл (или положите в NETLOGON)
-rem  Путь к шаре ниже поправьте под себя.
+rem  Share layout (read access for "Domain Computers"):
+rem    \SERVER\AMadmin\client\    - contents of dist\client (build-client.ps1)
+rem    \SERVER\AMadmin\configs\   - unpacked "Export configs" archive from the panel
+rem    \SERVER\AMadmin\AMadmin-Startup.cmd  - this file (or put it in NETLOGON)
+rem  Fix the SHARE path below.
+rem  NOTE: keep this file ASCII-only (see install-client.cmd).
 rem =====================================================================================
 set SHARE=\\SERVER\AMadmin
 set AMADMIN_NOPAUSE=1
 
 if not exist "%SHARE%\client\install-client.ps1" (
-    echo AMadmin: шара %SHARE% недоступна, пропускаю. >> C:\AMadmin-startup.log
+    echo AMadmin: share %SHARE% is not reachable, skipping. >> C:\AMadmin-startup.log
     exit /b 0
 )
 
