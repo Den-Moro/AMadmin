@@ -203,10 +203,15 @@ $xmlPath = Join-Path $env:TEMP 'amadmin-uiagent-task.xml'
 Remove-Item $xmlPath -Force -ErrorAction SilentlyContinue
 if ($LASTEXITCODE -ne 0) { Log 'ОШИБКА: не удалось создать задачу автозапуска'; exit 5 }
 
-# Запустить окно оповещений прямо сейчас — но НЕ от администратора: через explorer,
-# чтобы процесс родился в обычной сессии текущего пользователя.
+# Запустить окно оповещений прямо сейчас, не дожидаясь следующего входа. Запускаем
+# через саму задачу планировщика: она стартует процесс в сессии вошедшего пользователя
+# и без прав администратора — ровно так, как будет при каждом входе. (Запуск через
+# explorer.exe из повышенного процесса на Windows 11 молча не срабатывал.)
 if (-not $NoStartUi -and [Environment]::UserInteractive) {
-    Start-Process explorer.exe -ArgumentList "`"$uiExe`"" -ErrorAction SilentlyContinue
+    & schtasks.exe /Run /TN 'AMadmin UiAgent' 2>&1 | Out-Null
+    Start-Sleep -Seconds 3
+    if (Get-Process AMadmin.UiAgent -ErrorAction SilentlyContinue) { Log 'Окно оповещений запущено (значок в трее).' }
+    else { Log 'Окно оповещений запустится при следующем входе пользователя.' }
 }
 
 Log "Готово: $InstallDir, служба AMadminAgent — $((Get-Service AMadminAgent).Status), задача 'AMadmin UiAgent' при входе пользователя."
