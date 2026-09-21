@@ -158,14 +158,46 @@ if ($Mode -eq 'Docker') {
 else {
     Step 'PHP'
     $phpExe = Find-Php
-    if (-not $phpExe) {
-        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'Нет ни php, ни winget. Установите PHP 8.x вручную (windows.php.net) и добавьте в PATH.' }
+    # Способ 1: winget. Обязательно --source winget: на многих машинах источник msstore
+    # отваливается (сертификат/прокси), и без явного источника winget отказывается
+    # ставить даже найденный пакет — так было на тестовой ВМ.
+    if (-not $phpExe -and (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Host 'Устанавливаю PHP 8.3 через winget...'
-        Native { winget install --id PHP.PHP.8.3 -e --accept-package-agreements --accept-source-agreements } | Out-Null
+        Native { winget install --id PHP.PHP.8.3 -e --source winget --accept-package-agreements --accept-source-agreements } |
+            Where-Object { $_ -notmatch '^\s*[-\\|/]\s*$' } | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
         $phpExe = Find-Php
-        if (-not $phpExe) { throw 'winget отработал, но php.exe не найден. Установите PHP вручную с windows.php.net в C:\php и запустите скрипт снова.' }
+    }
+    # Способ 2: официальный zip с windows.php.net в C:\php — без winget (его может не быть
+    # на Windows Server или он сломан), нужен только доступ в интернет.
+    if (-not $phpExe) {
+        Write-Host 'winget не помог — скачиваю PHP 8.3 (zip) с windows.php.net в C:\php...'
+        $zipUrl = 'https://windows.php.net/downloads/releases/latest/php-8.3-nts-Win32-vs16-x64-latest.zip'
+        $zip = Join-Path $env:TEMP 'php83.zip'
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        try {
+            Invoke-WebRequest -UseBasicParsing -UserAgent 'Mozilla/5.0 AMadmin-installer' -Uri $zipUrl -OutFile $zip
+            New-Item -ItemType Directory -Path 'C:\php' -Force | Out-Null
+            Expand-Archive -Path $zip -DestinationPath 'C:\php' -Force
+            Remove-Item $zip -Force -ErrorAction SilentlyContinue
+        } catch {
+            throw "Не удалось скачать PHP: $($_.Exception.Message). Скачайте zip с windows.php.net руками, распакуйте в C:\php и запустите скрипт снова."
+        }
+        $phpExe = Find-Php
+        if (-not $phpExe) { throw 'PHP распакован, но php.exe не найден в C:\php — проверьте архив.' }
     }
     $phpDir = Split-Path $phpExe
+
+    # PHP из zip требует Visual C++ Redistributable 2015-2022 (x64); без него php.exe молча
+    # падает с VCRUNTIME140.dll. Проверяем по реестру и при необходимости ставим.
+    $vc = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64' -ErrorAction SilentlyContinue
+    if (-not $vc -or -not $vc.Installed) {
+        Write-Host 'Ставлю Visual C++ Redistributable (нужен PHP)...'
+        $vcExe = Join-Path $env:TEMP 'vc_redist.x64.exe'
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $vcExe
+            Start-Process $vcExe -ArgumentList '/install', '/quiet', '/norestart' -Wait
+        } catch { Write-Host "  не удалось поставить VC++ Redistributable автоматически: $($_.Exception.Message)" -ForegroundColor Yellow }
+    }
     # Чтобы php был виден и в этой консоли, и в новых (для задачи планировщика путь всё
     # равно берётся абсолютный, но администратору удобно вызывать php руками).
     if (($env:Path -split ';') -notcontains $phpDir) { $env:Path = "$phpDir;$env:Path" }
