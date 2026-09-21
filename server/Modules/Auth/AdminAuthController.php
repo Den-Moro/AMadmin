@@ -44,6 +44,12 @@ class AdminAuthController
         echo json_encode(array('status' => 'ok'));
     }
 
+    // GET / -> панель (или логин, если сессии нет).
+    public static function root()
+    {
+        header('Location: ' . (empty($_SESSION['admin_id']) ? '/admin/login.html' : '/admin/index.html'), true, 302);
+    }
+
     public static function me()
     {
         AdminAuth::requireLogin();

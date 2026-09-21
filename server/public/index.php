@@ -76,6 +76,10 @@ if (strpos($_SERVER['REQUEST_URI'], '/admin/logs') !== 0) {
 
 $router = new Router();
 
+// Корень сайта — сразу на вход в панель: человек, набравший просто адрес сервера,
+// не должен видеть {"error":"not_found"}.
+$router->get('/', array('AdminAuthController', 'root'));
+
 // Агенты (токен в заголовке, не сессия)
 $router->get('/occurrences', array('OccurrencesController', 'index'));
 $router->post('/occurrences/{id}/ack', array('AckController', 'store'));
