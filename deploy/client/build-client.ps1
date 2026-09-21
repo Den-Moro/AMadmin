@@ -15,6 +15,16 @@
 param(
     [string]$Configuration = 'Release'
 )
+# ---- Что происходит в самом начале любого нашего скрипта ---------------------------
+# 1) Консоль переводим в UTF-8: иначе русские сообщения в старом Windows PowerShell
+#    превращаются в «Џа®ўҐаЄ » (cp866 против cp1251).
+# 2) Снимаем со всех наших .ps1 пометку «скачано из интернета» (Zone.Identifier):
+#    архив с GitHub несёт её на каждом файле, и политика RemoteSigned блокирует запуск с
+#    ошибкой «is not digitally signed». Запускать через .cmd-обёртку рядом (она передаёт
+#    -ExecutionPolicy Bypass) — самый простой путь; этот блок чинит и прямой запуск.
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $OutputEncoding = [Text.Encoding]::UTF8 } catch { }
+try { Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue } catch { }
+
 
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
@@ -43,8 +53,11 @@ foreach ($module in @('Modules\Notifications', 'Modules\Management')) {
 }
 
 # Установщик кладём рядом — на кассе достаточно этой папки и config.json.
-Copy-Item (Join-Path $PSScriptRoot 'install-client.ps1') $dist -Force
-Copy-Item (Join-Path $PSScriptRoot 'uninstall-client.ps1') $dist -Force
+foreach ($f in 'install-client.ps1', 'install-client.cmd', 'uninstall-client.ps1', 'uninstall-client.cmd') {
+    Copy-Item (Join-Path $PSScriptRoot $f) $dist -Force
+}
+# Стартовый скрипт для GPO — тоже в комплект: на шаре он лежит рядом с client\.
+Copy-Item (Join-Path $PSScriptRoot 'gpo\AMadmin-Startup.cmd') (Join-Path $dist '..\AMadmin-Startup.cmd') -Force
 
 $version = (Get-Item (Join-Path $dist 'AMadmin.ManagementAgent.exe')).VersionInfo.FileVersion
 $zip = Join-Path $root "dist\AMadmin-client-$version.zip"

@@ -29,6 +29,16 @@ param(
     [string]$AdminPassword,
     [switch]$Seed
 )
+# ---- Что происходит в самом начале любого нашего скрипта ---------------------------
+# 1) Консоль переводим в UTF-8: иначе русские сообщения в старом Windows PowerShell
+#    превращаются в «Џа®ўҐаЄ » (cp866 против cp1251).
+# 2) Снимаем со всех наших .ps1 пометку «скачано из интернета» (Zone.Identifier):
+#    архив с GitHub несёт её на каждом файле, и политика RemoteSigned блокирует запуск с
+#    ошибкой «is not digitally signed». Запускать через .cmd-обёртку рядом (она передаёт
+#    -ExecutionPolicy Bypass) — самый простой путь; этот блок чинит и прямой запуск.
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $OutputEncoding = [Text.Encoding]::UTF8 } catch { }
+try { Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue } catch { }
+
 
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
@@ -67,6 +77,50 @@ function Wait-Server($url) {
 }
 
 
+# ---- Порядок работы скрипта --------------------------------------------------------
+# Docker-режим:  проверить Docker -> собрать и запустить контейнер -> дождаться ответа
+#                панели -> (тестовые данные) -> создать первого суперадмина -> адреса.
+# Native-режим:  права администратора -> найти/поставить PHP -> php.ini -> config.php и
+#                миграции -> первый суперадмин -> задача автозапуска + брандмауэр -> адреса.
+# -----------------------------------------------------------------------------------
+
+if ($Mode -eq 'Native') {
+    # Регистрация задачи планировщика и правило брандмауэра требуют администратора.
+    # Если запущены без него — перезапускаем себя с запросом повышения (UAC).
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Write-Host 'Режим Native требует прав администратора — запрашиваю повышение...' -ForegroundColor Yellow
+        $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Mode', 'Native', '-Port', "$Port", '-AdminUser', "`"$AdminUser`"")
+        if ($AdminPassword) { $args += @('-AdminPassword', "`"$AdminPassword`"") }
+        if ($Seed) { $args += '-Seed' }
+        Start-Process powershell.exe -Verb RunAs -ArgumentList $args -Wait
+        exit
+    }
+}
+
+# Ищем php.exe везде, куда его кладут установщики: PATH (с раскрытием %переменных%),
+# папка пакета winget, C:\php, Program Files. Get-Command видит только текущий PATH
+# процесса, а winget меняет PATH пользователя в реестре — в этой консоли его ещё нет.
+function Find-Php {
+    $cmd = Get-Command php.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $dirs = @()
+    foreach ($scope in 'User', 'Machine') {
+        $raw = [Environment]::GetEnvironmentVariable('Path', $scope)
+        if ($raw) { $dirs += ([Environment]::ExpandEnvironmentVariables($raw) -split ';') }
+    }
+    $dirs += Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Directory -Filter 'PHP.*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+    $dirs += @("$env:LOCALAPPDATA\Microsoft\WinGet\Links", 'C:\php', "$env:ProgramFiles\PHP", "${env:ProgramFiles(x86)}\PHP", 'C:\tools\php')
+    foreach ($d in $dirs | Where-Object { $_ } | Select-Object -Unique) {
+        $candidate = Join-Path $d 'php.exe'
+        if (Test-Path $candidate) { return (Resolve-Path $candidate).Path }
+        # Пакет winget может держать php.exe во вложенной папке версии.
+        $deep = Get-ChildItem $d -Filter php.exe -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($deep) { return $deep.FullName }
+    }
+    return $null
+}
+
 if ($Mode -eq 'Docker') {
     Step 'Проверка Docker'
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -103,17 +157,22 @@ if ($Mode -eq 'Docker') {
 }
 else {
     Step 'PHP'
-    $php = Get-Command php -ErrorAction SilentlyContinue
-    if (-not $php) {
+    $phpExe = Find-Php
+    if (-not $phpExe) {
         if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'Нет ни php, ни winget. Установите PHP 8.x вручную (windows.php.net) и добавьте в PATH.' }
         Write-Host 'Устанавливаю PHP 8.3 через winget...'
-        Native { winget install --id PHP.PHP.8.3 -e --accept-package-agreements --accept-source-agreements }
-        $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
-        $php = Get-Command php -ErrorAction SilentlyContinue
-        if (-not $php) { throw 'PHP установлен, но не найден в PATH — откройте новую консоль и запустите скрипт снова.' }
+        Native { winget install --id PHP.PHP.8.3 -e --accept-package-agreements --accept-source-agreements } | Out-Null
+        $phpExe = Find-Php
+        if (-not $phpExe) { throw 'winget отработал, но php.exe не найден. Установите PHP вручную с windows.php.net в C:\php и запустите скрипт снова.' }
     }
-    $phpDir = Split-Path $php.Source
-    Write-Host "PHP: $($php.Source)"
+    $phpDir = Split-Path $phpExe
+    # Чтобы php был виден и в этой консоли, и в новых (для задачи планировщика путь всё
+    # равно берётся абсолютный, но администратору удобно вызывать php руками).
+    if (($env:Path -split ';') -notcontains $phpDir) { $env:Path = "$phpDir;$env:Path" }
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    if (($machinePath -split ';') -notcontains $phpDir) { [Environment]::SetEnvironmentVariable('Path', "$machinePath;$phpDir", 'Machine') }
+    $php = @{ Source = $phpExe }
+    Write-Host "PHP: $phpExe"
 
     Step 'php.ini: расширения и лимиты'
     $ini = Join-Path $phpDir 'php.ini'
@@ -132,14 +191,14 @@ else {
     New-Item -ItemType Directory -Path (Join-Path $server 'data'), (Join-Path $server 'logs') -Force | Out-Null
     Push-Location $server
     try {
-        Native { php bin/migrate.php }
-        if ($Seed) { Native { php bin/seed.php } }
+        Native { & $phpExe bin/migrate.php }
+        if ($Seed) { Native { & $phpExe bin/seed.php } }
 
         Step 'Первый суперадмин'
-        $count = Native { php bin/count-admins.php } | Select-Object -Last 1
+        $count = Native { & $phpExe bin/count-admins.php } | Select-Object -Last 1
         if ([int]$count -eq 0) {
             $pwd = Read-AdminPassword
-            Native { php bin/create-admin.php $AdminUser $pwd superadmin }
+            Native { & $phpExe bin/create-admin.php $AdminUser $pwd superadmin }
         } else { Write-Host "Учётки уже есть ($count) — пропускаю." }
     } finally { Pop-Location }
 

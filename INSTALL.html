@@ -150,16 +150,32 @@ Windows 11 (сервер в Docker) и на тестовой кассе. Экс�
 <td>агенты</td>
 </tr>
 <tr>
-<td>Массовая раскатка</td>
+<td>Раскатка через GPO</td>
+<td>домен, сетевая папка с доступом на чтение для компьютеров</td>
+<td>стартовый скрипт</td>
+</tr>
+<tr>
+<td>Раскатка с ПК администратора</td>
 <td>админ-права на кассах, доступ к <code>\\касса\C$</code> (SMB); WinRM — если включён, иначе schtasks</td>
 <td>copy + install</td>
 </tr>
 </tbody>
 </table>
+<h2>0. Как запускать скрипты (важно)</h2>
+<p>Рядом с каждым <code>.ps1</code> лежит <code>.cmd</code> с тем же именем — <strong>запускайте его</strong> (двойным
+кликом или из консоли: <code>install-server.cmd -Mode Native</code>). Он сам обходит политику
+выполнения и переключает консоль в UTF-8.</p>
+<p>Почему: архив с GitHub несёт на каждом файле пометку «скачано из интернета», и
+PowerShell отказывает даже после <code>Set-ExecutionPolicy RemoteSigned</code> с ошибкой
+<em>«is not digitally signed»</em>. Если всё же нужен прямой запуск <code>.ps1</code>:</p>
+<pre><code class="language-powershell">Get-ChildItem -Recurse -Filter *.ps1 | Unblock-File
+powershell -ExecutionPolicy Bypass -File .\install-server.ps1 -Mode Native
+</code></pre>
+<p>(<code>-File</code> принимает только путь к файлу — параметры скрипта идут после него, не внутри кавычек.)</p>
 <h2>1. Сервер — один запуск</h2>
 <h3>Вариант A: Docker (рекомендуется, годится для 3000 касс)</h3>
-<p>Windows (PowerShell, из папки репозитория):</p>
-<pre><code class="language-powershell">.\deploy\server\install-server.ps1
+<p>Windows (из папки репозитория, двойной клик или консоль):</p>
+<pre><code>deploy\server\install-server.cmd
 </code></pre>
 <p>Linux:</p>
 <pre><code class="language-bash">./deploy/server/install-server.sh
@@ -171,11 +187,12 @@ Windows 11 (сервер в Docker) и на тестовой кассе. Экс�
 обновление образа. Контейнер стартует сам после перезагрузки хоста.</p>
 <p>Обновление сервера потом — тот же скрипт (или <code>docker compose up -d --build</code>).</p>
 <h3>Вариант B: без Docker, только Windows</h3>
-<pre><code class="language-powershell">.\deploy\server\install-server.ps1 -Mode Native
+<pre><code>deploy\server\install-server.cmd -Mode Native
 </code></pre>
-<p>Из консоли администратора. Установит PHP 8.3 через winget (если нет), включит
-расширения и лимиты в <code>php.ini</code>, накатит миграции, создаст суперадмина, зарегистрирует
-сервер задачей планировщика «при загрузке» от SYSTEM и откроет порт в брандмауэре.</p>
+<p>Сам запросит права администратора (UAC). Установит PHP 8.3 через winget (если нет) и
+найдёт его, даже если в этой консоли PATH ещё не обновился; включит расширения и
+лимиты в <code>php.ini</code>, накатит миграции, создаст суперадмина, зарегистрирует сервер
+задачей планировщика «при загрузке» от SYSTEM и откроет порт в брандмауэре.</p>
 <blockquote>
 <p>Встроенный веб-сервер PHP на Windows обрабатывает <strong>один запрос за раз</strong>. Для пилота и
 до ~100 касс этого достаточно; для полного парка используйте Docker или разверните
@@ -190,9 +207,10 @@ PHP под IIS (FastCGI) / Apache — папка <code>server/public</code> — 
 <li><strong>Настройки → Сервер</strong> → уровень лога, окно «онлайн», защита входа.</li>
 </ol>
 <h2>2. Клиент — сборка комплекта (один раз на ПК администратора)</h2>
-<pre><code class="language-powershell">.\deploy\client\build-client.ps1
+<pre><code>deploy\client\build-client.cmd
 </code></pre>
-<p>Получится <code>dist\client\</code> (оба агента + установщик) и <code>dist\AMadmin-client-&lt;версия&gt;.zip</code>.
+<p>Получится <code>dist\client\</code> (оба агента + установщики) и <code>dist\AMadmin-client-&lt;версия&gt;.zip</code>,
+а рядом <code>dist\AMadmin-Startup.cmd</code> для GPO.
 Этот комплект одинаковый для всех касс — отличается только <code>config.json</code>.</p>
 <h2>3. Ключи касс — из панели</h2>
 <ul>
@@ -206,20 +224,43 @@ PHP под IIS (FastCGI) / Apache — папка <code>server/public</code> — 
 <h3>Одна касса, руками</h3>
 <p>Скопировать <code>dist\client</code> на кассу (например, в <code>C:\AMadmin</code>), положить рядом её
 <code>config.json</code> и запустить от администратора:</p>
-<pre><code class="language-powershell">.\install-client.ps1
+<pre><code>install-client.cmd
 </code></pre>
 <p>или без файла конфига:</p>
-<pre><code class="language-powershell">.\install-client.ps1 -ServerUrl http://192.168.1.10:8000 -Token &lt;ключ из панели&gt;
+<pre><code>install-client.cmd -ServerUrl http://192.168.1.10:8000 -Token &lt;ключ из панели&gt;
 </code></pre>
 <p>Скрипт проверит .NET Framework 4.8, скопирует файлы в <code>C:\AMadmin</code>, поставит службу
 <code>AMadminAgent</code> (агент управления, от SYSTEM, автозапуск, авторестарт при сбое) и
 задачу планировщика «AMadmin UiAgent» (окно оповещений при входе любого пользователя,
 без прав администратора). Через минуту касса появится онлайн на дашборде.</p>
 <p>Повторный запуск = обновление агента (конфиг сохраняется). Снять всё:
-<code>.\uninstall-client.ps1</code> (<code>-KeepConfig</code> — оставить ключ).</p>
-<h3>Все кассы сразу, с ПК администратора</h3>
+<code>uninstall-client.cmd</code> (<code>-KeepConfig</code> — оставить ключ). Лог установки —
+<code>C:\AMadmin\install.log</code>.</p>
+<h3>Все кассы сразу через GPO (рекомендуется для домена)</h3>
+<p>Одна групповая политика — и каждая касса ставит и обновляет агентов при загрузке сама,
+без WinRM и без обхода касс.</p>
+<ol>
+<li>Сетевая папка с доступом на чтение для компьютеров домена (<code>Domain Computers</code>),
+   например <code>\\SERVER\AMadmin</code>:</li>
+<li><code>client\</code> — содержимое <code>dist\client</code>;</li>
+<li><code>configs\</code> — распакованный архив «Выгрузить конфиги» из панели (папка на каждый
+     hostname с <code>config.json</code> внутри);</li>
+<li><code>AMadmin-Startup.cmd</code> — из <code>dist\</code> (внутри поправьте <code>set SHARE=</code> на свой путь).</li>
+<li>GPMC → политика на OU с кассами → <em>Computer Configuration → Policies → Windows
+   Settings → Scripts (Startup/Shutdown) → Startup</em> → добавить
+   <code>\\SERVER\AMadmin\AMadmin-Startup.cmd</code>.</li>
+<li>При следующей загрузке касса найдёт свою папку в <code>configs\</code>, поставит агентов, службу
+   и автозапуск окна. При каждой следующей загрузке — за секунду сверит версию и конфиг
+   и ничего не тронет, если они не менялись. Кассы, которых ещё нет в <code>configs\</code>,
+   пропускаются: заведите их в панели и обновите архив на шаре.</li>
+<li>Обновление агентов: <code>build-client.cmd</code> → заменить <code>client\</code> на шаре → кассы обновятся
+   при перезагрузке. Лог на кассе: <code>C:\AMadmin\install.log</code>.</li>
+</ol>
+<p>Стартовый скрипт работает от SYSTEM, поэтому UAC не нужен; окно оповещений всё равно
+запускается в сессии кассира — задачей планировщика при входе.</p>
+<h3>Все кассы сразу с ПК администратора (без GPO)</h3>
 <p>Распаковать архив конфигов (например, в <code>C:\Temp\amadmin-configs</code>) и:</p>
-<pre><code class="language-powershell">.\deploy\client\deploy-clients.ps1 -ConfigsDir C:\Temp\amadmin-configs
+<pre><code>deploy\client\deploy-clients.cmd -ConfigsDir C:\Temp\amadmin-configs
 </code></pre>
 <p>Для каждой папки-hostname скрипт: проверит доступность, скопирует комплект и её
 <code>config.json</code> в <code>\\HOST\C$\AMadmin</code>, запустит там <code>install-client.ps1</code> через WinRM
@@ -238,10 +279,10 @@ PHP под IIS (FastCGI) / Apache — папка <code>server/public</code> — 
 (<code>docker compose logs</code> или Настройки → Сервер → уровень <code>debug</code>).</p>
 <h2>6. Обновление</h2>
 <ul>
-<li><strong>Сервер</strong>: <code>git pull</code> (или новая копия папки) → <code>install-server.ps1</code> снова.
+<li><strong>Сервер</strong>: <code>git pull</code> (или новая копия папки) → <code>install-server.cmd</code> снова.
   Миграции накатываются сами, данные на месте.</li>
-<li><strong>Кассы</strong>: <code>build-client.ps1</code> → <code>deploy-clients.ps1 -ConfigsDir ...</code> с тем же
-  архивом конфигов (ключи не меняются) — агенты переустановятся поверх.</li>
+<li><strong>Кассы</strong>: <code>build-client.cmd</code> → через GPO — заменить <code>client\</code> на шаре; без GPO —
+  <code>deploy-clients.cmd -ConfigsDir ...</code> с тем же архивом конфигов (ключи не меняются).</li>
 </ul>
     </div>
 </main>

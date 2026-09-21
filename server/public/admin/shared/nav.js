@@ -5,6 +5,7 @@
 const Nav = (function () {
     const icons = {
         grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+        monitor: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
         bell: '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>',
         layers: '<svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>',
         book: '<svg viewBox="0 0 24 24"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>',
@@ -20,6 +21,7 @@ const Nav = (function () {
 
     const items = [
         { href: '/admin/index.html', label: 'Дашборд', icon: 'grid' },
+        { href: '/admin/hosts/hosts.html', label: 'Хосты', icon: 'monitor', match: '/admin/hosts/' },
         { href: '/admin/notifications/notifications.html', label: 'Оповещения', icon: 'bell' },
         { href: '/admin/groups/groups.html', label: 'Группы', icon: 'layers' },
         { href: '/admin/manuals/manuals.html', label: 'Мануалы', icon: 'book' },
@@ -41,7 +43,8 @@ const Nav = (function () {
         let html = '<a class="brand" href="/admin/index.html"><span class="mark">A</span>' +
             '<span><span class="name">AMadmin</span><span class="tag">панель администратора</span></span></a><nav>';
         items.forEach(function (item) {
-            const active = path === item.href || (item.href === '/admin/index.html' && path === '/admin');
+            // match — префикс для разделов из нескольких страниц (список хостов + профиль).
+            const active = path === item.href || (item.match && path.indexOf(item.match) === 0) || (item.href === '/admin/index.html' && path === '/admin');
             html += '<a href="' + item.href + '" class="' + (active ? 'active' : '') + '"' +
                 (item.roles ? ' data-roles="' + item.roles.join(',') + '" style="display:none"' : '') + '>' +
                 icons[item.icon] + '<span>' + item.label + '</span></a>';

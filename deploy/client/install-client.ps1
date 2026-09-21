@@ -22,15 +22,58 @@ param(
     [string]$ServerUrl,
     [string]$Token,
     [string]$ConfigPath,
+    # Папка с конфигами по hostname (распакованный архив из панели или сетевая шара):
+    # берётся <ConfigsDir>\<ИМЯ_ЭТОГО_ПК>\config.json. Так работает GPO-раскатка.
+    [string]$ConfigsDir,
     [string]$InstallDir = 'C:\AMadmin',
     [string]$Source = $PSScriptRoot,
-    [switch]$NoStartUi
+    [switch]$NoStartUi,
+    # Ничего не делать, если уже стоит эта же версия с этим же конфигом (для запуска
+    # при каждой загрузке из GPO — обычно скрипт завершается за секунду).
+    [switch]$OnlyIfChanged,
+    # Без пауз и лишнего вывода; всё пишется в <InstallDir>\install.log.
+    [switch]$Quiet
 )
+# ---- Что происходит в самом начале любого нашего скрипта ---------------------------
+# 1) Консоль переводим в UTF-8: иначе русские сообщения в старом Windows PowerShell
+#    превращаются в «Џа®ўҐаЄ » (cp866 против cp1251).
+# 2) Снимаем со всех наших .ps1 пометку «скачано из интернета» (Zone.Identifier):
+#    архив с GitHub несёт её на каждом файле, и политика RemoteSigned блокирует запуск с
+#    ошибкой «is not digitally signed». Запускать через .cmd-обёртку рядом (она передаёт
+#    -ExecutionPolicy Bypass) — самый простой путь; этот блок чинит и прямой запуск.
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $OutputEncoding = [Text.Encoding]::UTF8 } catch { }
+try { Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue } catch { }
+
 
 $ErrorActionPreference = 'Stop'
 
+# ---- Порядок работы скрипта --------------------------------------------------------
+# 1) права администратора (или мы уже SYSTEM — из GPO/планировщика);
+# 2) .NET Framework 4.8 на месте?
+# 3) выбрать конфиг: -ServerUrl/-Token -> -ConfigPath -> -ConfigsDir\<hostname> ->
+#    config.json рядом со скриптом -> уже установленный;
+# 4) -OnlyIfChanged: если версия агента и конфиг не изменились — выйти;
+# 5) остановить старых агентов, скопировать файлы, записать config.json;
+# 6) служба AMadminAgent (--install), задача автозапуска окна оповещений;
+# 7) запустить окно оповещений в текущей сессии (если она есть).
+# -----------------------------------------------------------------------------------
+
+# Лог установки: при раскатке через GPO консоли нет, а разбирать «почему на этой кассе
+# не встало» нужно. Пишем и в консоль, и в файл.
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+$logFile = Join-Path $InstallDir 'install.log'
+function Log($text) {
+    $line = '[' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '] ' + $text
+    try { Add-Content -Path $logFile -Value $line -Encoding UTF8 } catch { }
+    if (-not $Quiet) { Write-Host $text }
+}
+
 # ---- Повышение прав ----------------------------------------------------------------
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin -and -not [Environment]::UserInteractive) {
+    Log 'Нет прав администратора и нет интерактивной сессии — запросить повышение некому. Запускайте из GPO (SYSTEM) или от администратора.'
+    exit 1
+}
 if (-not $isAdmin) {
     Write-Host 'Нужны права администратора — запрашиваю повышение...' -ForegroundColor Yellow
     $args = @('-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
@@ -42,34 +85,21 @@ if (-not $isAdmin) {
     exit
 }
 
-function Step($text) { Write-Host "== $text" -ForegroundColor Cyan }
+function Step($text) { Log "== $text" }
 
 # ---- .NET Framework 4.8 -------------------------------------------------------------
 Step 'Проверка .NET Framework 4.8'
 $release = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -ErrorAction SilentlyContinue).Release
 if (-not $release -or $release -lt 528040) {
-    Write-Host 'Не установлен .NET Framework 4.8. Установите его (Windows Update или ndp48-x86-x64-allos-enu.exe от Microsoft) и запустите скрипт снова.' -ForegroundColor Red
+    Log 'ОШИБКА: не установлен .NET Framework 4.8. Установите его (Windows Update или ndp48-x86-x64-allos-enu.exe от Microsoft) и запустите скрипт снова.'
     exit 2
 }
 
-# ---- Файлы ------------------------------------------------------------------------
-Step "Копирование файлов в $InstallDir"
+# ---- Какой конфиг ставим (решаем заранее — от этого зависит, есть ли что менять) ------
 $existingConfig = Join-Path $InstallDir 'config.json'
 $keepConfig = $null
 if (Test-Path $existingConfig) { $keepConfig = Get-Content $existingConfig -Raw }
 
-# Остановить работающих агентов, иначе .exe не заменить.
-$svc = Get-Service AMadminAgent -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -ne 'Stopped') { Stop-Service AMadminAgent -Force -ErrorAction SilentlyContinue; Start-Sleep 2 }
-Get-Process AMadmin.UiAgent, AMadmin.ManagementAgent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep 1
-
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Get-ChildItem $Source -File | Where-Object { $_.Extension -in '.exe', '.dll', '.config', '.ps1', '.json' -and $_.Name -ne 'config.json' } |
-    Copy-Item -Destination $InstallDir -Force
-
-# ---- config.json --------------------------------------------------------------------
-Step 'Конфиг'
 $configText = $null
 if ($ServerUrl -and $Token) {
     $configText = @"
@@ -92,21 +122,56 @@ if ($ServerUrl -and $Token) {
 "@
 } elseif ($ConfigPath) {
     $configText = Get-Content $ConfigPath -Raw
+} elseif ($ConfigsDir) {
+    $mine = Join-Path $ConfigsDir "$env:COMPUTERNAME\config.json"
+    if (Test-Path $mine) { $configText = Get-Content $mine -Raw }
+    elseif ($keepConfig) { $configText = $keepConfig; Log "В $ConfigsDir нет папки $env:COMPUTERNAME — оставляю существующий конфиг." }
+    else { Log "В $ConfigsDir нет конфига для $env:COMPUTERNAME — этот ПК ещё не заведён в панели. Ничего не делаю."; exit 6 }
 } elseif (Test-Path (Join-Path $Source 'config.json')) {
     $configText = Get-Content (Join-Path $Source 'config.json') -Raw
 } elseif ($keepConfig) {
     $configText = $keepConfig
-    Write-Host 'Оставляю существующий config.json.'
+    Log 'Оставляю существующий config.json.'
 } else {
-    Write-Host 'Не задан конфиг: укажите -ServerUrl и -Token, или -ConfigPath, или положите config.json рядом со скриптом.' -ForegroundColor Red
+    Log 'ОШИБКА: не задан конфиг: укажите -ServerUrl и -Token, или -ConfigPath, или -ConfigsDir, или положите config.json рядом со скриптом.'
     exit 3
 }
+
+# ---- Есть ли что менять? (для запуска при каждой загрузке из GPO) -------------------
+if ($OnlyIfChanged) {
+    $srcExe = Join-Path $Source 'AMadmin.ManagementAgent.exe'
+    $dstExe = Join-Path $InstallDir 'AMadmin.ManagementAgent.exe'
+    $sameVersion = (Test-Path $dstExe) -and (Test-Path $srcExe) -and
+        ((Get-Item $srcExe).VersionInfo.FileVersion -eq (Get-Item $dstExe).VersionInfo.FileVersion)
+    $sameConfig = $keepConfig -and ($keepConfig.Trim() -eq $configText.Trim())
+    $serviceOk = $null -ne (Get-Service AMadminAgent -ErrorAction SilentlyContinue)
+    if ($sameVersion -and $sameConfig -and $serviceOk) {
+        Log "Уже установлена версия $((Get-Item $dstExe).VersionInfo.FileVersion) с тем же конфигом — ничего не делаю."
+        exit 0
+    }
+}
+
+# ---- Файлы ------------------------------------------------------------------------
+Step "Копирование файлов в $InstallDir"
+
+# Остановить работающих агентов, иначе .exe не заменить.
+$svc = Get-Service AMadminAgent -ErrorAction SilentlyContinue
+if ($svc -and $svc.Status -ne 'Stopped') { Stop-Service AMadminAgent -Force -ErrorAction SilentlyContinue; Start-Sleep 2 }
+Get-Process AMadmin.UiAgent, AMadmin.ManagementAgent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep 1
+
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+Get-ChildItem $Source -File | Where-Object { $_.Extension -in '.exe', '.dll', '.config', '.ps1', '.json' -and $_.Name -ne 'config.json' } |
+    Copy-Item -Destination $InstallDir -Force
+
+# ---- config.json --------------------------------------------------------------------
+Step 'Конфиг'
 [IO.File]::WriteAllText($existingConfig, $configText, (New-Object Text.UTF8Encoding $false))
 
 # ---- Служба управления ---------------------------------------------------------------
 Step 'Служба AMadminAgent (агент управления, от SYSTEM)'
 & (Join-Path $InstallDir 'AMadmin.ManagementAgent.exe') --install
-if ($LASTEXITCODE -ne 0) { Write-Host 'Установка службы не удалась — см. management-agent.log' -ForegroundColor Red; exit 4 }
+if ($LASTEXITCODE -ne 0) { Log 'ОШИБКА: установка службы не удалась — см. management-agent.log'; exit 4 }
 
 # ---- Автозапуск окна оповещений ----------------------------------------------------------
 # Задача планировщика «при входе любого пользователя», от имени вошедшего (группа Users),
@@ -136,7 +201,7 @@ $xmlPath = Join-Path $env:TEMP 'amadmin-uiagent-task.xml'
 [IO.File]::WriteAllText($xmlPath, $taskXml, [Text.Encoding]::Unicode)
 & schtasks.exe /Create /TN 'AMadmin UiAgent' /XML $xmlPath /F | Out-Null
 Remove-Item $xmlPath -Force -ErrorAction SilentlyContinue
-if ($LASTEXITCODE -ne 0) { Write-Host 'Не удалось создать задачу автозапуска' -ForegroundColor Red; exit 5 }
+if ($LASTEXITCODE -ne 0) { Log 'ОШИБКА: не удалось создать задачу автозапуска'; exit 5 }
 
 # Запустить окно оповещений прямо сейчас — но НЕ от администратора: через explorer,
 # чтобы процесс родился в обычной сессии текущего пользователя.
@@ -144,9 +209,5 @@ if (-not $NoStartUi -and [Environment]::UserInteractive) {
     Start-Process explorer.exe -ArgumentList "`"$uiExe`"" -ErrorAction SilentlyContinue
 }
 
-Write-Host ''
-Write-Host 'Готово.' -ForegroundColor Green
-Write-Host "  Папка:            $InstallDir"
-Write-Host "  Служба:           AMadminAgent — $((Get-Service AMadminAgent).Status)"
-Write-Host "  Окно оповещений:  задача 'AMadmin UiAgent' при входе пользователя"
-Write-Host '  Через минуту ПК появится онлайн на дашборде. Логи: management-agent.log, ui-agent.log в папке.'
+Log "Готово: $InstallDir, служба AMadminAgent — $((Get-Service AMadminAgent).Status), задача 'AMadmin UiAgent' при входе пользователя."
+if (-not $Quiet) { Write-Host 'Через минуту ПК появится онлайн на дашборде. Логи: management-agent.log, ui-agent.log, install.log в папке.' }

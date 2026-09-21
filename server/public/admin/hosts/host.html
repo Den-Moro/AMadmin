@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Хост — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+<style>
+    /* Профиль хоста: карточка фактов слева, действия справа, ниже — две ленты истории. */
+    .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 20px; }
+    .fact .k { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+    .fact .v { font-size: 15px; margin-top: 2px; word-break: break-word; }
+    .crumbs { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .crumbs a { color: var(--muted); text-decoration: none; }
+    .crumbs a:hover { color: var(--accent); }
+    .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-line { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+</style>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="crumbs"><a href="/admin/hosts/hosts.html">Хосты</a> / <span id="crumbName">…</span></div>
+    <div class="page-head">
+        <div>
+            <h1 id="title">…</h1>
+            <div class="status-line"><span id="statusBadge" class="badge badge-neutral">загрузка</span><span class="muted" id="statusText"></span></div>
+        </div>
+        <div class="head-actions">
+            <button type="button" id="refreshBtn" title="Перечитать данные хоста">↻ Обновить</button>
+            <span id="adminActions" hidden>
+                <button type="button" id="notifyBtn">Оповестить</button>
+                <button type="button" id="commandBtn">Команда…</button>
+                <button type="button" id="editBtn">Изменить</button>
+                <button type="button" id="moreBtn" title="Ещё действия">⋯</button>
+            </span>
+        </div>
+    </div>
+
+    <div class="row-2">
+        <div class="card compact">
+            <h2>Карточка</h2>
+            <div class="facts" id="facts"></div>
+        </div>
+        <div class="card compact">
+            <h2>Итоги</h2>
+            <div class="facts" id="totals"></div>
+            <h2 style="margin-top:8px">Группы</h2>
+            <div id="groups" class="muted"></div>
+        </div>
+    </div>
+
+    <h1>Результаты команд на этом хосте</h1>
+    <table id="resultsTable">
+        <thead><tr><th>Когда</th><th>Команда</th><th>Автор</th><th>Статус</th><th>Результат</th></tr></thead>
+        <tbody></tbody>
+    </table>
+
+    <h1>Подтверждённые оповещения</h1>
+    <table id="acksTable">
+        <thead><tr><th>Когда</th><th>Оповещение</th><th>Важность</th><th>Открыл инструкцию</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="host.js"></script>
+</body>
+</html>

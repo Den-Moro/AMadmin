@@ -34,6 +34,15 @@
 
     targetTypeEl.addEventListener('change', function () { loadTargetOptions(targetTypeEl.value); });
 
+    // Пришли из профиля хоста (?pc=ID): открываем форму с этим ПК в качестве получателя.
+    const presetPc = new URLSearchParams(window.location.search).get('pc');
+    if (presetPc) {
+        $('createForm').hidden = false;
+        targetTypeEl.value = 'pc';
+        await loadTargetOptions('pc');
+        targetIdEl.value = presetPc;
+    }
+
     // ---- Форма ------------------------------------------------------------------------
 
     $('newBtn').addEventListener('click', function () {

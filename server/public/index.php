@@ -101,6 +101,7 @@ $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->post('/admin/pcs', array('AdminPcsController', 'store'));
 $router->post('/admin/pcs/bulk', array('AdminPcsController', 'bulkStore'));
 $router->get('/admin/pcs/configs.zip', array('AdminPcsController', 'exportConfigs'));
+$router->get('/admin/pcs/{id}', array('AdminPcsController', 'show'));
 $router->put('/admin/pcs/{id}', array('AdminPcsController', 'update'));
 $router->delete('/admin/pcs/{id}', array('AdminPcsController', 'destroy'));
 $router->post('/admin/pcs/{id}/token', array('AdminPcsController', 'regenerateToken'));

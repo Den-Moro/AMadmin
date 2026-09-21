@@ -12,11 +12,7 @@ class AdminPcsController
     {
         AdminAuth::requireLogin();
 
-        $rows = self::query(
-            isset($_GET['store_id']) && $_GET['store_id'] !== '' ? (int) $_GET['store_id'] : null,
-            isset($_GET['device_type_id']) && $_GET['device_type_id'] !== '' ? (int) $_GET['device_type_id'] : null,
-            isset($_GET['search']) ? trim($_GET['search']) : ''
-        );
+        $rows = self::query(self::filtersFromRequest());
 
         // agent_token — это пароль кассы. Оператору список нужен, а ключи — нет: их
         // видят только те, кто может заводить ПК и выгружать конфиги (administrator+).
@@ -30,18 +26,38 @@ class AdminPcsController
         echo json_encode($rows);
     }
 
-    // Общий запрос списка ПК: используется и для таблицы на дашборде, и для выгрузки
-    // конфигов архивом — чтобы "что вижу в списке, то и выгружается" выполнялось само
-    // собой, а фильтры не разъехались между двумя копиями одного SQL.
-    private static function query($storeId, $deviceTypeId, $search)
+    // Фильтры списка из query string. Одни и те же для таблицы хостов и для выгрузки
+    // конфигов архивом — "что вижу в списке, то и выгружается".
+    //   store_id, device_type_id, group_id — привязки;
+    //   search — hostname / пользователь / понятное имя / магазин;
+    //   state — online | offline | never (ни разу не выходил) | silent (молчит > суток);
+    //   ids — "1,2,3": только эти ПК (выгрузка конфигов для отмеченных строк).
+    private static function filtersFromRequest()
     {
+        return array(
+            'store_id'       => isset($_GET['store_id']) && $_GET['store_id'] !== '' ? (int) $_GET['store_id'] : null,
+            'device_type_id' => isset($_GET['device_type_id']) && $_GET['device_type_id'] !== '' ? (int) $_GET['device_type_id'] : null,
+            'group_id'       => isset($_GET['group_id']) && $_GET['group_id'] !== '' ? (int) $_GET['group_id'] : null,
+            'search'         => isset($_GET['search']) ? trim($_GET['search']) : '',
+            'state'          => isset($_GET['state']) ? $_GET['state'] : '',
+            'ids'            => isset($_GET['ids']) && $_GET['ids'] !== ''
+                ? array_values(array_filter(array_map('intval', explode(',', $_GET['ids']))))
+                : null,
+        );
+    }
+
+    // Общий запрос списка ПК (см. filtersFromRequest).
+    private static function query($f)
+    {
+        $window = Settings::int('online_window_seconds', self::ONLINE_WINDOW_SECONDS);
         $sql = "
             SELECT
                 p.id, p.hostname, p.username, p.display_name, p.last_seen, p.agent_version,
-                p.agent_token, p.store_id, p.device_type_id,
+                p.agent_token, p.store_id, p.device_type_id, p.created_at,
                 s.name AS store_name,
                 dt.name AS device_type_name,
-                (julianday('now') - julianday(p.last_seen)) * 86400.0 AS seconds_since_seen
+                (julianday('now') - julianday(p.last_seen)) * 86400.0 AS seconds_since_seen,
+                (SELECT GROUP_CONCAT(g.name, ', ') FROM host_group_members m JOIN host_groups g ON g.id = m.group_id WHERE m.pc_id = p.id) AS groups
             FROM pcs p
             JOIN stores s ON s.id = p.store_id
             JOIN device_types dt ON dt.id = p.device_type_id
@@ -49,17 +65,39 @@ class AdminPcsController
         ";
         $params = array();
 
-        if ($storeId) {
+        if (!empty($f['store_id'])) {
             $sql .= ' AND p.store_id = :store_id';
-            $params['store_id'] = $storeId;
+            $params['store_id'] = $f['store_id'];
         }
-        if ($deviceTypeId) {
+        if (!empty($f['device_type_id'])) {
             $sql .= ' AND p.device_type_id = :device_type_id';
-            $params['device_type_id'] = $deviceTypeId;
+            $params['device_type_id'] = $f['device_type_id'];
         }
-        if ($search !== '') {
+        if (!empty($f['group_id'])) {
+            $sql .= ' AND p.id IN (SELECT pc_id FROM host_group_members WHERE group_id = :group_id)';
+            $params['group_id'] = $f['group_id'];
+        }
+        if ($f['search'] !== '') {
             $sql .= ' AND (p.hostname LIKE :search OR p.username LIKE :search OR p.display_name LIKE :search OR s.name LIKE :search)';
-            $params['search'] = '%' . $search . '%';
+            $params['search'] = '%' . $f['search'] . '%';
+        }
+        switch ($f['state']) {
+            case 'online':
+                $sql .= " AND p.last_seen IS NOT NULL AND (julianday('now') - julianday(p.last_seen)) * 86400.0 <= {$window}";
+                break;
+            case 'offline':
+                $sql .= " AND (p.last_seen IS NULL OR (julianday('now') - julianday(p.last_seen)) * 86400.0 > {$window})";
+                break;
+            case 'never':
+                $sql .= ' AND p.last_seen IS NULL';
+                break;
+            case 'silent':
+                $sql .= " AND p.last_seen IS NOT NULL AND (julianday('now') - julianday(p.last_seen)) > 1";
+                break;
+        }
+        if (!empty($f['ids'])) {
+            // Список чисел, собранный через intval — подставлять безопасно.
+            $sql .= ' AND p.id IN (' . implode(',', $f['ids']) . ')';
         }
 
         $sql .= ' ORDER BY p.last_seen DESC';
@@ -69,12 +107,68 @@ class AdminPcsController
         $rows = $stmt->fetchAll();
 
         foreach ($rows as &$row) {
-            $row['online'] = $row['last_seen'] !== null && $row['seconds_since_seen'] <= Settings::int('online_window_seconds', self::ONLINE_WINDOW_SECONDS);
+            $row['online'] = $row['last_seen'] !== null && $row['seconds_since_seen'] <= $window;
             unset($row['seconds_since_seen']);
         }
         unset($row);
 
         return $rows;
+    }
+
+    // GET /admin/pcs/{id} — профиль хоста: карточка, группы, последние подтверждения
+    // оповещений и результаты команд именно этого ПК.
+    public static function show($id)
+    {
+        AdminAuth::requireLogin();
+
+        $rows = self::query(array('store_id' => null, 'device_type_id' => null, 'group_id' => null, 'search' => '', 'state' => '', 'ids' => array((int) $id)));
+        if (!$rows) {
+            http_response_code(404);
+            echo json_encode(array('error' => 'not_found'));
+            return;
+        }
+        $pc = $rows[0];
+        if ($_SESSION['admin_role'] === 'operator') {
+            unset($pc['agent_token']);
+        }
+
+        $db = Db::get();
+        $groups = $db->prepare('SELECT g.id, g.name FROM host_group_members m JOIN host_groups g ON g.id = m.group_id WHERE m.pc_id = :id ORDER BY g.name');
+        $groups->execute(array('id' => $pc['id']));
+
+        $acks = $db->prepare('
+            SELECT a.acked_at, a.reacted, n.id AS notification_id, n.text, n.priority
+            FROM notification_acks a
+            JOIN notification_occurrences o ON o.id = a.occurrence_id
+            JOIN notifications n ON n.id = o.notification_id
+            WHERE a.pc_id = :id ORDER BY a.acked_at DESC LIMIT 20
+        ');
+        $acks->execute(array('id' => $pc['id']));
+
+        $results = $db->prepare('
+            SELECT r.status, r.output, r.claimed_at, r.executed_at, c.id AS command_id, c.type, c.payload, u.username AS author
+            FROM command_results r
+            JOIN commands c ON c.id = r.command_id
+            LEFT JOIN admin_users u ON u.id = c.created_by
+            WHERE r.pc_id = :id ORDER BY r.claimed_at DESC LIMIT 20
+        ');
+        $results->execute(array('id' => $pc['id']));
+
+        $totals = $db->prepare("
+            SELECT
+                (SELECT COUNT(*) FROM notification_acks WHERE pc_id = :id1) AS acks,
+                (SELECT COUNT(*) FROM command_results WHERE pc_id = :id2) AS results,
+                (SELECT COUNT(*) FROM command_results WHERE pc_id = :id3 AND status IN ('failed', 'timeout')) AS failed
+        ");
+        $totals->execute(array('id1' => $pc['id'], 'id2' => $pc['id'], 'id3' => $pc['id']));
+
+        echo json_encode(array(
+            'pc'      => $pc,
+            'groups'  => $groups->fetchAll(),
+            'acks'    => $acks->fetchAll(),
+            'results' => $results->fetchAll(),
+            'totals'  => $totals->fetch(),
+        ));
     }
 
     // POST /admin/pcs   body: { store_id, device_type_id, hostname, display_name? }
@@ -289,11 +383,7 @@ class AdminPcsController
             return;
         }
 
-        $pcs = self::query(
-            isset($_GET['store_id']) && $_GET['store_id'] !== '' ? (int) $_GET['store_id'] : null,
-            isset($_GET['device_type_id']) && $_GET['device_type_id'] !== '' ? (int) $_GET['device_type_id'] : null,
-            isset($_GET['search']) ? trim($_GET['search']) : ''
-        );
+        $pcs = self::query(self::filtersFromRequest());
 
         if (empty($pcs)) {
             http_response_code(404);

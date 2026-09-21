@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Хосты — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+<style>
+    /* Страница хостов: фильтры в два ряда, панель массовых действий появляется, когда
+       отмечена хотя бы одна строка. */
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .filters-grid input[type=search] { grid-column: span 2; }
+    .filters-grid input, .filters-grid select { width: 100%; }
+    .bulk-bar { display: none; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 10px;
+                background: var(--accent-soft); border: 1px solid rgba(45,212,191,.3); border-radius: var(--radius-sm); }
+    .bulk-bar.show { display: flex; flex-wrap: wrap; }
+    .bulk-bar b { color: var(--accent); }
+    td.check, th.check { width: 34px; padding-right: 0; }
+    .host-link { color: var(--text); text-decoration: none; font-weight: 600; }
+    .host-link:hover { color: var(--accent); }
+    .refreshed { font-size: 12px; color: var(--muted); }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable.asc::after { content: " ▲"; } th.sortable.desc::after { content: " ▼"; }
+    .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: -12px; }
+    @media (max-width: 900px) { .filters-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="page-head">
+        <div>
+            <h1>Хосты</h1>
+            <p class="muted">Все кассы и ПК. Нажмите на имя — откроется профиль хоста с историей. Отметьте строки — появятся массовые действия.</p>
+        </div>
+        <div class="actions">
+            <button type="button" id="refreshBtn" title="Перечитать статусы прямо сейчас">↻ Обновить</button>
+            <span id="adminActions" hidden>
+                <button type="button" id="addPcBtn" class="primary">＋ Добавить ПК</button>
+                <button type="button" id="exportConfigsBtn" title="Архив с config.json для каждого ПК из списка (с учётом фильтров)">Выгрузить конфиги</button>
+            </span>
+        </div>
+    </div>
+
+    <!-- Панель добавления ПК: один или списком. Скрыта, пока не нажали «Добавить ПК». -->
+    <div id="addPanel" class="card" hidden>
+        <div class="tabs">
+            <button type="button" class="active" data-tab="one">Один ПК</button>
+            <button type="button" data-tab="many">Списком на весь магазин</button>
+        </div>
+        <form id="createPcForm" class="tab-panel" data-panel="one">
+            <div class="row">
+                <label>Магазин <select id="pcStoreId" required></select></label>
+                <label>Тип устройства <select id="pcDeviceTypeId" required></select></label>
+            </div>
+            <div class="row">
+                <label>Hostname
+                    <span class="hint">Имя компьютера в Windows (как в «Свойствах системы»).</span>
+                    <input type="text" id="pcHostname" placeholder="например, KASSA-05" required>
+                </label>
+                <label>Понятное имя (необязательно)
+                    <span class="hint">Показывается вместо hostname везде в панели.</span>
+                    <input type="text" id="pcDisplayName" placeholder="например, Касса 5">
+                </label>
+            </div>
+            <div class="row">
+                <button type="submit">Создать и показать конфиг</button>
+                <button type="button" class="ghost" data-close-add>Отмена</button>
+            </div>
+        </form>
+        <form id="bulkPcForm" class="tab-panel" data-panel="many" hidden>
+            <div class="row">
+                <label>Магазин <select id="bulkStoreId" required></select></label>
+                <label>Тип устройства <select id="bulkDeviceTypeId" required></select></label>
+            </div>
+            <label>Список hostname
+                <span class="hint">По одному в строке, можно через запятую. Каждому сразу выдастся ключ; уже заведённые пропускаются.</span>
+                <textarea id="bulkHostnames" rows="5" placeholder="KASSA-01&#10;KASSA-02&#10;KASSA-03" required></textarea>
+            </label>
+            <div class="row">
+                <button type="submit">Создать все</button>
+                <button type="button" class="ghost" data-close-add>Отмена</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Фильтры. Всё, кроме поиска, применяется мгновенно. -->
+    <div class="filters-grid">
+        <input type="search" id="search" placeholder="Поиск: hostname, пользователь, имя, магазин…">
+        <select id="storeFilter"><option value="">Все магазины</option></select>
+        <select id="deviceTypeFilter"><option value="">Все типы</option></select>
+        <select id="groupFilter"><option value="">Все группы</option></select>
+        <select id="stateFilter">
+            <option value="">Любой статус</option>
+            <option value="online">Онлайн</option>
+            <option value="offline">Офлайн</option>
+            <option value="silent">Молчат больше суток</option>
+            <option value="never">Ни разу не выходили</option>
+        </select>
+        <select id="versionFilter"><option value="">Любая версия агента</option></select>
+    </div>
+
+    <div class="bulk-bar" id="bulkBar">
+        <span>Отмечено: <b id="bulkCount">0</b></span>
+        <button type="button" class="small" data-bulk="group">В группу…</button>
+        <button type="button" class="small" data-bulk="export">Выгрузить конфиги</button>
+        <button type="button" class="small danger" data-bulk="delete">Удалить</button>
+        <button type="button" class="small ghost" data-bulk="clear">Снять отметки</button>
+    </div>
+
+    <table id="pcsTable">
+        <thead>
+            <tr>
+                <th class="check"><input type="checkbox" id="checkAll" title="Отметить все на странице"></th>
+                <th class="sortable" data-sort="online">Статус</th>
+                <th class="sortable" data-sort="hostname">Хост</th>
+                <th class="sortable" data-sort="store_name">Магазин</th>
+                <th>Тип</th>
+                <th>Группы</th>
+                <th class="sortable" data-sort="agent_version">Агент</th>
+                <th class="sortable desc" data-sort="last_seen">На связи</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <div class="pager">
+        <span class="refreshed" id="refreshed"></span>
+        <span class="grow"></span>
+        <span class="muted" id="pageInfo"></span>
+        <button type="button" class="small" id="prevBtn">‹</button>
+        <button type="button" class="small" id="nextBtn">›</button>
+    </div>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="hosts.js"></script>
+</body>
+</html>

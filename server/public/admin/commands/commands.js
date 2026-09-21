@@ -58,6 +58,14 @@
     }
     targetTypeEl.addEventListener('change', function () { loadTargetOptions(targetTypeEl.value); });
 
+    // Пришли из профиля хоста (?pc=ID): сразу открываем форму с этим ПК в качестве цели.
+    const presetPc = new URLSearchParams(window.location.search).get('pc');
+    if (presetPc && canEdit) {
+        $('createForm').hidden = false;
+        targetTypeEl.value = 'pc';
+        await loadTargetOptions('pc', presetPc);
+    }
+
     // «Точно на N хостов?» — считаем через существующие эндпоинты.
     async function estimateTargetCount(type, id) {
         if (type === 'all') return (await Api.get('/admin/pcs')).length;

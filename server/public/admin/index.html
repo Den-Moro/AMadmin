@@ -12,12 +12,12 @@
 <main>
     <div class="page-head">
         <div>
-            <h1>ПК магазинов</h1>
-            <p class="muted">Все кассы и ПК. «Онлайн» — агент выходил на связь недавно (окно задаётся в Настройках → Сервер).</p>
+            <h1>Дашборд</h1>
+            <p class="muted">Состояние парка одним взглядом. Список касс с фильтрами и профилями — на странице «Хосты».</p>
         </div>
-        <div class="actions" id="adminActions" hidden>
-            <button type="button" id="addPcBtn" class="primary">＋ Добавить ПК</button>
-            <button type="button" id="exportConfigsBtn" title="Архив с config.json для каждого ПК из списка (с учётом фильтров)">Выгрузить конфиги</button>
+        <div class="actions">
+            <button type="button" id="refreshBtn" title="Перечитать всё прямо сейчас">↻ Обновить</button>
+            <a href="/admin/hosts/hosts.html"><button type="button" class="primary">Все хосты →</button></a>
         </div>
     </div>
 
@@ -48,75 +48,17 @@
         </div>
     </div>
 
-    <div id="addPanel" class="card" hidden>
-        <div class="tabs">
-            <button type="button" class="active" data-tab="one">Один ПК</button>
-            <button type="button" data-tab="many">Списком на весь магазин</button>
+    <div class="card compact" id="attentionCard">
+        <div class="row" style="justify-content:space-between;align-items:center">
+            <h2>Требуют внимания</h2>
+            <a href="/admin/hosts/hosts.html?state=offline" class="muted">все офлайн →</a>
         </div>
-
-        <form id="createPcForm" class="tab-panel" data-panel="one">
-            <div class="row">
-                <label>Магазин <select id="pcStoreId" required></select></label>
-                <label>Тип устройства <select id="pcDeviceTypeId" required></select></label>
-            </div>
-            <div class="row">
-                <label>Hostname
-                    <span class="hint">Имя компьютера в Windows (как в «Свойствах системы»).</span>
-                    <input type="text" id="pcHostname" placeholder="например, KASSA-05" required>
-                </label>
-                <label>Понятное имя (необязательно)
-                    <span class="hint">Показывается вместо hostname везде в панели.</span>
-                    <input type="text" id="pcDisplayName" placeholder="например, Касса 5">
-                </label>
-            </div>
-            <div class="row">
-                <button type="submit">Создать и показать конфиг</button>
-                <button type="button" class="ghost" data-close-add>Отмена</button>
-            </div>
-        </form>
-
-        <form id="bulkPcForm" class="tab-panel" data-panel="many" hidden>
-            <div class="row">
-                <label>Магазин <select id="bulkStoreId" required></select></label>
-                <label>Тип устройства <select id="bulkDeviceTypeId" required></select></label>
-            </div>
-            <label>Список hostname
-                <span class="hint">По одному в строке, можно через запятую. Каждому сразу выдастся ключ; уже заведённые пропускаются.</span>
-                <textarea id="bulkHostnames" rows="5" placeholder="KASSA-01&#10;KASSA-02&#10;KASSA-03" required></textarea>
-            </label>
-            <div class="row">
-                <button type="submit">Создать все</button>
-                <button type="button" class="ghost" data-close-add>Отмена</button>
-            </div>
-            <p class="muted">Ключи потом выгружаются одним архивом кнопкой «Выгрузить конфиги» (с учётом фильтров списка).</p>
-        </form>
+        <p class="muted" style="margin:0">Кассы, которые молчат дольше суток или ни разу не выходили на связь.</p>
+        <table id="attentionTable">
+            <thead><tr><th>Хост</th><th>Магазин</th><th>Агент</th><th>Последний опрос</th></tr></thead>
+            <tbody></tbody>
+        </table>
     </div>
-
-    <div class="toolbar">
-        <input type="search" id="search" placeholder="Поиск: hostname, пользователь, магазин…">
-        <select id="storeFilter"><option value="">Все магазины</option></select>
-        <select id="deviceTypeFilter"><option value="">Все типы</option></select>
-        <select id="stateFilter">
-            <option value="">Любой статус</option>
-            <option value="online">Только онлайн</option>
-            <option value="offline">Только офлайн</option>
-        </select>
-    </div>
-
-    <table id="pcsTable">
-        <thead>
-            <tr>
-                <th>Статус</th>
-                <th>Хост</th>
-                <th>Магазин</th>
-                <th>Тип</th>
-                <th>Агент</th>
-                <th>На связи</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
 </main>
 
 <script src="shared/api.js"></script>
