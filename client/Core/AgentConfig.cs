@@ -46,6 +46,13 @@ namespace AMadmin.Core
                     "или возьмите готовый с дашборда (кнопка \"Показать конфиг\").");
             }
 
+            return Parse(File.ReadAllText(path));
+        }
+
+        // Общий разбор — использует и Load (реальный config.json), и импорт файла через
+        // окно настроек (проверить кандидата ДО того, как он заменит рабочий конфиг).
+        public static AgentConfig Parse(string json)
+        {
             // Обычный JSON комментариев не допускает, но людям с ними проще — разрешаем
             // // и /* */ прямо в файле.
             var options = new JsonSerializerOptions
@@ -54,15 +61,28 @@ namespace AMadmin.Core
                 AllowTrailingCommas = true,
             };
 
-            var config = JsonSerializer.Deserialize<AgentConfig>(File.ReadAllText(path), options);
+            var config = JsonSerializer.Deserialize<AgentConfig>(json, options);
+            Validate(config);
+            config.ServerUrl = config.ServerUrl.TrimEnd('/');
+            return config;
+        }
 
-            if (string.IsNullOrWhiteSpace(config.ServerUrl) || string.IsNullOrWhiteSpace(config.AgentToken))
+        public static void Validate(AgentConfig config)
+        {
+            if (config == null || string.IsNullOrWhiteSpace(config.ServerUrl) || string.IsNullOrWhiteSpace(config.AgentToken))
             {
                 throw new InvalidOperationException("В config.json должны быть заполнены server_url и agent_token.");
             }
+        }
 
-            config.ServerUrl = config.ServerUrl.TrimEnd('/');
-            return config;
+        // Перезаписывает файл целиком — используется окном настроек (правка полей или
+        // импорт нового конфига). ВНИМАНИЕ: комментарии и форматирование, которые Load
+        // умеет пропускать при чтении, при сохранении не сохраняются — файл переписывается
+        // заново из значений объекта.
+        public void Save(string path)
+        {
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(path, JsonSerializer.Serialize(this, options));
         }
     }
 }

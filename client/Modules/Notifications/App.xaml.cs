@@ -12,6 +12,8 @@ namespace AMadmin.UiAgent
     {
         private ApiClient _api;
         private AgentConfig _config;
+        private string _configPath;
+        private string _version;
         private DispatcherTimer _pollTimer;
         private WinForms.NotifyIcon _tray;
         private bool _polling;
@@ -21,13 +23,14 @@ namespace AMadmin.UiAgent
             base.OnStartup(e);
 
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+            _version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+            _configPath = Path.Combine(baseDir, "config.json");
 
             Logger.Path = Path.Combine(baseDir, "ui-agent.log");
 
             try
             {
-                _config = AgentConfig.Load(Path.Combine(baseDir, "config.json"));
+                _config = AgentConfig.Load(_configPath);
             }
             catch (Exception ex)
             {
@@ -38,13 +41,13 @@ namespace AMadmin.UiAgent
             }
 
             Logger.SetLevel(_config.LogLevel);
-            Logger.Info("UiAgent " + version + " запущен (сервер " + _config.ServerUrl +
+            Logger.Info("UiAgent " + _version + " запущен (сервер " + _config.ServerUrl +
                         ", опрос каждые " + _config.PollIntervalSeconds + "с, log_level=" + _config.LogLevel + ")");
 
             AgentState.ServerUrl = _config.ServerUrl;
-            AgentState.Version = version;
+            AgentState.Version = _version;
 
-            _api = new ApiClient(_config, version);
+            _api = new ApiClient(_config, _version);
 
             SetupTray();
 
@@ -108,6 +111,7 @@ namespace AMadmin.UiAgent
 
             var menu = new WinForms.ContextMenuStrip();
             menu.Items.Add("Статус агента", null, (s, a) => ShowStatus());
+            menu.Items.Add("Настройки", null, (s, a) => ShowSettings());
             menu.Items.Add("Проверить сейчас", null, async (s, a) => await PollAsync());
             _tray.ContextMenuStrip = menu;
             _tray.DoubleClick += (s, a) => ShowStatus();
@@ -116,6 +120,26 @@ namespace AMadmin.UiAgent
         private void ShowStatus()
         {
             new StatusWindow().Show();
+        }
+
+        private void ShowSettings()
+        {
+            new SettingsWindow(_config, _configPath, ApplyConfig).Show();
+        }
+
+        // Общая точка применения новой конфигурации — и после сохранения в окне настроек,
+        // и после импорта файла (SettingsWindow сохраняет и вызывает этот колбэк). ApiClient
+        // запекает server_url/токен/прокси в себя при создании (см. ApiClient.cs), поэтому
+        // недостаточно просто заменить _config — клиент нужно пересоздать.
+        private void ApplyConfig(AgentConfig config)
+        {
+            _config = config;
+            Logger.SetLevel(_config.LogLevel);
+            AgentState.ServerUrl = _config.ServerUrl;
+            _api = new ApiClient(_config, _version);
+            _pollTimer.Interval = TimeSpan.FromSeconds(_config.PollIntervalSeconds);
+            Logger.Info("Конфиг обновлён из окна настроек (сервер " + _config.ServerUrl +
+                        ", опрос каждые " + _config.PollIntervalSeconds + "с, log_level=" + _config.LogLevel + ")");
         }
 
         protected override void OnExit(ExitEventArgs e)
