@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-# Том с данными монтируется от root, а Apache работает от www-data — отдаём ему
-# базу, файлы для раскатки, сессии и логи, иначе первая же запись упадёт.
+# Том с данными монтируется от root, а php-fpm и nginx работают от www-data —
+# отдаём ему базу, файлы для раскатки, сессии и логи, иначе первая же запись упадёт.
 mkdir -p /app/data /app/logs
 chown -R www-data:www-data /app/data /app/logs
 
@@ -11,5 +11,10 @@ chown -R www-data:www-data /app/data /app/logs
 # томе, и на уже существующей БД с новыми миграциями поверх старых. dev-seed.sql сюда
 # осознанно не входит — тестовые данные накатываются отдельно (docker compose exec ...).
 su -s /bin/sh www-data -c 'php /app/bin/migrate.php'
+
+# php-fpm поднимается в фоне (-D), PID1 — nginx (передаётся как CMD). Без супервизора:
+# если php-fpm упадёт, контейнер сам не перезапустится — для пилота приемлемо, для
+# полного парка следить через docker compose healthcheck/restart.
+php-fpm -D
 
 exec "$@"
