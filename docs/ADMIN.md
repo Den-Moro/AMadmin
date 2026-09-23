@@ -2,7 +2,7 @@
 
 Руководство по эксплуатации AMadmin: как пользоваться админ-панелью и что где
 настраивается. **Установка сервера и касс в один запуск — в [INSTALL.md](INSTALL.md).**
-Полное техническое ТЗ — в [AGENTS.md](AGENTS.md); статус — в [README.md](README.md);
+Полное техническое ТЗ — в [../AGENTS.md](../AGENTS.md); статус — в [../README.md](../README.md);
 инструкция для сотрудников магазина — в [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 ## 1. Что это за система
@@ -23,7 +23,7 @@
 
 ## 2. Развёртывание
 
-Сервер — `deploy/server/install-server.ps1` (Docker; Apache + PHP внутри, годится для
+Сервер — `deploy/server/install-server.ps1` (Docker; nginx + PHP-FPM внутри, годится для
 3000 касс) или `-Mode Native` (без Docker, пилот). Кассы — `deploy/client/build-client.ps1`
 → `install-client.ps1` на кассе или `deploy-clients.ps1` на все сразу. Требования,
 шаги и проверка — в [INSTALL.md](INSTALL.md).
@@ -224,4 +224,4 @@
 - `.exe` не подписаны сертификатом — на масштабе SmartScreen/антивирусы будут мешать,
   подпись обязательна перед продом.
 
-Актуальный чек-лист статуса — всегда в [README.md](README.md).
+Актуальный чек-лист статуса — всегда в [../README.md](../README.md).

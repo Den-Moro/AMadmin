@@ -5,13 +5,13 @@
 .DESCRIPTION
     Два режима:
       -Mode Docker (по умолчанию, рекомендуется): нужен только Docker Desktop. Внутри
-        образа Apache + PHP 8.3 с несколькими рабочими процессами — годится и для
+        образа nginx + PHP-FPM 8.3 с несколькими рабочими процессами — годится и для
         3000 касс. Данные (база, файлы, сессии, логи) живут на docker-томах и переживают
         пересборку. Порт — -Port (по умолчанию 8000).
       -Mode Native: без Docker, PHP ставится через winget, сервер регистрируется задачей
         планировщика «при загрузке» от SYSTEM. Работает на встроенном веб-сервере PHP,
         который на Windows обслуживает ОДИН запрос за раз — этого хватает для пилота и
-        сотни касс, но не для тысяч. Для полного парка без Docker — IIS/Apache (см. INSTALL.md).
+        сотни касс, но не для тысяч. Для полного парка без Docker — IIS/Apache (см. docs/INSTALL.md).
 
     В обоих режимах: накатывает миграции, создаёт первого суперадмина (если учёток ещё
     нет) и печатает адрес панели.
@@ -251,14 +251,25 @@ else {
     Step "Автозапуск сервера (задача планировщика, порт $Port)"
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) { throw 'Для регистрации автозапуска и правила брандмауэра запустите консоль от администратора.' }
-    $tr = "`"$($php.Source)`" -S 0.0.0.0:$Port -t `"$server\public`" `"$server\public\router.php`""
-    Native { schtasks.exe /Create /TN 'AMadmin Server' /SC ONSTART /RU SYSTEM /RL HIGHEST /TR $tr /F } | Out-Null
+    # ВАЖНО: не собирать команду вручную в одну строку для schtasks.exe /TR — его
+    # собственный разбор этой строки ломается, если путь к проекту содержит пробел
+    # (например архив с GitHub распакован в "Downloads\AMadmin-master (1)\..."):
+    # /Create тихо проваливается (ненулевой код возврата, который раньше не
+    # проверялся), задача не создаётся, /Run встаёт в никуда, и единственный
+    # видимый симптом — таймаут в Wait-Server ниже. Register-ScheduledTask передаёт
+    # программу и аргументы раздельно (обычный CreateProcess, а не самодельный
+    # разбор schtasks) и с пробелами в пути работает корректно.
+    $taskArgs = "-S 0.0.0.0:$Port -t `"$server\public`" `"$server\public\router.php`""
+    $action = New-ScheduledTaskAction -Execute $php.Source -Argument $taskArgs
+    $trigger = New-ScheduledTaskTrigger -AtStartup
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName 'AMadmin Server' -Action $action -Trigger $trigger -Principal $principal -Force -ErrorAction Stop | Out-Null
     Native { netsh advfirewall firewall add rule name="AMadmin Server $Port" dir=in action=allow protocol=TCP localport=$Port } | Out-Null
-    Native { schtasks.exe /Run /TN 'AMadmin Server' } | Out-Null
+    Start-ScheduledTask -TaskName 'AMadmin Server' -ErrorAction Stop
 
     $url = "http://localhost:$Port"
-    if (-not (Wait-Server $url)) { throw "Сервер не ответил на $url. Проверьте: schtasks /Query /TN `"AMadmin Server`" и server\logs\app.log" }
-    Write-Host 'ВНИМАНИЕ: встроенный сервер PHP на Windows обрабатывает один запрос за раз. Для пилота и до ~100 касс — нормально; для всего парка используйте режим Docker или IIS (см. INSTALL.md).' -ForegroundColor Yellow
+    if (-not (Wait-Server $url)) { throw "Сервер не ответил на $url. Проверьте: Get-ScheduledTaskInfo -TaskName 'AMadmin Server' и server\logs\app.log" }
+    Write-Host 'ВНИМАНИЕ: встроенный сервер PHP на Windows обрабатывает один запрос за раз. Для пилота и до ~100 касс — нормально; для всего парка используйте режим Docker или IIS (см. docs/INSTALL.md).' -ForegroundColor Yellow
 }
 
 $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1).IPAddress

@@ -33,6 +33,7 @@ server/
 │   └── admin/       панель: shared/{admin.css,ui.js,nav.js,api.js} + папка на раздел
 ├── migrations/      001…012, хронологические, накатываются bin/migrate.php
 ├── bin/             migrate.php, create-admin.php, count-admins.php, seed.php
+├── docker/          nginx.conf (Docker-образ: nginx + PHP-FPM, см. Dockerfile)
 └── data/, logs/     БД amadmin.sqlite, files/ (раскатка), sessions/; app.log
 
 client/
@@ -46,9 +47,14 @@ deploy/
 └── client/  build-client, install-client, uninstall-client, deploy-clients (+ .cmd),
             gpo/AMadmin-Startup.cmd
 
-Документы: AGENTS.md (ТЗ), README.md (статус), INSTALL.md (установка),
-ADMIN.md (эксплуатация), INSTRUCTIONS.md (для кассира). У ADMIN/INSTALL/INSTRUCTIONS
-есть .html-версии — они генерируются из .md, править .md и пересобирать.
+docs/
+├── INSTALL.md(.html)       установка
+├── ADMIN.md(.html)         эксплуатация
+└── INSTRUCTIONS.md(.html)  для кассира
+
+Документы: AGENTS.md (ТЗ, корень), README.md (статус, корень), docs/INSTALL.md,
+docs/ADMIN.md, docs/INSTRUCTIONS.md. У ADMIN/INSTALL/INSTRUCTIONS есть .html-версии —
+это не автогенерация (генератора в репозитории нет), править оба файла руками.
 ```
 
 ## 3. Готово и проверено
@@ -114,6 +120,7 @@ deploy\client\build-client.cmd                   # комплект агенто
 | Окно оповещений не стартовало сразу | запуск через explorer из повышенного процесса на Win11 | `schtasks /Run` созданной задачи |
 | Команды «всем» валились на давно выключенную кассу | не было срока жизни | `command_ttl_hours` (по умолчанию 24 ч) |
 | Кракозябры в выводе скриптов | консоль Windows в OEM-кодировке | читаем stdout/stderr в OEM; `.ps1` — UTF-8 **с BOM**, `.cmd` — OEM/ASCII |
+| Native-установка: «Сервер не ответил», задачи `AMadmin Server` нет | путь проекта с пробелом (`Downloads\AMadmin-master (1)\...`) ломает разбор `schtasks /TR "..." "..."`, код возврата не проверялся | `install-server.ps1` регистрирует задачу через `Register-ScheduledTask`/`New-ScheduledTaskAction` (программа и аргументы раздельно, без ручной сборки строки) |
 
 Инструменты: в Bash-инструменте ломаются обратные слэши — пути Windows и JSON писать
 через Write или .py-скрипт; `.ps1` сохранять с BOM, иначе PowerShell 5.1 не разберёт

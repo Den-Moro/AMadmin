@@ -180,7 +180,7 @@ powershell -ExecutionPolicy Bypass -File .\install-server.ps1 -Mode Native
 <p>Linux:</p>
 <pre><code class="language-bash">./deploy/server/install-server.sh
 </code></pre>
-<p>Скрипт соберёт образ (Apache + PHP 8.3, несколько рабочих процессов), поднимет
+<p>Скрипт соберёт образ (nginx + PHP-FPM 8.3, несколько рабочих процессов), поднимет
 контейнер на порту 8000 (<code>-Port</code> / первый аргумент), накатит миграции, при первом
 запуске спросит пароль для суперадмина <code>admin</code> и напечатает адрес панели и адрес
 для касс. База, файлы для раскатки, сессии и логи лежат на docker-томах и переживают

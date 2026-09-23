@@ -5,9 +5,9 @@ SQLite) с веб-панелью; на каждой кассе два мален
 единственный .NET, работающий на Windows 7): один показывает оповещения кассиру, второй
 выполняет команды администратора (службы, процессы, скрипты, файлы). Полное ТЗ — в
 [AGENTS.md](AGENTS.md). **Начинающему работу над проектом — [HANDOVER.md](HANDOVER.md)**
-(что готово, что нет, где какие грабли). Инструкции для людей: [INSTALL.md](INSTALL.md)
-(установка в один запуск), [ADMIN.md](ADMIN.md) (администратору) и
-[INSTRUCTIONS.md](INSTRUCTIONS.md) (сотруднику магазина); у всех есть HTML-версии рядом.
+(что готово, что нет, где какие грабли). Инструкции для людей: [docs/INSTALL.md](docs/INSTALL.md)
+(установка в один запуск), [docs/ADMIN.md](docs/ADMIN.md) (администратору) и
+[docs/INSTRUCTIONS.md](docs/INSTRUCTIONS.md) (сотруднику магазина); у всех есть HTML-версии рядом.
 
 ## Статус
 
@@ -32,8 +32,8 @@ SQLite) с веб-панелью; на каждой кассе два мален
   сравнением по SHA-256, резервная копия старого файла, ограничение скорости скачивания)
 - [x] Агент управления на C# — настоящая служба Windows (`AMadminAgent`), с защитой от
   повторного выполнения команды после сбоя и защищёнными списками служб/процессов
-- [x] Развёртывание в один запуск: `deploy/server/install-server.ps1` (Docker: Apache +
-  PHP, или без Docker), `deploy/client/build-client.ps1` → `install-client.ps1` /
+- [x] Развёртывание в один запуск: `deploy/server/install-server.ps1` (Docker: nginx +
+  PHP-FPM, или без Docker), `deploy/client/build-client.ps1` → `install-client.ps1` /
   `deploy-clients.ps1` (массово по SMB + WinRM/schtasks)
 - [x] Справочники (магазины, типы устройств), редактирование/удаление ПК и перевыпуск
   ключа, отзыв оповещений и подтверждения по кассам, настройки сервера из панели
@@ -44,12 +44,13 @@ SQLite) с веб-панелью; на каждой кассе два мален
 - [ ] Нагрузочная проверка SQLite на 3000+ опрашивающих касс
 - [ ] CRUD магазинов/типов устройств, история по ПК, экспорт статистики, 2FA, CSRF
 
-Подробнее об ограничениях — в [ADMIN.md](ADMIN.md#7-известные-ограничения-осознанный-бэклог).
+Подробнее об ограничениях — в [docs/ADMIN.md](docs/ADMIN.md#7-известные-ограничения-осознанный-бэклог).
 
-## Требования к развёртыванию (кратко — подробности в ADMIN.md)
+## Требования к развёртыванию (кратко — подробности в docs/ADMIN.md)
 
-**Сервер:** либо Docker (Docker Desktop/Engine — и больше ничего), либо PHP 8.x с
-расширениями `pdo_sqlite` и `zip` + веб-сервер (Apache с `mod_rewrite` или IIS) для прода;
+**Сервер:** либо Docker (Docker Desktop/Engine — и больше ничего; внутри образа nginx +
+PHP-FPM), либо PHP 8.x с расширениями `pdo_sqlite` и `zip` + веб-сервер (nginx, Apache с
+`mod_rewrite` или IIS) для прода;
 встроенный `php -S` — только для разработки. Отдельная СУБД не нужна (SQLite — файл).
 Для раскатки файлов поднять `upload_max_filesize`/`post_max_size` в `php.ini`.
 
@@ -60,10 +61,10 @@ Windows 7 ставится через Windows Update или отдельным �
 
 ## Быстрый старт
 
-Один запуск на всё — см. [INSTALL.md](INSTALL.md). Коротко:
+Один запуск на всё — см. [docs/INSTALL.md](docs/INSTALL.md). Коротко:
 
 ```powershell
-.\deploy\server\install-server.ps1          # сервер (Docker: Apache + PHP 8.3), спросит пароль admin
+.\deploy\server\install-server.ps1          # сервер (Docker: nginx + PHP-FPM 8.3), спросит пароль admin
 .\deploy\client\build-client.ps1            # комплект агентов в dist\client
 .\deploy\client\deploy-clients.ps1 -ConfigsDir <архив конфигов из панели>   # на все кассы
 ```
@@ -80,7 +81,8 @@ Windows 7 ставится через Windows Update или отдельным �
 3. `php server/bin/create-admin.php admin <пароль> [operator|administrator|superadmin]`
 4. Для разработки: `php -S localhost:8000 -t server/public server/public/router.php`
    (`router.php` обязателен — без него встроенный сервер отдаёт `admin/index.html` вместо
-   API; на Apache/IIS его роль играет `.htaccess`/правила перезаписи).
+   API; на nginx/Apache/IIS эту роль играют правила перезаписи — см. `server/docker/nginx.conf`
+   или `.htaccess`).
 
 ## Клиент вручную (без скриптов)
 

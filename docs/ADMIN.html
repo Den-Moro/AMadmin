@@ -117,7 +117,7 @@
 <h1>Инструкция для администратора</h1>
 <p>Руководство по эксплуатации AMadmin: как пользоваться админ-панелью и что где
 настраивается. <strong>Установка сервера и касс в один запуск — в <a href="INSTALL.html">INSTALL.md</a>.</strong>
-Полное техническое ТЗ — в <a href="AGENTS.md">AGENTS.md</a>; статус — в <a href="README.md">README.md</a>;
+Полное техническое ТЗ — в <a href="../AGENTS.md">AGENTS.md</a>; статус — в <a href="../README.md">README.md</a>;
 инструкция для сотрудников магазина — в <a href="INSTRUCTIONS.html">INSTRUCTIONS.md</a>.</p>
 <h2>1. Что это за система</h2>
 <p>Два больших модуля:</p>
@@ -134,7 +134,7 @@
 (Session 0 isolation), а окно кассира не имеет прав управлять службами. Ключ (<code>agent_token</code>)
 и конфиг у них общие — один файл <code>config.json</code> на ПК.</p>
 <h2>2. Развёртывание</h2>
-<p>Сервер — <code>deploy/server/install-server.ps1</code> (Docker; Apache + PHP внутри, годится для
+<p>Сервер — <code>deploy/server/install-server.ps1</code> (Docker; nginx + PHP-FPM внутри, годится для
 3000 касс) или <code>-Mode Native</code> (без Docker, пилот). Кассы — <code>deploy/client/build-client.ps1</code>
 → <code>install-client.ps1</code> на кассе или <code>deploy-clients.ps1</code> на все сразу. Требования,
 шаги и проверка — в <a href="INSTALL.html">INSTALL.md</a>.</p>
@@ -342,7 +342,7 @@
 <li><code>.exe</code> не подписаны сертификатом — на масштабе SmartScreen/антивирусы будут мешать,
   подпись обязательна перед продом.</li>
 </ul>
-<p>Актуальный чек-лист статуса — всегда в <a href="README.md">README.md</a>.</p>
+<p>Актуальный чек-лист статуса — всегда в <a href="../README.md">README.md</a>.</p>
     </div>
 </main>
 </body>
