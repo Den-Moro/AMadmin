@@ -237,14 +237,24 @@ else {
     New-Item -ItemType Directory -Path (Join-Path $server 'data'), (Join-Path $server 'logs') -Force | Out-Null
     Push-Location $server
     try {
-        Native { & $phpExe bin/migrate.php }
-        if ($Seed) { Native { & $phpExe bin/seed.php } }
+        # Раньше вывод и код возврата migrate.php никак не проверялись — если он падал
+        # (например на БД, оставшейся от давней версии схемы без более новых миграций),
+        # ошибка проглатывалась молча и установка «успешно» доезжала до заведомо
+        # нерабочего сервера. Теперь печатаем вывод и останавливаемся на ошибке —
+        # тот же урок, что и с schtasks /TR выше.
+        Native { & $phpExe bin/migrate.php } | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) { throw "bin/migrate.php завершился с ошибкой (код $LASTEXITCODE) — смотрите вывод выше." }
+        if ($Seed) {
+            Native { & $phpExe bin/seed.php } | ForEach-Object { Write-Host $_ }
+            if ($LASTEXITCODE -ne 0) { throw "bin/seed.php завершился с ошибкой (код $LASTEXITCODE)." }
+        }
 
         Step 'Первый суперадмин'
         $count = Native { & $phpExe bin/count-admins.php } | Select-Object -Last 1
         if ([int]$count -eq 0) {
             $pwd = Read-AdminPassword
-            Native { & $phpExe bin/create-admin.php $AdminUser $pwd superadmin }
+            Native { & $phpExe bin/create-admin.php $AdminUser $pwd superadmin } | ForEach-Object { Write-Host $_ }
+            if ($LASTEXITCODE -ne 0) { throw "bin/create-admin.php завершился с ошибкой (код $LASTEXITCODE)." }
         } else { Write-Host "Учётки уже есть ($count) — пропускаю." }
     } finally { Pop-Location }
 
