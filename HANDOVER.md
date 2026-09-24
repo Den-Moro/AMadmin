@@ -2,7 +2,7 @@
 
 Этот файл — стартовая точка. Открывая новую сессию: прочитать его, затем при
 необходимости [AGENTS.md](AGENTS.md) (ТЗ) и [README.md](README.md) (статус).
-Дата среза: 23.09.2026, последний коммит `a531150`.
+Дата среза: 24.09.2026, последний коммит `ada93fb`.
 
 ## 1. Что это
 
@@ -37,9 +37,9 @@ server/
 └── data/, logs/     БД amadmin.sqlite, files/ (раскатка), sessions/; app.log
 
 client/
-├── Core/            AgentConfig, ApiClient, Logger
+├── Core/            AgentConfig (Load/Save/Parse/Validate), ApiClient, Logger
 └── Modules/
-    ├── Notifications/  AMadmin.UiAgent (WPF-окно, трей, статус)
+    ├── Notifications/  AMadmin.UiAgent (WPF: StatusWindow, SettingsWindow, трей)
     └── Management/     AMadmin.ManagementAgent (служба) + Executors/ по типу команды
 
 deploy/
@@ -73,11 +73,25 @@ docs/ADMIN.md, docs/INSTRUCTIONS.md. У ADMIN/INSTALL/INSTRUCTIONS есть .htm
   «Сервер» — только superadmin), **Пользователи**.
 
 Клиент: оповещения с защитой от случайного закрытия на сенсорных кассах, команды всех
-четырёх типов, ограничение скорости и асинхронная загрузка файлов.
+четырёх типов, ограничение скорости и асинхронная загрузка файлов, окно «Настройки» в
+трее (путь установки, правка config.json, импорт конфига файлом) — UiAgent применяет
+изменения сразу, ManagementAgent (служба) требует перезапуска администратором.
 
-**Сквозной тест на двух чистых Windows 11 в VirtualBox (21.09.2026)**: установка
-сервера в режиме Native из архива с GitHub → установка клиента → окно оповещения
-на кассе → команда с сервера выполнена на кассе, кириллица в выводе целая.
+Docker-образ сервера — nginx + PHP-FPM (был Apache): `server/docker/nginx.conf`
+воспроизводит логику `.htaccess` (DirectorySlash-стиль роутинга) и добавляет
+`fastcgi_param HTTP_AUTHORIZATION`, который PHP-FPM (в отличие от старого mod_php)
+не пробрасывает сам.
+
+**Сквозной тест (24.09.2026)**:
+- Docker: сборка, вход, `/admin/stores` без токена → 401 (не редирект), заголовок
+  Authorization доходит до PHP через fastcgi, `router.php`/чужие `.php` отдают 403.
+- Native на хосте (порт 8001, не мешает Docker на 8000): чистая установка → все
+  12 миграций → суперадмин → задача планировщика → панель и Дашборд работают.
+- Windows 10 Pro (стенд `AM10-Server`/`AM10-Client`, см. §7): установка сервера в
+  режиме Native из архива с GitHub → установка клиента → оба агента на связи с
+  сервером по сети → команда с панели дошла и выполнилась на кассе, кириллица в
+  выводе целая → задача `AMadmin Server` сама поднялась после перезагрузки сервера
+  (Windows Update).
 
 ## 4. Не сделано (осознанный бэклог)
 
@@ -121,6 +135,7 @@ deploy\client\build-client.cmd                   # комплект агенто
 | Команды «всем» валились на давно выключенную кассу | не было срока жизни | `command_ttl_hours` (по умолчанию 24 ч) |
 | Кракозябры в выводе скриптов | консоль Windows в OEM-кодировке | читаем stdout/stderr в OEM; `.ps1` — UTF-8 **с BOM**, `.cmd` — OEM/ASCII |
 | Native-установка: «Сервер не ответил», задачи `AMadmin Server` нет | путь проекта с пробелом (`Downloads\AMadmin-master (1)\...`) ломает разбор `schtasks /TR "..." "..."`, код возврата не проверялся | `install-server.ps1` регистрирует задачу через `Register-ScheduledTask`/`New-ScheduledTaskAction` (программа и аргументы раздельно, без ручной сборки строки) |
+| Native-установка «успешна», но панель не работает | `bin/migrate.php` падал (БД от старой схемы без новых миграций) молча — вывод и код возврата не проверялись | `install-server.ps1` печатает вывод migrate.php/seed.php/create-admin.php и останавливается на ненулевом коде возврата |
 
 Инструменты: в Bash-инструменте ломаются обратные слэши — пути Windows и JSON писать
 через Write или .py-скрипт; `.ps1` сохранять с BOM, иначе PowerShell 5.1 не разберёт
@@ -128,14 +143,50 @@ deploy\client\build-client.cmd                   # комплект агенто
 
 ## 7. Тестовый стенд (если ещё нужен)
 
-VirtualBox: `AM-Server` (192.168.56.102) и `AM-Client`, обе Windows 11 Enterprise
-Evaluation, вход `admin` / `Passw0rd!`, панель в ВМ `admin` / `VmAdmin123!`.
-Файлы стенда — `E:\ClaudeCode\VMs` (там же ISO 5.4 ГБ и `create-vms.ps1`).
-Если стенд не нужен: `VBoxManage unregistervm AM-Server --delete` (и `AM-Client`),
-удалить `E:\ClaudeCode\VMs`.
+VirtualBox, пара `AM10-Server` (192.168.56.103) / `AM10-Client`, обе Windows 10 Pro
+22H2 (Windows 11/10 Enterprise Evaluation ISO у Microsoft больше не скачать —
+Windows 10 вне поддержки с осени 2025, поэтому образ взят из собственного архива
+`D:\All_Application\...\Win_10\Win10_22H2_Russian_x64v1.iso`). Вход `admin` /
+`Passw0rd!`. Панель на сервере: `admin` / `Win10Test123!`. Файлы стенда —
+`E:\ClaudeCode\VMs` (`create-vms.ps1` — теперь параметризован: `-Prefix`, `-OsType`,
+`-Firmware bios|efi`, `-ImageIndex`, `-ProductKey`). Прежняя пара `AM-Server`/`AM-Client`
+(Win11) была снесена в процессе диагностики зависшего Windows Update — не восстанавливал,
+раз всё равно нужен был новый Win10-стенд.
+
+**Грабли конкретно этого стенда** (не про сам продукт — про VirtualBox/среду):
+- Windows 10 ISO с несколькими SKU в одном install.wim виснет в unattended-установке
+  на диалоге «Не удаётся прочитать параметр ProductKey», если не передать
+  `--key=<generic KMS client key>` — `create-vms.ps1` поддерживает `-ProductKey`.
+- EFI-прошивка (`--firmware efi`, по умолчанию у скрипта — годится для Win11)
+  на этом ISO виснет на «No bootable option or device was found» — для Windows 10
+  используйте `-Firmware bios` (Windows 10 не требует UEFI/TPM).
+- Через NAT этой VirtualBox у крупных файлов (PHP zip с windows.php.net, VC++
+  Redistributable с aka.ms) скачивание зависает на 0 байт и не таймаутится — GitHub
+  при этом работает нормально. Обходной путь: скачать/взять из кэша на хосте и
+  `guestcontrol copyto` внутрь гостя (PHP — из `%LOCALAPPDATA%\Microsoft\WinGet\Packages`,
+  VC++ — из `C:\ProgramData\Package Cache\...\VC_redist.x64.exe`), либо один раз
+  установить VC++ руками — тогда `install-server.ps1` увидит ключ реестра и не будет
+  скачивать сам.
+- `VBoxManage guestcontrol run` даёт **отфильтрованный** (не-admin) токен даже для
+  локального администратора — `Start-Process -Verb RunAs` внутри такой сессии
+  показывает настоящий UAC-диалог на Secure Desktop, который `screenshotpng` не
+  рисует (выглядит как обычный рабочий стол), но клавиатурный ввод туда всё равно
+  доходит: `VBoxManage controlvm <vm> keyboardputscancode 38 15 95 b8` (Alt+Y) его
+  принимает. Так же можно поднять/перезапустить службы, реестр HKLM и т.п. изнутри —
+  без этого трюка Native-режим и install-client.cmd на этом стенде не запустить.
+- После нескольких `poweroff`/`reset` гостевой exec-сервис VBoxService иногда виснет
+  («guest execution service is not ready») даже при полностью загруженном рабочем
+  столе — лечится мягким `VBoxManage controlvm <vm> reset` (не `poweroff` —
+  принудительное выключение посреди установки один раз спровоцировало долгий
+  «ремонт после грязного выключения» при следующей загрузке).
+- Windows 10 сама применяет накопленные обновления и перезагружается без
+  предупреждения — если сервер вдруг перестал отвечать, сначала проверьте
+  скриншотом «Подготовка Windows», а не считайте стенд сломанным.
 
 Важно: VirtualBox и Hyper-V конфликтуют. Hyper-V сейчас снят — из-за этого **Docker
 Desktop не работает**; для Docker-режима Hyper-V надо вернуть, для ВМ — держать снятым.
+(Docker тем не менее оказался доступен в начале этой сессии — см. дату/окружение
+при следующей проверке, могло измениться.)
 
 ## 8. Репозиторий
 
