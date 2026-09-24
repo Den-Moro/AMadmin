@@ -56,7 +56,7 @@ namespace AMadmin.ManagementAgent
                         ", опрос каждые " + config.PollIntervalSeconds + "с, log_level=" + config.LogLevel +
                         ", пользователь " + Environment.UserName + ")");
 
-            return new CommandLoop(config, new ApiClient(config, version));
+            return new CommandLoop(config, new ApiClient(config, version), baseDir);
         }
 
         private static int RunConsole(string baseDir)

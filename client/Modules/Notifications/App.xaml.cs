@@ -104,7 +104,7 @@ namespace AMadmin.UiAgent
         {
             _tray = new WinForms.NotifyIcon
             {
-                Icon = System.Drawing.SystemIcons.Information,
+                Icon = ResolveTrayIcon(),
                 Text = "AMadmin — агент оповещений",
                 Visible = true,
             };
@@ -112,9 +112,22 @@ namespace AMadmin.UiAgent
             var menu = new WinForms.ContextMenuStrip();
             menu.Items.Add("Статус агента", null, (s, a) => ShowStatus());
             menu.Items.Add("Настройки", null, (s, a) => ShowSettings());
+            menu.Items.Add("Последние команды", null, (s, a) => ShowRecentCommands());
             menu.Items.Add("Проверить сейчас", null, async (s, a) => await PollAsync());
             _tray.ContextMenuStrip = menu;
             _tray.DoubleClick += (s, a) => ShowStatus();
+        }
+
+        // Свой .ico из настроек, если указан и читается; иначе — как раньше, системный.
+        // Никогда не должно уронить агента из-за плохого/удалённого файла значка.
+        private System.Drawing.Icon ResolveTrayIcon()
+        {
+            if (!string.IsNullOrWhiteSpace(_config.TrayIconPath) && File.Exists(_config.TrayIconPath))
+            {
+                try { return new System.Drawing.Icon(_config.TrayIconPath); }
+                catch (Exception ex) { Logger.Warning("Не удалось загрузить иконку трея '" + _config.TrayIconPath + "': " + ex.Message); }
+            }
+            return System.Drawing.SystemIcons.Information;
         }
 
         private void ShowStatus()
@@ -125,6 +138,11 @@ namespace AMadmin.UiAgent
         private void ShowSettings()
         {
             new SettingsWindow(_config, _configPath, ApplyConfig).Show();
+        }
+
+        private void ShowRecentCommands()
+        {
+            new RecentCommandsWindow().Show();
         }
 
         // Общая точка применения новой конфигурации — и после сохранения в окне настроек,
@@ -138,6 +156,7 @@ namespace AMadmin.UiAgent
             AgentState.ServerUrl = _config.ServerUrl;
             _api = new ApiClient(_config, _version);
             _pollTimer.Interval = TimeSpan.FromSeconds(_config.PollIntervalSeconds);
+            _tray.Icon = ResolveTrayIcon();
             Logger.Info("Конфиг обновлён из окна настроек (сервер " + _config.ServerUrl +
                         ", опрос каждые " + _config.PollIntervalSeconds + "с, log_level=" + _config.LogLevel + ")");
         }

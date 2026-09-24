@@ -29,6 +29,7 @@ namespace AMadmin.UiAgent
             ProxyUrlBox.Text = config.ProxyUrl;
             ProxyUsernameBox.Text = config.ProxyUsername;
             ProxyPasswordBox.Password = config.ProxyPassword;
+            TrayIconPathBox.Text = config.TrayIconPath;
             foreach (System.Windows.Controls.ComboBoxItem item in LogLevelBox.Items)
             {
                 if (string.Equals((string)item.Content, config.LogLevel, StringComparison.OrdinalIgnoreCase))
@@ -60,6 +61,12 @@ namespace AMadmin.UiAgent
             }
         }
 
+        private void PickTrayIcon_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Значок (*.ico)|*.ico" };
+            if (dialog.ShowDialog() == true) TrayIconPathBox.Text = dialog.FileName;
+        }
+
         private void Save_Click(object sender, RoutedEventArgs e)
         {
             int pollInterval, downloadLimit;
@@ -84,6 +91,7 @@ namespace AMadmin.UiAgent
                 ProxyUsername = ProxyUsernameBox.Text,
                 ProxyPassword = ProxyPasswordBox.Password,
                 DownloadLimitKbps = downloadLimit,
+                TrayIconPath = TrayIconPathBox.Text,
             };
 
             try

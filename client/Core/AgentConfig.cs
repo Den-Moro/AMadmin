@@ -37,6 +37,11 @@ namespace AMadmin.Core
         [JsonPropertyName("download_limit_kbps")]
         public int DownloadLimitKbps { get; set; } = 0;
 
+        // Путь к своему .ico для значка в трее. Пусто/файл не найден — обычный системный
+        // значок (см. App.xaml.cs).
+        [JsonPropertyName("tray_icon_path")]
+        public string TrayIconPath { get; set; }
+
         public static AgentConfig Load(string path)
         {
             if (!File.Exists(path))

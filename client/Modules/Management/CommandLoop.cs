@@ -37,6 +37,7 @@ namespace AMadmin.ManagementAgent
     {
         private readonly AgentConfig _config;
         private readonly ApiClient _api;
+        private readonly string _baseDir;
         private readonly Dictionary<string, IExecutor> _executors;
 
         // Фоновые загрузки: следим за ними, чтобы при остановке службы дать им дописаться.
@@ -45,10 +46,11 @@ namespace AMadmin.ManagementAgent
         private SemaphoreSlim _parallel;
         private int _parallelLimit;
 
-        public CommandLoop(AgentConfig config, ApiClient api)
+        public CommandLoop(AgentConfig config, ApiClient api, string baseDir)
         {
             _config = config;
             _api = api;
+            _baseDir = baseDir;
             _executors = new Dictionary<string, IExecutor>
             {
                 { "service_control", new ServiceExecutor() },
@@ -153,7 +155,7 @@ namespace AMadmin.ManagementAgent
                 Logger.Warning("Команда id=" + command.Id + " уже была застолблена (статус " + claim.ExistingStatus + ")");
                 if (claim.ExistingStatus == "in_progress")
                 {
-                    await SafeReport(command.Id, Outcome.Failed("Выполнение было прервано перезапуском агента; повторно не запускалось."));
+                    await SafeReport(command, Outcome.Failed("Выполнение было прервано перезапуском агента; повторно не запускалось."));
                 }
                 return;
             }
@@ -161,7 +163,7 @@ namespace AMadmin.ManagementAgent
             IExecutor executor;
             if (!_executors.TryGetValue(command.Type, out executor))
             {
-                await SafeReport(command.Id, Outcome.Failed("Агент этой версии не умеет команду типа '" + command.Type + "'."));
+                await SafeReport(command, Outcome.Failed("Агент этой версии не умеет команду типа '" + command.Type + "'."));
                 return;
             }
 
@@ -189,7 +191,7 @@ namespace AMadmin.ManagementAgent
             }
             catch (OperationCanceledException)
             {
-                await SafeReport(command.Id, Outcome.Failed("Агент остановлен во время выполнения."));
+                await SafeReport(command, Outcome.Failed("Агент остановлен во время выполнения."));
                 throw;
             }
             catch (Exception ex)
@@ -199,7 +201,7 @@ namespace AMadmin.ManagementAgent
             }
 
             Logger.Info("Команда id=" + command.Id + " -> " + outcome.Status);
-            await SafeReport(command.Id, outcome);
+            await SafeReport(command, outcome);
         }
 
         // Загрузка файла в фоне. Число одновременных загрузок ограничено семафором —
@@ -249,18 +251,23 @@ namespace AMadmin.ManagementAgent
             }
         }
 
-        private async Task SafeReport(int commandId, Outcome outcome)
+        private async Task SafeReport(Command command, Outcome outcome)
         {
+            // Локальная история — для окна "Последние команды" в UiAgent (отдельный
+            // процесс, без IPC — читает этот же файл). Пишем независимо от того, дошёл
+            // ли результат до сервера: агент это выполнил, это и есть локальная правда.
+            RecentCommands.Append(_baseDir, command.Id, command.Type, outcome.Status, outcome.Output);
+
             try
             {
-                await _api.SendCommandResultAsync(commandId, outcome.Status, outcome.Output);
+                await _api.SendCommandResultAsync(command.Id, outcome.Status, outcome.Output);
             }
             catch (Exception ex)
             {
                 // Результат не доставлен — на сервере останется in_progress, при следующем
                 // опросе команда уже не придёт (строка claim есть). Пишем в лог, чтобы
                 // разобрать по логам "почему у этой кассы результат так и не появился".
-                Logger.Error("Не удалось отправить результат команды id=" + commandId + ": " + ex.Message);
+                Logger.Error("Не удалось отправить результат команды id=" + command.Id + ": " + ex.Message);
             }
         }
     }
