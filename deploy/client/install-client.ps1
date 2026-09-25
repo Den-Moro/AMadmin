@@ -26,7 +26,8 @@ param(
     # берётся <ConfigsDir>\<ИМЯ_ЭТОГО_ПК>\config.json. Так работает GPO-раскатка.
     [string]$ConfigsDir,
     [string]$InstallDir = 'C:\AMadmin',
-    [string]$Source = $PSScriptRoot,
+    # По умолчанию — папка этого скрипта (подставляется ниже, не здесь: см. комментарий).
+    [string]$Source,
     [switch]$NoStartUi,
     # Ничего не делать, если уже стоит эта же версия с этим же конфигом (для запуска
     # при каждой загрузке из GPO — обычно скрипт завершается за секунду).
@@ -44,6 +45,9 @@ param(
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 try { Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue } catch { }
 
+# Windows PowerShell 5.1 со [CmdletBinding()] оставляет $PSScriptRoot пустым в значениях
+# по умолчанию param() — поэтому подставляем здесь, в теле скрипта.
+if (-not $Source) { $Source = $PSScriptRoot }
 
 $ErrorActionPreference = 'Stop'
 

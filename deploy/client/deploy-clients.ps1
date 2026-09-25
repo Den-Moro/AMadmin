@@ -19,7 +19,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$ConfigsDir,
-    [string]$Source = (Join-Path $PSScriptRoot '..\..\dist\client'),
+    # По умолчанию — dist\client этого репозитория (подставляется ниже: в Windows
+    # PowerShell 5.1 $PSScriptRoot пуст в значениях по умолчанию param()).
+    [string]$Source,
     [string[]]$Hosts,
     [ValidateSet('Auto', 'WinRM', 'Schtasks')][string]$Method = 'Auto',
     [string]$RemoteDir = 'C:\AMadmin',
@@ -38,6 +40,7 @@ try { Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter *.ps1 -Error
 
 
 $ErrorActionPreference = 'Stop'
+if (-not $Source) { $Source = Join-Path $PSScriptRoot '..\..\dist\client' }
 $Source = Resolve-Path $Source
 if (-not (Test-Path (Join-Path $Source 'AMadmin.ManagementAgent.exe'))) {
     throw "В $Source нет агентов — сначала соберите комплект: deploy\client\build-client.ps1"
