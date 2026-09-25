@@ -127,7 +127,57 @@
 
     $('attentionSearch').addEventListener('input', renderAttention);
 
-    async function refresh() { await Promise.all([loadStats(), loadAttention()]); }
+    // ---- Ресурсы сервера (Docker cgroup или реальный хост в Native — см. ServerMetrics) --
+
+    const MODE_NAMES = { docker: 'Docker (контейнер)', 'native-windows': 'Native (хост Windows)', 'native-linux': 'Native (хост Linux)' };
+    let lastIps = [];
+
+    function formatRate(bps) { return bps == null ? '—' : Ui.formatSize(bps) + '/с'; }
+
+    function formatUptime(seconds) {
+        if (seconds == null) return '—';
+        const d = Math.floor(seconds / 86400), h = Math.floor(seconds % 86400 / 3600), m = Math.floor(seconds % 3600 / 60);
+        if (d > 0) return d + 'д ' + h + 'ч';
+        if (h > 0) return h + 'ч ' + m + 'м';
+        return m + 'м';
+    }
+
+    async function loadMetrics() {
+        let m;
+        try { m = await Api.get('/admin/server-metrics'); } catch (e) { return; }
+
+        $('metricsMode').textContent = MODE_NAMES[m.mode] || m.mode;
+
+        $('mCpu').textContent = m.cpu.percent != null ? m.cpu.percent + '%' : '—';
+        $('mCpuSub').textContent = m.cpu.note || (m.cpu.cores ? 'ядер: ' + m.cpu.cores : '');
+
+        $('mMem').textContent = m.mem.used_bytes != null ? Ui.formatSize(m.mem.used_bytes) : '—';
+        $('mMemSub').textContent = m.mem.limit_bytes
+            ? 'из ' + Ui.formatSize(m.mem.limit_bytes) + (m.mem.percent != null ? ' · ' + m.mem.percent + '%' : '')
+            : (m.mem.used_bytes != null ? 'лимит не задан' : '');
+
+        $('mDisk').textContent = m.disk.percent_used != null ? m.disk.percent_used + '%' : '—';
+        $('mDiskSub').textContent = (m.disk.free_bytes != null && m.disk.total_bytes != null)
+            ? 'свободно ' + Ui.formatSize(m.disk.free_bytes) + ' из ' + Ui.formatSize(m.disk.total_bytes) : '';
+
+        $('mConn').textContent = m.connections.tcp_count != null ? m.connections.tcp_count : '—';
+
+        $('mTraffic').textContent = (m.traffic.rx_bps != null) ? '↓' + formatRate(m.traffic.rx_bps) : '—';
+        $('mTrafficSub').textContent = (m.traffic.tx_bps != null) ? '↑' + formatRate(m.traffic.tx_bps) : (m.traffic.rx_bps == null ? 'копится за 2 опроса' : '');
+
+        $('mUptime').textContent = formatUptime(m.uptime_seconds);
+
+        lastIps = m.ips || [];
+        if (!$('mIpsValue').hidden) $('mIpsValue').textContent = lastIps.length ? lastIps.join(', ') : '—';
+    }
+
+    $('mIpsReveal').addEventListener('click', function () {
+        $('mIpsHidden').hidden = true;
+        $('mIpsValue').hidden = false;
+        $('mIpsValue').textContent = lastIps.length ? lastIps.join(', ') : '—';
+    });
+
+    async function refresh() { await Promise.all([loadStats(), loadAttention(), loadMetrics()]); }
 
     $('refreshBtn').addEventListener('click', async function () {
         $('refreshBtn').disabled = true;

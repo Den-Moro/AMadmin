@@ -51,6 +51,24 @@
         </div>
     </div>
 
+    <div class="card compact" id="serverMetricsCard">
+        <div class="row" style="justify-content:space-between;align-items:center">
+            <h2>Ресурсы сервера</h2>
+            <span class="muted" id="metricsMode"></span>
+        </div>
+        <div class="stats stats-small" id="metricsTiles">
+            <div class="stat"><div class="label">ЦП</div><div class="value" id="mCpu">—</div><div class="sub muted" id="mCpuSub"></div></div>
+            <div class="stat"><div class="label">Память</div><div class="value" id="mMem">—</div><div class="sub muted" id="mMemSub"></div></div>
+            <div class="stat"><div class="label">Диск</div><div class="value" id="mDisk">—</div><div class="sub muted" id="mDiskSub"></div></div>
+            <div class="stat"><div class="label">Соединения</div><div class="value" id="mConn">—</div><div class="sub muted">TCP</div></div>
+            <div class="stat"><div class="label">Трафик</div><div class="value" id="mTraffic">—</div><div class="sub muted" id="mTrafficSub"></div></div>
+            <div class="stat"><div class="label">Время работы</div><div class="value" id="mUptime">—</div><div class="sub muted">с последнего запуска</div></div>
+        </div>
+        <p class="muted" style="margin:10px 0 0">
+            IP-адреса сервера: <span id="mIpsHidden"><button type="button" class="ghost small" id="mIpsReveal">показать 👁</button></span><span id="mIpsValue" hidden></span>
+        </p>
+    </div>
+
     <div class="card compact" id="ntpCard" hidden>
         <h2>Время сервера (NTP)</h2>
         <p class="muted" style="margin-top:0">Периодическая проверка расхождения часов сервера с NTP-сервером. Сервер
