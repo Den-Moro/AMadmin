@@ -57,6 +57,7 @@ class OccurrencesController
         }
 
         $quietNow = self::isQuietHours($settings);
+        $brand = self::resolveBrand($pc, $settings);
 
         $result = array();
         foreach ($rows as $row) {
@@ -80,8 +81,8 @@ class OccurrencesController
             $row['accidental_tap_guard_ms'] = (int) self::setting($settings, 'accidental_tap_guard_ms', '600');
             $row['play_sound'] = $important && self::setting($settings, 'sound_on_important', '1') === '1';
             $row['soft_corner'] = self::setting($settings, 'soft_corner', 'bottom-right');
-            $row['brand_name'] = $settings['brand_name'];
-            $row['brand_contact'] = $settings['brand_contact'];
+            $row['brand_name'] = $brand['brand_name'];
+            $row['brand_contact'] = $brand['brand_contact'];
 
             $result[] = $row;
         }
@@ -132,5 +133,40 @@ class OccurrencesController
         return $from <= $to
             ? ($now >= $from && $now < $to)
             : ($now >= $from || $now < $to);
+    }
+
+    // Свой бренд/контакт для оповещений этого ПК: группа (если в какой-то из групп ПК
+    // задан бренд) → магазин → глобальная настройка. Пусто в конкретной группе/магазине
+    // не считается переопределением — идём дальше по цепочке.
+    private static function resolveBrand($pc, $settings)
+    {
+        $db = Db::get();
+
+        $groupStmt = $db->prepare("
+            SELECT g.brand_name, g.brand_contact
+            FROM host_group_members m JOIN host_groups g ON g.id = m.group_id
+            WHERE m.pc_id = :pc_id AND (COALESCE(g.brand_name, '') != '' OR COALESCE(g.brand_contact, '') != '')
+            ORDER BY g.id LIMIT 1
+        ");
+        $groupStmt->execute(array('pc_id' => $pc['id']));
+        $group = $groupStmt->fetch();
+        if ($group) {
+            return array(
+                'brand_name' => $group['brand_name'] !== '' && $group['brand_name'] !== null ? $group['brand_name'] : $settings['brand_name'],
+                'brand_contact' => $group['brand_contact'] !== '' && $group['brand_contact'] !== null ? $group['brand_contact'] : $settings['brand_contact'],
+            );
+        }
+
+        $storeStmt = $db->prepare('SELECT brand_name, brand_contact FROM stores WHERE id = :id');
+        $storeStmt->execute(array('id' => $pc['store_id']));
+        $store = $storeStmt->fetch();
+        if ($store && ($store['brand_name'] !== '' && $store['brand_name'] !== null || $store['brand_contact'] !== '' && $store['brand_contact'] !== null)) {
+            return array(
+                'brand_name' => $store['brand_name'] !== '' && $store['brand_name'] !== null ? $store['brand_name'] : $settings['brand_name'],
+                'brand_contact' => $store['brand_contact'] !== '' && $store['brand_contact'] !== null ? $store['brand_contact'] : $settings['brand_contact'],
+            );
+        }
+
+        return array('brand_name' => $settings['brand_name'], 'brand_contact' => $settings['brand_contact']);
     }
 }

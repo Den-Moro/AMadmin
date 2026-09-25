@@ -24,10 +24,15 @@
                 '<label>Название<input type="text" id="stName" value="' + esc(store ? store.name : '') + '" placeholder="например, Магазин №12 (Ленина, 5)"></label>' +
                 '<label><input type="checkbox" id="stPilot"' + (store && store.is_pilot ? ' checked' : '') + '> Пилотный магазин' +
                 '<span class="hint">Сюда можно отправлять новое раньше остальных, чтобы обкатать.</span></label>' +
+                '<label>Свой бренд в оповещениях<input type="text" id="stBrandName" value="' + esc(store && store.brand_name || '') + '" placeholder="пусто — общий из Настроек"></label>' +
+                '<label>Свой контакт в оповещениях<input type="text" id="stBrandContact" value="' + esc(store && store.brand_contact || '') + '" placeholder="пусто — общий из Настроек"></label>' +
                 '<p class="error modal-error"></p>',
             buttons: [{ label: 'Отмена', value: null }, { label: store ? 'Сохранить' : 'Создать', value: 'submit', kind: 'primary' }],
             onSubmit: async function (root) {
-                const body = { name: root.querySelector('#stName').value.trim(), is_pilot: root.querySelector('#stPilot').checked ? 1 : 0 };
+                const body = {
+                    name: root.querySelector('#stName').value.trim(), is_pilot: root.querySelector('#stPilot').checked ? 1 : 0,
+                    brand_name: root.querySelector('#stBrandName').value.trim(), brand_contact: root.querySelector('#stBrandContact').value.trim(),
+                };
                 if (!body.name) { root.querySelector('.modal-error').textContent = 'Введите название.'; return false; }
                 if (store) await Api.request('PUT', '/admin/stores/' + store.id, body);
                 else await Api.post('/admin/stores', body);
@@ -130,4 +135,5 @@
 
     await loadStores();
     await loadTypes();
+    setInterval(function () { if (!document.hidden) { loadStores(); loadTypes(); } }, 30000);
 })();

@@ -29,19 +29,25 @@
     }
 
     function groupNameForm(g) {
-        return Ui.prompt('Название группы', {
-            title: g ? 'Переименовать группу' : 'Новая группа',
-            value: g ? g.name : '',
-            okLabel: g ? 'Сохранить' : 'Создать',
-            validate: function (v) { return v.trim() ? null : 'Введите название.'; },
-        }).then(async function (name) {
-            if (name === null) return;
-            try {
-                if (g) await Api.request('PUT', '/admin/host-groups/' + g.id, { name: name.trim() });
-                else await Api.post('/admin/host-groups', { name: name.trim() });
-                Ui.toast('Сохранено', 'success');
-                await loadGroups();
-            } catch (err) { Ui.toast('Не удалось: ' + Ui.reason(err), 'error'); }
+        return Ui.modal({
+            title: g ? 'Группа «' + g.name + '»' : 'Новая группа',
+            body:
+                '<label>Название<input type="text" id="grName" value="' + esc(g ? g.name : '') + '"></label>' +
+                '<label>Свой бренд в оповещениях<input type="text" id="grBrandName" value="' + esc(g && g.brand_name || '') + '" placeholder="пусто — общий из Настроек (или магазина)"></label>' +
+                '<label>Свой контакт в оповещениях<input type="text" id="grBrandContact" value="' + esc(g && g.brand_contact || '') + '" placeholder="пусто — общий из Настроек (или магазина)"></label>' +
+                '<p class="error modal-error"></p>',
+            buttons: [{ label: 'Отмена', value: null }, { label: g ? 'Сохранить' : 'Создать', value: 'submit', kind: 'primary' }],
+            onSubmit: async function (root) {
+                const name = root.querySelector('#grName').value.trim();
+                if (!name) { root.querySelector('.modal-error').textContent = 'Введите название.'; return false; }
+                const body = { name: name, brand_name: root.querySelector('#grBrandName').value.trim(), brand_contact: root.querySelector('#grBrandContact').value.trim() };
+                if (g) await Api.request('PUT', '/admin/host-groups/' + g.id, body);
+                else await Api.post('/admin/host-groups', body);
+            },
+        }).then(async function (v) {
+            if (!v) return;
+            Ui.toast('Сохранено', 'success');
+            await loadGroups();
         });
     }
 
@@ -88,12 +94,11 @@
             const q = search.value.toLowerCase();
             const items = allPcs.filter(function (pc) {
                 if (memberIds.has(pc.id)) return false;
-                const hay = (pc.hostname + ' ' + (pc.display_name || '') + ' ' + pc.store_name).toLowerCase();
-                return !q || hay.indexOf(q) >= 0;
+                return !q || Ui.pcMatches(pc, q);
             });
             list.innerHTML = items.length ? items.map(function (pc) {
                 return '<label><input type="checkbox" value="' + pc.id + '">' + esc(pc.display_name || pc.hostname) +
-                    '<span class="sub">' + esc(pc.store_name) + '</span></label>';
+                    '<span class="sub">' + esc(pc.store_name) + (pc.last_ip ? ' · ' + esc(pc.last_ip) : '') + '</span></label>';
             }).join('') : '<div class="empty">Все подходящие ПК уже в группе.</div>';
             count.textContent = '';
         }
@@ -155,4 +160,5 @@
     });
 
     await loadGroups();
+    setInterval(function () { if (!document.hidden) loadGroups(); }, 30000);
 })();

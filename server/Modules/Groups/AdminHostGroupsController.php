@@ -10,7 +10,7 @@ class AdminHostGroupsController
         AdminAuth::requireLogin();
 
         $sql = "
-            SELECT g.id, g.name,
+            SELECT g.id, g.name, g.brand_name, g.brand_contact,
                 (SELECT COUNT(*) FROM host_group_members m WHERE m.group_id = g.id) AS member_count
             FROM host_groups g
             ORDER BY g.name
@@ -32,8 +32,12 @@ class AdminHostGroupsController
             return;
         }
 
-        $stmt = Db::get()->prepare('INSERT INTO host_groups (name) VALUES (:name)');
-        $stmt->execute(array('name' => $name));
+        $stmt = Db::get()->prepare('INSERT INTO host_groups (name, brand_name, brand_contact) VALUES (:name, :brand_name, :brand_contact)');
+        $stmt->execute(array(
+            'name' => $name,
+            'brand_name' => isset($body['brand_name']) && trim($body['brand_name']) !== '' ? trim($body['brand_name']) : null,
+            'brand_contact' => isset($body['brand_contact']) && trim($body['brand_contact']) !== '' ? trim($body['brand_contact']) : null,
+        ));
 
         $id = Db::get()->lastInsertId();
         Logger::info("Группа хостов создана: id={$id} name='{$name}' автор='{$_SESSION['admin_username']}'");
@@ -55,7 +59,11 @@ class AdminHostGroupsController
             echo json_encode(array('error' => 'name_required'));
             return;
         }
-        Db::get()->prepare('UPDATE host_groups SET name = :name WHERE id = :id')->execute(array('name' => $name, 'id' => (int) $id));
+        Db::get()->prepare('UPDATE host_groups SET name = :name, brand_name = :brand_name, brand_contact = :brand_contact WHERE id = :id')->execute(array(
+            'name' => $name, 'id' => (int) $id,
+            'brand_name' => isset($body['brand_name']) && trim($body['brand_name']) !== '' ? trim($body['brand_name']) : null,
+            'brand_contact' => isset($body['brand_contact']) && trim($body['brand_contact']) !== '' ? trim($body['brand_contact']) : null,
+        ));
         echo json_encode(array('status' => 'ok'));
     }
 
