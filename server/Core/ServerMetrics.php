@@ -24,7 +24,7 @@ class ServerMetrics
         if ($mode === 'docker') {
             list($result, $raw) = self::collectDocker($prevRaw);
         } elseif ($mode === 'native-windows') {
-            list($result, $raw) = self::collectWindowsNative($prevRaw);
+            list($result, $raw) = self::collectWindowsNative();
         } else {
             // Голый Linux без Docker — вне решённого при планировании объёма
             // (пользователь выбрал "авто по режиму": Docker или Windows Native).
@@ -42,7 +42,9 @@ class ServerMetrics
         }
 
         $result['mode'] = $mode;
-        $result['collected_at'] = gmdate('Y-m-d H:i:s');
+        if (!isset($result['collected_at'])) {
+            $result['collected_at'] = gmdate('Y-m-d H:i:s');
+        }
 
         self::writeCache($cacheFile, array(
             'collected_at_unix' => microtime(true),
@@ -288,68 +290,94 @@ class ServerMetrics
 
     // ------------------------------------------------------------- Windows Native ---
 
-    // Один вызов PowerShell вместо нескольких — на 3000-касcном стенде это всё ещё
-    // дашборд одного администратора, но спавнить процесс на каждую метрику отдельно
-    // незачем. Жёсткий предел 5 с: сам PowerShell + пара Get-CimInstance/WMI-запросов
-    // на живой машине замерено занимает ~3 с (первый запуск после простоя — до 5 с),
-    // так что 3 с оказались слишком строгим порогом и ловили бы обычную работу как
-    // "не ответил"; результат всё равно кэшируется на 8 с, так что цена платится не
-    // на каждый запрос дашборда, а раз в окно кэша.
-    private static function collectWindowsNative($prev)
-    {
-        $script = <<<'PS1'
+    // Native на Windows. Встроенный сервер PHP обслуживает один запрос за раз, а PowerShell
+    // с CIM-запросами на Win10-стенде шёл 6–18 с — ждать его внутри запроса значило бы на
+    // это время остановить опрос всех касс (к тому же на Windows неблокирующее чтение
+    // pipe из proc_open не работает, и таймаут не срабатывал). Поэтому замер делает
+    // фоновый PowerShell (NATIVE_SAMPLER) и пишет JSON в data/; запрос только читает
+    // последний замер и, если тот устарел, запускает следующий — не дожидаясь его.
+    const NATIVE_REFRESH_SECONDS = 15;
+    const NATIVE_STALE_SECONDS = 300;
+
+    // CPU и трафик — разница двух отсчётов через 2 с внутри самого скрипта (к этому
+    // моменту запуск PowerShell уже позади и не попадает в замер). Get-NetAdapterStatistics
+    // от SYSTEM возвращал пустоту — счётчики берём из .NET. Литералы 0.0/1.0 в Min/Max
+    // обязательны: с целым 1 PowerShell 5.1 выбирает Int32-перегрузку и округляет долю.
+    const NATIVE_SAMPLER = <<<'PS1'
 $ErrorActionPreference = 'SilentlyContinue'
-$cpu = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
+$out = $args[0]
+function NetBytes {
+    $rx = [double]0; $tx = [double]0
+    foreach ($n in [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
+        if ($n.NetworkInterfaceType -eq 'Loopback' -or $n.OperationalStatus -ne 'Up') { continue }
+        $s = $n.GetIPStatistics()
+        $rx += $s.BytesReceived; $tx += $s.BytesSent
+    }
+    return @($rx, $tx)
+}
+function CpuIdle {
+    $idle = [double]0; $ts = [double]0; $cnt = 0
+    foreach ($c in Get-CimInstance Win32_PerfRawData_PerfOS_Processor) {
+        if ($c.Name -eq '_Total') { continue }
+        $idle += [double]$c.PercentProcessorTime; $ts = [double]$c.Timestamp_Sys100NS; $cnt++
+    }
+    return @($idle, $ts, $cnt)
+}
+$n1 = NetBytes; $c1 = CpuIdle; $t1 = [DateTime]::UtcNow
+Start-Sleep -Seconds 2
+$n2 = NetBytes; $c2 = CpuIdle; $t2 = [DateTime]::UtcNow
+$dt = ($t2 - $t1).TotalSeconds
+$cpu = $null
+if ($c2[2] -gt 0 -and $c2[1] -gt $c1[1]) {
+    $busy = 1.0 - (($c2[0] - $c1[0]) / $c2[2]) / ($c2[1] - $c1[1])
+    $cpu = [math]::Round([math]::Max(0.0, [math]::Min(1.0, $busy)) * 100.0, 1)
+}
 $os = Get-CimInstance Win32_OperatingSystem
-$disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
-$net = Get-NetAdapterStatistics
-$rx = ($net | Measure-Object -Property ReceivedBytes -Sum).Sum
-$tx = ($net | Measure-Object -Property SentBytes -Sum).Sum
-$tcp = (Get-NetTCPConnection).Count
 [PSCustomObject]@{
-    cpu_percent = $cpu
+    cpu_percent     = $cpu
+    cores           = $c2[2]
     mem_total_bytes = [int64]$os.TotalVisibleMemorySize * 1024
-    mem_free_bytes = [int64]$os.FreePhysicalMemory * 1024
-    disk_free_bytes = $disk.FreeSpace
-    disk_total_bytes = $disk.Size
-    rx_bytes = $rx
-    tx_bytes = $tx
-    tcp_count = $tcp
-    boot_time = $os.LastBootUpTime.ToString('o')
-} | ConvertTo-Json -Compress
+    mem_free_bytes  = [int64]$os.FreePhysicalMemory * 1024
+    rx_bps          = [math]::Round([math]::Max(0.0, $n2[0] - $n1[0]) / $dt)
+    tx_bps          = [math]::Round([math]::Max(0.0, $n2[1] - $n1[1]) / $dt)
+    tcp_count       = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpConnections().Length
+    boot_time       = $os.LastBootUpTime.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+} | ConvertTo-Json -Compress | Set-Content -Path "$out.tmp" -Encoding ASCII
+Move-Item -Path "$out.tmp" -Destination $out -Force
 PS1;
 
-        $data = self::runPowerShell($script, 5.0);
-        $now = microtime(true);
+    private static function collectWindowsNative()
+    {
+        $dir = dirname(self::cacheFile());
+        $sampleFile = $dir . '/server-metrics-native.json';
 
-        if ($data === null) {
-            return array(array(
-                'cpu' => array('percent' => null, 'cores' => null, 'note' => 'PowerShell недоступен или не ответил за 5 с'),
-                'mem' => array('used_bytes' => null, 'limit_bytes' => null, 'percent' => null),
-                'disk' => array('free_bytes' => null, 'total_bytes' => null, 'percent_used' => null),
-                'connections' => array('tcp_count' => null),
-                'traffic' => array('rx_bps' => null, 'tx_bps' => null),
-                'uptime_seconds' => null,
-                'ips' => self::localIps(),
-            ), array());
+        clearstatcache();
+        $sampledAt = is_file($sampleFile) ? filemtime($sampleFile) : null;
+        if ($sampledAt === null || time() - $sampledAt >= self::NATIVE_REFRESH_SECONDS) {
+            self::startNativeSampler($dir, $sampleFile, $sampledAt);
+        }
+
+        $data = $sampledAt !== null ? json_decode((string) @file_get_contents($sampleFile), true) : null;
+        if (!is_array($data)) {
+            $data = array();
+        }
+
+        $note = 'загрузка хоста (Windows)' . (!empty($data['cores']) ? ', ядер: ' . (int) $data['cores'] : '');
+        if ($sampledAt === null) {
+            $note = 'первый замер — появится через несколько секунд';
+        } elseif (time() - $sampledAt > self::NATIVE_STALE_SECONDS) {
+            $note = 'замер устарел: ' . (int) round((time() - $sampledAt) / 60) . ' мин назад';
         }
 
         $memTotal = isset($data['mem_total_bytes']) ? (int) $data['mem_total_bytes'] : null;
         $memFree = isset($data['mem_free_bytes']) ? (int) $data['mem_free_bytes'] : null;
         $memUsed = ($memTotal !== null && $memFree !== null) ? max(0, $memTotal - $memFree) : null;
 
-        $diskFree = isset($data['disk_free_bytes']) ? (int) $data['disk_free_bytes'] : null;
-        $diskTotal = isset($data['disk_total_bytes']) ? (int) $data['disk_total_bytes'] : null;
-
-        $rxBps = null;
-        $txBps = null;
-        if (isset($data['rx_bytes'], $data['tx_bytes']) && isset($prev['rx_bytes'], $prev['tx_bytes'], $prev['at']) && $now > $prev['at']) {
-            $deltaT = $now - $prev['at'];
-            if ($deltaT > 0) {
-                $rxBps = max(0, (int) round(((float) $data['rx_bytes'] - $prev['rx_bytes']) / $deltaT));
-                $txBps = max(0, (int) round(((float) $data['tx_bytes'] - $prev['tx_bytes']) / $deltaT));
-            }
-        }
+        // Диск — тот, где лежит БД (именно он заполняется), и прямо из PHP, без PowerShell.
+        $diskFree = @disk_free_space($dir);
+        $diskTotal = @disk_total_space($dir);
+        $diskFree = $diskFree === false ? null : (int) $diskFree;
+        $diskTotal = $diskTotal === false ? null : (int) $diskTotal;
 
         $uptimeSeconds = null;
         if (!empty($data['boot_time'])) {
@@ -361,8 +389,9 @@ PS1;
 
         $result = array(
             'cpu' => array(
-                'percent' => isset($data['cpu_percent']) && $data['cpu_percent'] !== null ? round((float) $data['cpu_percent'], 1) : null,
-                'cores' => null, 'note' => 'загрузка хоста (Windows)',
+                'percent' => isset($data['cpu_percent']) ? round((float) $data['cpu_percent'], 1) : null,
+                'cores' => isset($data['cores']) ? (int) $data['cores'] : null,
+                'note' => $note,
             ),
             'mem' => array(
                 'used_bytes' => $memUsed, 'limit_bytes' => $memTotal,
@@ -373,62 +402,46 @@ PS1;
                 'percent_used' => ($diskFree !== null && $diskTotal) ? round((1 - $diskFree / $diskTotal) * 100, 1) : null,
             ),
             'connections' => array('tcp_count' => isset($data['tcp_count']) ? (int) $data['tcp_count'] : null),
-            'traffic' => array('rx_bps' => $rxBps, 'tx_bps' => $txBps),
+            'traffic' => array(
+                'rx_bps' => isset($data['rx_bps']) ? (int) $data['rx_bps'] : null,
+                'tx_bps' => isset($data['tx_bps']) ? (int) $data['tx_bps'] : null,
+            ),
             'uptime_seconds' => $uptimeSeconds,
             'ips' => self::localIps(),
         );
-
-        $raw = array('at' => $now);
-        if (isset($data['rx_bytes'])) {
-            $raw['rx_bytes'] = (float) $data['rx_bytes'];
-        }
-        if (isset($data['tx_bytes'])) {
-            $raw['tx_bytes'] = (float) $data['tx_bytes'];
+        if ($sampledAt !== null) {
+            $result['collected_at'] = gmdate('Y-m-d H:i:s', $sampledAt);
         }
 
-        return array($result, $raw);
+        return array($result, array());
     }
 
-    // Запускает PowerShell как массив-команду (без участия shell — не нужно экранировать
-    // кавычки), с жёстким пределом по времени. Возвращает разобранный JSON или null.
-    private static function runPowerShell($script, $timeoutSeconds)
+    private static function startNativeSampler($dir, $sampleFile, $sampledAt)
     {
-        $descriptors = array(1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
+        // Уже запущен (метка новее последнего замера) и не завис (моложе минуты) — ждём его.
+        $lockFile = $dir . '/server-metrics-native.lock';
+        $lockAt = is_file($lockFile) ? filemtime($lockFile) : null;
+        if ($lockAt !== null && ($sampledAt === null || $lockAt >= $sampledAt) && time() - $lockAt < 60) {
+            return;
+        }
+
+        $script = $dir . '/server-metrics-native.ps1';
+        if (@file_put_contents($script, self::NATIVE_SAMPLER) === false || !@touch($lockFile)) {
+            Logger::warning('Метрики сервера: не удалось записать ' . $script . ' или ' . $lockFile);
+            return;
+        }
+
+        // proc_close() не вызываем: он ждал бы завершения процесса, а освобождение ресурса
+        // без него — нет, поэтому PowerShell продолжает работать после ответа на запрос.
         $process = @proc_open(
-            array('powershell.exe', '-NoProfile', '-NonInteractive', '-Command', $script),
-            $descriptors,
+            array('powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $script, $sampleFile),
+            array(0 => array('file', 'NUL', 'r'), 1 => array('file', 'NUL', 'w'), 2 => array('file', 'NUL', 'w')),
             $pipes
         );
-        if (!is_resource($process)) {
-            return null;
+        if (is_resource($process)) {
+            Logger::debug('Метрики сервера: запущен фоновый замер (PowerShell)');
+        } else {
+            Logger::warning('Метрики сервера: не удалось запустить powershell.exe для замера');
         }
-
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-
-        $output = '';
-        $deadline = microtime(true) + $timeoutSeconds;
-        do {
-            $output .= stream_get_contents($pipes[1]);
-            $status = proc_get_status($process);
-            if (!$status['running']) {
-                break;
-            }
-            usleep(50000);
-        } while (microtime(true) < $deadline);
-
-        $output .= stream_get_contents($pipes[1]);
-        $status = proc_get_status($process);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        if ($status['running']) {
-            @proc_terminate($process);
-            proc_close($process);
-            return null;
-        }
-        proc_close($process);
-
-        $data = json_decode(trim($output), true);
-        return is_array($data) ? $data : null;
     }
 }
