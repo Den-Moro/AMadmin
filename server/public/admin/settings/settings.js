@@ -8,7 +8,7 @@
         close_delay_seconds: 'text', close_delay_seconds_important: 'text', confirm_close_required: 'bool',
         accidental_tap_guard_ms: 'text', catchup_missed_default: 'bool', timezone: 'text',
         quiet_hours_enabled: 'bool', quiet_hours_from: 'text', quiet_hours_to: 'text', sound_on_important: 'bool',
-        brand_name: 'text', brand_contact: 'text',
+        brand_name: 'text', brand_contact: 'text', client_lock_enabled: 'bool',
         log_level: 'text', login_max_attempts: 'text', login_lockout_minutes: 'text', session_lifetime_hours: 'text',
     };
 
@@ -49,8 +49,14 @@
             if (!el || !panel.contains(el)) return;
             body[key] = FIELDS[key] === 'bool' ? (el.checked ? '1' : '0') : el.value;
         });
+        // client_lock_password — не обычное поле settings (сервер хранит только его хеш,
+        // см. AdminSettingsController::update), поэтому его нет в FIELDS. Шлём, только если
+        // реально ввели новый пароль — пустое значит «не менять».
+        const pwEl = $('client_lock_password');
+        if (pwEl && panel.contains(pwEl) && pwEl.value) body.client_lock_password = pwEl.value;
         try {
             await Api.request('PUT', '/admin/settings', body);
+            if (pwEl) pwEl.value = '';
             Ui.toast(activeTab === 'server' ? 'Настройки сервера сохранены' : 'Сохранено — кассы подхватят при следующем опросе', 'success');
         } catch (err) {
             Ui.toast('Не удалось сохранить: ' + Ui.reason(err, {

@@ -53,6 +53,7 @@ require __DIR__ . '/../Core/ServerMetrics.php';
 require __DIR__ . '/../Core/NetworkSiteMatcher.php';
 require __DIR__ . '/../Core/Router.php';
 require __DIR__ . '/../Core/PageRouter.php';
+require __DIR__ . '/../Modules/Agent/AgentConfigController.php';
 require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';
 require __DIR__ . '/../Modules/Notifications/AckController.php';
 require __DIR__ . '/../Modules/Notifications/AdminNotificationsController.php';
@@ -91,6 +92,7 @@ $router->get('/', array('AdminAuthController', 'root'));
 PageRouter::register($router);
 
 // Агенты (токен в заголовке, не сессия)
+$router->get('/agent/config', array('AgentConfigController', 'index'));
 $router->get('/occurrences', array('OccurrencesController', 'index'));
 $router->post('/occurrences/{id}/ack', array('AckController', 'store'));
 $router->get('/commands', array('CommandsController', 'index'));

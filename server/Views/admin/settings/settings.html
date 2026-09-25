@@ -19,6 +19,7 @@
 
     <div class="tabs">
         <button type="button" class="active" data-tab="notifications">Оповещения</button>
+        <button type="button" data-tab="client">Клиент</button>
         <button type="button" data-tab="server" id="serverTab" hidden>Сервер</button>
     </div>
     <p class="muted">Защита команд, раскатка файлов и срок жизни команды — теперь на странице
@@ -158,6 +159,27 @@
                 <span class="hint">Телефон или почта поддержки — показывается рядом с названием,
                 чтобы человеку было куда обратиться с вопросом.</span>
                 <input type="text" id="brand_contact" placeholder="например, +7 900 000-00-00">
+            </label>
+        </div>
+        </section>
+
+        <section class="tab-panel" data-panel="client" hidden>
+        <div class="card">
+            <h2>Защита клиента от случайных действий</h2>
+            <p class="muted" style="margin-top:0">Пароль для действий, которые кассир делать не должен
+            (настройки агента, импорт конфига). Это не криптостойкая защита, а простая мера от «шаловливых
+            рук» — агент хранит только присланный сервером хеш и сверяет его локально, поэтому продолжает
+            работать даже без связи с сервером. Новый пароль доедет до всех касс при следующем опросе.</p>
+
+            <label>
+                <input type="checkbox" id="client_lock_enabled">
+                Включить защиту паролем
+            </label>
+
+            <label>Новый пароль
+                <span class="hint">Оставьте пустым, чтобы не менять текущий. Сам пароль сервер не хранит —
+                только хеш.</span>
+                <input type="password" id="client_lock_password" autocomplete="new-password" placeholder="········">
             </label>
         </div>
         </section>

@@ -13,20 +13,33 @@ namespace AMadmin.UiAgent
         private ApiClient _api;
         private AgentConfig _config;
         private string _configPath;
+        private string _baseDir;
         private string _version;
         private DispatcherTimer _pollTimer;
         private WinForms.NotifyIcon _tray;
         private bool _polling;
 
+        // Пароль защиты клиента и актуальная версия агента — опрашивается заметно реже,
+        // чем /occurrences (см. PollAsync), поэтому храним последний известный результат
+        // отдельно, а не гоняем его вместе с каждым обычным опросом.
+        private AgentServerConfig _agentServerConfig;
+        private DateTime _agentServerConfigFetchedAt = DateTime.MinValue;
+        private static readonly TimeSpan AgentServerConfigInterval = TimeSpan.FromMinutes(5);
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            _baseDir = AppDomain.CurrentDomain.BaseDirectory;
             _version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
-            _configPath = Path.Combine(baseDir, "config.json");
+            _configPath = Path.Combine(_baseDir, "config.json");
 
-            Logger.Path = Path.Combine(baseDir, "ui-agent.log");
+            Logger.Path = Path.Combine(_baseDir, "ui-agent.log");
+
+            // Последний известный результат /agent/config — с предыдущего запуска, если
+            // есть. Так пароль защиты клиента проверяется корректно даже если сервер
+            // недоступен прямо сейчас, а не только после первого успешного опроса.
+            _agentServerConfig = AgentConfigCache.Load(_baseDir);
 
             try
             {
@@ -67,6 +80,18 @@ namespace AMadmin.UiAgent
 
             try
             {
+                // Пароль защиты клиента и актуальная версия — раз в 5 минут, не на каждом
+                // опросе, и обязательно ДО показа оповещений: NotificationWindow.ShowDialog()
+                // ниже блокирует этот метод, пока кассир не закроет окно (может быть минуты),
+                // а этот запрос не должен от него зависеть. FetchAndCache сама не бросает
+                // исключений (см. AgentConfigCache) — сетевая ошибка здесь не должна срывать
+                // остальной опрос.
+                if (DateTime.Now - _agentServerConfigFetchedAt > AgentServerConfigInterval)
+                {
+                    _agentServerConfigFetchedAt = DateTime.Now;
+                    _agentServerConfig = await AgentConfigCache.FetchAndCache(_api, _baseDir);
+                }
+
                 Logger.Debug("Опрос " + _config.ServerUrl + "/occurrences");
                 var occurrences = await _api.GetOccurrencesAsync();
 
@@ -135,8 +160,18 @@ namespace AMadmin.UiAgent
             new StatusWindow().Show();
         }
 
+        // Если защита паролем включена (см. Settings -> Клиент на панели) и уже известен
+        // хеш — сначала спрашиваем пароль. Ничего не знаем (свежая установка, сервер ни
+        // разу не ответил на /agent/config) или защита выключена — открываем как раньше,
+        // без вопросов: замок, который может запереть админа из настроек в первый же
+        // день, хуже, чем проблема, которую он должен был решать.
         private void ShowSettings()
         {
+            if (_agentServerConfig != null && _agentServerConfig.ClientLockEnabled && !string.IsNullOrEmpty(_agentServerConfig.ClientLockPasswordHash))
+            {
+                var prompt = new PasswordPromptWindow(_agentServerConfig.ClientLockPasswordHash);
+                if (prompt.ShowDialog() != true || !prompt.Unlocked) return;
+            }
             new SettingsWindow(_config, _configPath, ApplyConfig).Show();
         }
 

@@ -16,6 +16,10 @@ class AdminSettingsController
         foreach ($rows as $row) {
             $settings[$row['key']] = $row['value'];
         }
+        // Хеш пароля клиента сюда не отдаём — эту ручку видит любая роль (в т.ч. operator),
+        // а форме он не нужен: там только checkbox client_lock_enabled и всегда пустое
+        // write-only поле нового пароля. Меньше повод для офлайн-подбора почём зря.
+        unset($settings['client_lock_password_hash']);
 
         echo json_encode($settings);
     }
@@ -52,6 +56,19 @@ class AdminSettingsController
             http_response_code(400);
             echo json_encode(array('error' => 'invalid_log_level'));
             return;
+        }
+
+        // client_lock_password — не настоящий ключ settings (в таблице его нет, поэтому
+        // обычный цикл ниже и так его пропустит): пароль в открытом виде мы не храним
+        // вообще, только его PBKDF2-хеш в client_lock_password_hash. Пустое значение —
+        // не смена пароля, а "поле не трогали" (форма шлёт его всегда).
+        if (array_key_exists('client_lock_password', $body) && trim((string) $body['client_lock_password']) !== '') {
+            $iterations = 100000;
+            $salt = random_bytes(16);
+            $hash = hash_pbkdf2('sha256', (string) $body['client_lock_password'], $salt, $iterations, 32, true);
+            $encoded = 'pbkdf2$' . $iterations . '$' . base64_encode($salt) . '$' . base64_encode($hash);
+            Db::get()->prepare('UPDATE settings SET value = :value WHERE key = :key')
+                ->execute(array('key' => 'client_lock_password_hash', 'value' => $encoded));
         }
 
         $stmt = Db::get()->prepare('UPDATE settings SET value = :value WHERE key = :key');

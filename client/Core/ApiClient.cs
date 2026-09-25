@@ -43,6 +43,16 @@ namespace AMadmin.Core
         [JsonPropertyName("existing_status")] public string ExistingStatus { get; set; }
     }
 
+    // GET /agent/config — настройки, нужные самому агенту (не панели): пароль защиты
+    // клиента и версия, которая считается актуальной. Опрашивается реже, чем
+    // /occurrences и /commands (см. AgentServerConfig.FetchAndCache).
+    public class AgentServerConfig
+    {
+        [JsonPropertyName("client_lock_enabled")] public bool ClientLockEnabled { get; set; }
+        [JsonPropertyName("client_lock_password_hash")] public string ClientLockPasswordHash { get; set; }
+        [JsonPropertyName("current_agent_version")] public string CurrentAgentVersion { get; set; }
+    }
+
     // Единственное место, где клиент разговаривает с сервером. Токен — всегда заголовком
     // Authorization (не в URL, чтобы не оседал в логах прокси/веб-сервера).
     public class ApiClient
@@ -99,6 +109,12 @@ namespace AMadmin.Core
         public Task SendAckAsync(int occurrenceId, bool reacted)
         {
             return PostJsonAsync("/occurrences/" + occurrenceId + "/ack", new { reacted = reacted });
+        }
+
+        public async Task<AgentServerConfig> GetAgentConfigAsync()
+        {
+            var json = await GetStringAsync("/agent/config");
+            return JsonSerializer.Deserialize<AgentServerConfig>(json);
         }
 
         public async Task<List<Command>> GetCommandsAsync()
