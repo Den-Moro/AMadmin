@@ -337,6 +337,54 @@
         } catch (err) { Ui.toast('Не удалось: ' + Ui.reason(err, { hostnames_required: 'список пуст' }), 'error'); }
     });
 
+    $('importInfoBtn').addEventListener('click', function () {
+        Ui.modal({
+            title: 'Формат файла для импорта',
+            body:
+                '<p class="muted" style="margin-top:0">Магазин и тип устройства — по названию, как в «Справочниках» (без учёта регистра). Понятное имя необязательно.</p>' +
+                '<p><b>.txt</b> — по строке: <code>hostname;магазин;тип_устройства;понятное_имя</code>. Строки, начинающиеся с <code>#</code>, пропускаются.</p>' +
+                '<p><b>.json</b> — массив объектов: <code>[{"hostname":"...","store":"...","device_type":"...","display_name":"..."}]</code></p>' +
+                '<p><b>.xml</b> — <code>&lt;hosts&gt;&lt;host hostname="..." store="..." device_type="..." display_name="..."/&gt;&lt;/hosts&gt;</code></p>' +
+                '<p class="muted">Готовые примеры — кнопками «Шаблон» рядом с полем файла.</p>',
+            buttons: [{ label: 'Понятно', value: true }],
+        });
+    });
+
+    document.querySelectorAll('[data-template]').forEach(function (b) {
+        b.addEventListener('click', function () { window.location.href = '/admin/pcs/import/template?format=' + b.dataset.template; });
+    });
+
+    $('importPcForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const input = $('importFile');
+        if (!input.files.length) return;
+        const form = new FormData();
+        form.append('file', input.files[0]);
+        const btn = $('importPcForm').querySelector('button[type=submit]');
+        btn.disabled = true;
+        btn.textContent = 'Импортируется…';
+        try {
+            const response = await fetch('/admin/pcs/import', { method: 'POST', body: form });
+            const data = await response.json().catch(function () { return {}; });
+            if (!response.ok) throw new Error(data.error || ('http_' + response.status));
+            $('importResult').innerHTML =
+                '<p class="muted">Создано: <b>' + data.created.length + '</b>, пропущено (уже были): <b>' + data.skipped.length + '</b>, ошибок: <b>' + data.errors.length + '</b></p>' +
+                (data.errors.length ? '<table><thead><tr><th>Строка</th><th>Хост</th><th>Проблема</th></tr></thead><tbody>' +
+                    data.errors.map(function (er) {
+                        const reasons = { hostname_required: 'не указан hostname', store_not_found: 'магазин «' + esc(er.value) + '» не найден', device_type_not_found: 'тип устройства «' + esc(er.value) + '» не найден' };
+                        return '<tr><td>' + er.row + '</td><td>' + esc(er.hostname || '—') + '</td><td>' + (reasons[er.reason] || er.reason) + '</td></tr>';
+                    }).join('') + '</tbody></table>' : '');
+            Ui.toast('Импорт завершён: создано ' + data.created.length, data.created.length ? 'success' : 'info');
+            $('importFile').value = '';
+            await loadPcs();
+        } catch (err) {
+            Ui.toast('Не удалось импортировать: ' + Ui.reason(err, { unsupported_file_type: 'неподдерживаемый тип файла — только .txt, .json, .xml', parse_failed: 'не удалось разобрать файл' }), 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Импортировать';
+        }
+    });
+
     $('exportConfigsBtn').addEventListener('click', function () {
         const p = serverParams();
         p.set('server_url', window.location.origin);

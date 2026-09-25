@@ -109,6 +109,8 @@ $router->get('/admin/logs/download', array('AdminLogsController', 'download'));
 $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->post('/admin/pcs', array('AdminPcsController', 'store'));
 $router->post('/admin/pcs/bulk', array('AdminPcsController', 'bulkStore'));
+$router->post('/admin/pcs/import', array('AdminPcsController', 'import'));
+$router->get('/admin/pcs/import/template', array('AdminPcsController', 'importTemplate'));
 $router->get('/admin/pcs/configs.zip', array('AdminPcsController', 'exportConfigs'));
 $router->get('/admin/pcs/{id}', array('AdminPcsController', 'show'));
 $router->put('/admin/pcs/{id}', array('AdminPcsController', 'update'));

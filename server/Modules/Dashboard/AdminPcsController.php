@@ -335,11 +335,32 @@ class AdminPcsController
             return;
         }
 
+        $result = self::insertRows(array_map(function ($hostname) use ($storeId, $deviceTypeId) {
+            return array('store_id' => $storeId, 'device_type_id' => $deviceTypeId, 'hostname' => $hostname, 'display_name' => null);
+        }, $hostnames));
+
+        Logger::info(
+            'Массовое создание ПК: добавлено ' . count($result['created']) . ', пропущено (уже были) ' .
+            count($result['skipped']) . ", автор='{$_SESSION['admin_username']}'"
+        );
+
+        echo json_encode(array('status' => 'ok', 'created' => $result['created'], 'skipped' => $result['skipped']));
+    }
+
+    // Общее ядро вставки пачки ПК — используется и «списком на весь магазин» (bulkStore,
+    // один store_id/device_type_id на всю пачку), и импортом из файла (import, свои
+    // store_id/device_type_id у каждой строки). Существующий hostname в том же магазине —
+    // пропускаем, а не падаем на середине: список обычно составляют вручную, и повтор
+    // в нём — норма, а не повод отменять всё остальное.
+    //   $rows: [{store_id, device_type_id, hostname, display_name}, ...]
+    //   -> ['created' => [hostname, ...], 'skipped' => [hostname, ...]]
+    private static function insertRows(array $rows)
+    {
         $db = Db::get();
         $existingStmt = $db->prepare('SELECT id FROM pcs WHERE hostname = :hostname AND store_id = :store_id');
         $insertStmt = $db->prepare('
-            INSERT INTO pcs (store_id, device_type_id, hostname, agent_token)
-            VALUES (:store_id, :device_type_id, :hostname, :token)
+            INSERT INTO pcs (store_id, device_type_id, hostname, display_name, agent_token)
+            VALUES (:store_id, :device_type_id, :hostname, :display_name, :token)
         ');
 
         $created = array();
@@ -347,20 +368,21 @@ class AdminPcsController
 
         $db->beginTransaction();
         try {
-            foreach ($hostnames as $hostname) {
-                $existingStmt->execute(array('hostname' => $hostname, 'store_id' => $storeId));
+            foreach ($rows as $row) {
+                $existingStmt->execute(array('hostname' => $row['hostname'], 'store_id' => $row['store_id']));
                 if ($existingStmt->fetch()) {
-                    $skipped[] = $hostname;
+                    $skipped[] = $row['hostname'];
                     continue;
                 }
 
                 $insertStmt->execute(array(
-                    'store_id'       => $storeId,
-                    'device_type_id' => $deviceTypeId,
-                    'hostname'       => $hostname,
+                    'store_id'       => $row['store_id'],
+                    'device_type_id' => $row['device_type_id'],
+                    'hostname'       => $row['hostname'],
+                    'display_name'   => !empty($row['display_name']) ? $row['display_name'] : null,
                     'token'          => bin2hex(random_bytes(32)),
                 ));
-                $created[] = $hostname;
+                $created[] = $row['hostname'];
             }
             $db->commit();
         } catch (Exception $e) {
@@ -368,12 +390,184 @@ class AdminPcsController
             throw $e;
         }
 
+        return array('created' => $created, 'skipped' => $skipped);
+    }
+
+    // POST /admin/pcs/import — multipart, поле "file" (.txt/.json/.xml, формат см.
+    // importTemplate ниже и кнопку «ⓘ» в панели). Магазин/тип устройства матчатся по
+    // названию без учёта регистра; несовпадение не заводит новый справочник молча —
+    // строка уходит в errors, чтобы админ поправил файл и перезалил, а не гадал,
+    // откуда взялся лишний магазин.
+    public static function import()
+    {
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
+
+        if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'file_required'));
+            return;
+        }
+
+        $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+        $parsers = array('txt' => 'parseTxt', 'json' => 'parseJson', 'xml' => 'parseXml');
+        if (!isset($parsers[$ext])) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'unsupported_file_type'));
+            return;
+        }
+
+        $content = file_get_contents($_FILES['file']['tmp_name']);
+        try {
+            $parsed = self::{$parsers[$ext]}($content);
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'parse_failed', 'message' => $e->getMessage()));
+            return;
+        }
+
+        $db = Db::get();
+        $stores = array();
+        foreach ($db->query('SELECT id, name FROM stores')->fetchAll() as $s) {
+            $stores[mb_strtolower(trim($s['name']))] = (int) $s['id'];
+        }
+        $deviceTypes = array();
+        foreach ($db->query('SELECT id, name FROM device_types')->fetchAll() as $t) {
+            $deviceTypes[mb_strtolower(trim($t['name']))] = (int) $t['id'];
+        }
+
+        $rows = array();
+        $errors = array();
+        foreach ($parsed as $i => $line) {
+            $rowNum = $i + 1;
+            $hostname = trim($line['hostname']);
+            $storeName = trim($line['store']);
+            $typeName = trim($line['device_type']);
+            $displayName = trim($line['display_name']);
+
+            if ($hostname === '') {
+                $errors[] = array('row' => $rowNum, 'reason' => 'hostname_required');
+                continue;
+            }
+            if (!isset($stores[mb_strtolower($storeName)])) {
+                $errors[] = array('row' => $rowNum, 'hostname' => $hostname, 'reason' => 'store_not_found', 'value' => $storeName);
+                continue;
+            }
+            if (!isset($deviceTypes[mb_strtolower($typeName)])) {
+                $errors[] = array('row' => $rowNum, 'hostname' => $hostname, 'reason' => 'device_type_not_found', 'value' => $typeName);
+                continue;
+            }
+
+            $rows[] = array(
+                'store_id' => $stores[mb_strtolower($storeName)],
+                'device_type_id' => $deviceTypes[mb_strtolower($typeName)],
+                'hostname' => $hostname,
+                'display_name' => $displayName !== '' ? $displayName : null,
+            );
+        }
+
+        $result = $rows ? self::insertRows($rows) : array('created' => array(), 'skipped' => array());
+
         Logger::info(
-            'Массовое создание ПК: добавлено ' . count($created) . ', пропущено (уже были) ' .
-            count($skipped) . ", автор='{$_SESSION['admin_username']}'"
+            "Импорт ПК из файла .{$ext}: добавлено " . count($result['created']) . ', пропущено ' .
+            count($result['skipped']) . ', ошибок ' . count($errors) . ", автор='{$_SESSION['admin_username']}'"
         );
 
-        echo json_encode(array('status' => 'ok', 'created' => $created, 'skipped' => $skipped));
+        echo json_encode(array('status' => 'ok', 'created' => $result['created'], 'skipped' => $result['skipped'], 'errors' => $errors));
+    }
+
+    // .txt: "hostname;магазин;тип_устройства;понятное_имя(необязательно)" по строке,
+    // строки, начинающиеся с #, — комментарии и пропускаются.
+    private static function parseTxt($content)
+    {
+        $rows = array();
+        foreach (preg_split('/\r\n|\r|\n/', (string) $content) as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === '#') {
+                continue;
+            }
+            $parts = array_map('trim', explode(';', $line));
+            $rows[] = array(
+                'hostname'     => isset($parts[0]) ? $parts[0] : '',
+                'store'        => isset($parts[1]) ? $parts[1] : '',
+                'device_type'  => isset($parts[2]) ? $parts[2] : '',
+                'display_name' => isset($parts[3]) ? $parts[3] : '',
+            );
+        }
+        return $rows;
+    }
+
+    // .json: [{"hostname":"...","store":"...","device_type":"...","display_name":"..."}]
+    private static function parseJson($content)
+    {
+        $data = json_decode((string) $content, true);
+        if (!is_array($data)) {
+            throw new Exception('invalid_json');
+        }
+        $rows = array();
+        foreach ($data as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $rows[] = array(
+                'hostname'     => isset($item['hostname']) ? (string) $item['hostname'] : '',
+                'store'        => isset($item['store']) ? (string) $item['store'] : '',
+                'device_type'  => isset($item['device_type']) ? (string) $item['device_type'] : '',
+                'display_name' => isset($item['display_name']) ? (string) $item['display_name'] : '',
+            );
+        }
+        return $rows;
+    }
+
+    // .xml: <hosts><host hostname="..." store="..." device_type="..." display_name="..."/></hosts>
+    private static function parseXml($content)
+    {
+        libxml_use_internal_errors(true);
+        $xml = @simplexml_load_string((string) $content);
+        if ($xml === false) {
+            throw new Exception('invalid_xml');
+        }
+        $rows = array();
+        foreach ($xml->host as $host) {
+            $attrs = $host->attributes();
+            $rows[] = array(
+                'hostname'     => isset($attrs['hostname']) ? (string) $attrs['hostname'] : '',
+                'store'        => isset($attrs['store']) ? (string) $attrs['store'] : '',
+                'device_type'  => isset($attrs['device_type']) ? (string) $attrs['device_type'] : '',
+                'display_name' => isset($attrs['display_name']) ? (string) $attrs['display_name'] : '',
+            );
+        }
+        return $rows;
+    }
+
+    // GET /admin/pcs/import/template?format=txt|json|xml — образец файла для импорта,
+    // тот же формат, что описывает кнопка «ⓘ» в панели. Статичный пример, без похода в БД.
+    public static function importTemplate()
+    {
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
+
+        $format = isset($_GET['format']) ? $_GET['format'] : 'txt';
+        $samples = array(
+            'txt' => "# hostname;магазин;тип_устройства;понятное_имя (необязательно)\r\n" .
+                "KASSA-01;Тестовый магазин;Касса;Касса у входа\r\nKASSA-02;Тестовый магазин;Касса\r\n",
+            'json' => json_encode(array(
+                array('hostname' => 'KASSA-01', 'store' => 'Тестовый магазин', 'device_type' => 'Касса', 'display_name' => 'Касса у входа'),
+                array('hostname' => 'KASSA-02', 'store' => 'Тестовый магазин', 'device_type' => 'Касса'),
+            ), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n",
+            'xml' => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<hosts>\r\n" .
+                "    <host hostname=\"KASSA-01\" store=\"Тестовый магазин\" device_type=\"Касса\" display_name=\"Касса у входа\"/>\r\n" .
+                "    <host hostname=\"KASSA-02\" store=\"Тестовый магазин\" device_type=\"Касса\"/>\r\n</hosts>\r\n",
+        );
+        $mimes = array('txt' => 'text/plain', 'json' => 'application/json', 'xml' => 'application/xml');
+
+        if (!isset($samples[$format])) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'unsupported_file_type'));
+            return;
+        }
+
+        header('Content-Type: ' . $mimes[$format] . '; charset=utf-8');
+        header('Content-Disposition: attachment; filename="amadmin-import-template.' . $format . '"');
+        echo $samples[$format];
     }
 
     // GET /admin/pcs/configs.zip?store_id=&device_type_id=&search=

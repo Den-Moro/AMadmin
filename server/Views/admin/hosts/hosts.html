@@ -48,6 +48,7 @@
         <div class="tabs">
             <button type="button" class="active" data-tab="one">Один ПК</button>
             <button type="button" data-tab="many">Списком на весь магазин</button>
+            <button type="button" data-tab="import">Импорт из файла</button>
         </div>
         <form id="createPcForm" class="tab-panel" data-panel="one">
             <div class="row">
@@ -82,6 +83,27 @@
                 <button type="submit">Создать все</button>
                 <button type="button" class="ghost" data-close-add>Отмена</button>
             </div>
+        </form>
+        <form id="importPcForm" class="tab-panel" data-panel="import" hidden>
+            <p class="muted" style="margin-top:0">Магазин и тип устройства берутся из самого файла (по названию,
+            без учёта регистра) — у каждой строки могут быть свои. Неизвестные названия не заводят новый
+            справочник сами — такие строки попадут в список ошибок ниже, магазины/типы создаются заранее
+            на странице «Справочники».</p>
+            <div class="row" style="align-items:center">
+                <label>Файл (.txt, .json или .xml)<input type="file" id="importFile" accept=".txt,.json,.xml" required></label>
+                <button type="button" id="importInfoBtn" class="ghost" title="Формат файла">ⓘ Формат</button>
+            </div>
+            <div class="row">
+                <span class="hint">Шаблон:</span>
+                <button type="button" class="small ghost" data-template="txt">.txt</button>
+                <button type="button" class="small ghost" data-template="json">.json</button>
+                <button type="button" class="small ghost" data-template="xml">.xml</button>
+            </div>
+            <div class="row">
+                <button type="submit">Импортировать</button>
+                <button type="button" class="ghost" data-close-add>Отмена</button>
+            </div>
+            <div id="importResult"></div>
         </form>
     </div>
 
