@@ -6,8 +6,33 @@
 //      (GET /admin/pcs?state=silent|never), первые 10.
 //   4. «Обновить» и таймер раз в 30 с (только пока вкладка видна) повторяют 2–3.
 (async function () {
-    await requireAdminAuth();
+    const me = await requireAdminAuth();
     const $ = Ui.$, esc = Ui.escapeHtml;
+
+    if (me.role === 'superadmin') {
+        $('ntpCard').hidden = false;
+        Ui.settingsFieldsPanel({
+            ntp_enabled: 'bool', ntp_server_address: 'text',
+            ntp_drift_threshold_seconds: 'text', ntp_check_interval_seconds: 'text',
+        }, 'ntpSaveBtn');
+    }
+
+    function renderNtp(ntp) {
+        if (!ntp || !ntp.enabled) { $('ntpWarning').hidden = true; if ($('ntpStatusLine')) $('ntpStatusLine').textContent = ''; return; }
+        const line = $('ntpStatusLine');
+        if (line) {
+            line.textContent = !ntp.ok
+                ? 'Проверка не удалась (' + ntp.server + '): ' + ntp.error
+                : 'Расхождение с ' + ntp.server + ': ' + ntp.drift_seconds + ' с (проверено ' + formatServerTime(ntp.checked_at) + ')';
+        }
+        const bad = !ntp.ok || Math.abs(+ntp.drift_seconds) > +ntp.threshold_seconds;
+        $('ntpWarning').hidden = !bad;
+        if (bad) {
+            $('ntpWarning').textContent = !ntp.ok
+                ? 'NTP: проверка времени сервера не удалась (' + ntp.server + '): ' + ntp.error
+                : 'NTP: часы сервера разошлись с ' + ntp.server + ' на ' + ntp.drift_seconds + ' с — больше порога ' + ntp.threshold_seconds + ' с.';
+        }
+    }
 
     function bar(name, value, total, bad, href) {
         const pct = total ? Math.round(value / total * 100) : 0;
@@ -28,6 +53,7 @@
     async function loadStats() {
         let st;
         try { st = await Api.get('/admin/stats'); } catch (e) { return; }
+        renderNtp(st.ntp);
         const p = st.pcs, a = st.activity;
         const total = +p.total, online = +p.online;
         $('statTotal').textContent = total;

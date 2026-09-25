@@ -77,6 +77,57 @@ class AdminStatsController
             'events'   => $events,
             'log_level' => Settings::get('log_level', 'debug'),
             'server_time' => gmdate('Y-m-d H:i:s'),
+            'ntp' => self::ntpStatus(),
         ));
+    }
+
+    // Контроль расхождения часов сервера с NTP (см. NtpClient) — не чаще, чем раз в
+    // ntp_check_interval_seconds, иначе дашборд на каждой перезагрузке долбил бы чужой
+    // NTP-сервер. Результат кэшируется в файле рядом с БД, а не в settings — это не
+    // настройка, а последний известный результат проверки.
+    private static function ntpStatus()
+    {
+        if (!Settings::bool('ntp_enabled', false)) {
+            return array(
+                'enabled' => false, 'ok' => null, 'drift_seconds' => null,
+                'threshold_seconds' => null, 'checked_at' => null, 'server' => null, 'error' => null,
+            );
+        }
+
+        $server = Settings::get('ntp_server_address', 'pool.ntp.org');
+        $threshold = Settings::int('ntp_drift_threshold_seconds', 5);
+        $interval = Settings::int('ntp_check_interval_seconds', 300);
+        $cacheFile = dirname(Config::get('db')['path']) . '/ntp-cache.json';
+
+        $cached = null;
+        if (is_file($cacheFile)) {
+            $raw = json_decode(file_get_contents($cacheFile), true);
+            if (is_array($raw) && isset($raw['checked_at']) && $raw['server'] === $server
+                && (time() - strtotime($raw['checked_at'] . ' UTC')) < $interval) {
+                $cached = $raw;
+            }
+        }
+
+        if ($cached === null) {
+            $result = NtpClient::checkDrift($server, 2);
+            $cached = array(
+                'checked_at' => gmdate('Y-m-d H:i:s'),
+                'server' => $server,
+                'ok' => $result['ok'],
+                'drift_seconds' => $result['drift_seconds'],
+                'error' => $result['error'],
+            );
+            @file_put_contents($cacheFile, json_encode($cached));
+        }
+
+        return array(
+            'enabled' => true,
+            'ok' => $cached['ok'],
+            'drift_seconds' => $cached['drift_seconds'],
+            'threshold_seconds' => $threshold,
+            'checked_at' => $cached['checked_at'],
+            'server' => $cached['server'],
+            'error' => $cached['error'],
+        );
     }
 }

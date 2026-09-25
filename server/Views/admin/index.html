@@ -21,6 +21,8 @@
         </div>
     </div>
 
+    <div id="ntpWarning" class="note warn" hidden style="margin-bottom:10px"></div>
+
     <div class="stats">
         <div class="stat"><div class="label">Всего ПК</div><div class="value" id="statTotal">—</div><div class="sub muted" id="statNever"></div></div>
         <div class="stat ok"><div class="label">Онлайн</div><div class="value" id="statOnline">—</div><div class="sub muted" id="statOnlinePct"></div></div>
@@ -46,6 +48,22 @@
             <div id="versionBars" class="bars"></div>
             <h2 style="margin-top:10px">Последние события</h2>
             <div id="events" class="events"></div>
+        </div>
+    </div>
+
+    <div class="card compact" id="ntpCard" hidden>
+        <h2>Время сервера (NTP)</h2>
+        <p class="muted" style="margin-top:0">Периодическая проверка расхождения часов сервера с NTP-сервером. Сервер
+        никогда не меняет системное время сам — только показывает предупреждение выше, если разошлось больше порога.</p>
+        <label><input type="checkbox" id="ntp_enabled"> Включить проверку</label>
+        <div class="row">
+            <label>NTP-сервер<input type="text" id="ntp_server_address" placeholder="pool.ntp.org"></label>
+            <label>Порог тревоги, сек<input type="number" id="ntp_drift_threshold_seconds" min="1" max="3600"></label>
+            <label>Проверять не чаще, сек<input type="number" id="ntp_check_interval_seconds" min="60" max="86400"></label>
+        </div>
+        <div class="row" style="align-items:center">
+            <button type="button" id="ntpSaveBtn">Сохранить</button>
+            <span class="muted" id="ntpStatusLine"></span>
         </div>
     </div>
 

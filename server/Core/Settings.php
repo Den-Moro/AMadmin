@@ -18,6 +18,10 @@ class Settings
         'session_lifetime_hours',
         'command_output_max_kb',
         'command_ttl_hours',
+        'ntp_enabled',
+        'ntp_server_address',
+        'ntp_drift_threshold_seconds',
+        'ntp_check_interval_seconds',
     );
 
     public static function all()

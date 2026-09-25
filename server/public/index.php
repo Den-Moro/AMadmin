@@ -47,6 +47,7 @@ set_error_handler(function ($severity, $message, $file, $line) {
     return true;
 });
 require __DIR__ . '/../Core/TargetMatcher.php';
+require __DIR__ . '/../Core/NtpClient.php';
 require __DIR__ . '/../Core/Router.php';
 require __DIR__ . '/../Core/PageRouter.php';
 require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';
