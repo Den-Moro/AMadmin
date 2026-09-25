@@ -519,3 +519,17 @@ pre.output {
     main { padding: 20px 16px 48px; }
     .card .row, .modal .row { flex-direction: column; gap: 12px; }
 }
+
+/* ---------- Анимации: лёгкие, только opacity/transform (не влияют на layout),
+   и только когда пользователь их не отключил в ОС. ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+    @keyframes amadmin-page-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: none; }
+    }
+    main { animation: amadmin-page-in 0.25s ease-out; }
+
+    .card { transition: transform 0.15s, box-shadow 0.15s; }
+    .card:hover { transform: translateY(-1px); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.55); }
+}
