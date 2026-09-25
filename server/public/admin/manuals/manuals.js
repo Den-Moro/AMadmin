@@ -63,4 +63,5 @@
     $('search').addEventListener('input', loadManuals);
 
     await loadManuals();
+    setInterval(function () { if (!document.hidden) loadManuals(); }, 30000);
 })();

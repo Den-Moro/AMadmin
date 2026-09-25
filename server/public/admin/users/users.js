@@ -141,4 +141,5 @@
     });
 
     await loadUsers();
+    setInterval(function () { if (!document.hidden) loadUsers(); }, 30000);
 })();

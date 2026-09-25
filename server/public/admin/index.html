@@ -33,6 +33,7 @@
         <div class="stat"><div class="label">Команд за сутки</div><div class="value" id="actCmd">—</div><div class="sub muted" id="actCmdRes"></div></div>
         <div class="stat"><div class="label">В работе на кассах</div><div class="value" id="actInProgress">—</div><div class="sub muted">команд ещё выполняются</div></div>
         <div class="stat"><div class="label">Файлы для раскатки</div><div class="value" id="actFiles">—</div><div class="sub muted" id="actFilesSize"></div></div>
+        <div class="stat" id="statOutdatedTile"><div class="label">Устаревшие агенты</div><div class="value" id="statOutdated">—</div><div class="sub muted" id="statOutdatedSub"></div></div>
     </div>
 
     <div class="row-2">
@@ -54,8 +55,9 @@
             <a href="/admin/hosts/hosts.html?state=offline" class="muted">все офлайн →</a>
         </div>
         <p class="muted" style="margin:0">Кассы, которые молчат дольше суток или ни разу не выходили на связь.</p>
+        <input type="search" id="attentionSearch" placeholder="Поиск: хост, магазин, IP…" style="width:100%;margin:10px 0">
         <table id="attentionTable">
-            <thead><tr><th>Хост</th><th>Магазин</th><th>Агент</th><th>Последний опрос</th></tr></thead>
+            <thead><tr><th>Хост</th><th>Магазин</th><th>IP</th><th>Агент</th><th>Последний опрос</th></tr></thead>
             <tbody></tbody>
         </table>
     </div>

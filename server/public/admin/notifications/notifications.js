@@ -12,17 +12,38 @@
         return item.name || item.display_name || item.hostname;
     }
 
-    async function loadTargetOptions(type) {
+    const targetPcPickerEl = $('targetPcPicker');
+
+    // Для type=pc — поиск по имени/магазину/IP (Ui.pcPicker) вместо голого <select>;
+    // выбор пишется обратно в скрытый #targetId, остальной код его не отличает.
+    async function loadTargetOptions(type, selectedId) {
         if (type === 'all') {
             targetIdWrap.style.display = 'none';
             return;
         }
         targetIdWrap.style.display = '';
-        targetIdEl.innerHTML = '<option value="">Загрузка…</option>';
         if (!optionsCache[type]) {
             const endpoints = { store: '/admin/stores', group: '/admin/host-groups', device_type: '/admin/device-types', pc: '/admin/pcs' };
             optionsCache[type] = await Api.get(endpoints[type]);
         }
+
+        if (type === 'pc') {
+            targetIdEl.style.display = 'none';
+            targetPcPickerEl.style.display = '';
+            targetIdEl.innerHTML = '';
+            const selected = selectedId && optionsCache.pc.find(function (pc) { return String(pc.id) === String(selectedId); });
+            Ui.pcPicker(targetPcPickerEl, optionsCache.pc, function (pc) {
+                targetIdEl.innerHTML = pc ? '<option value="' + pc.id + '" selected>' + esc(Ui.pcLabel(pc)) + '</option>' : '';
+            });
+            if (selected) {
+                targetPcPickerEl.querySelector('.pc-picker-search').value = Ui.pcLabel(selected);
+                targetIdEl.innerHTML = '<option value="' + selected.id + '" selected>' + esc(Ui.pcLabel(selected)) + '</option>';
+            }
+            return;
+        }
+
+        targetIdEl.style.display = '';
+        targetPcPickerEl.style.display = 'none';
         targetIdEl.innerHTML = '';
         optionsCache[type].forEach(function (item) {
             const opt = document.createElement('option');
@@ -39,8 +60,7 @@
     if (presetPc) {
         $('createForm').hidden = false;
         targetTypeEl.value = 'pc';
-        await loadTargetOptions('pc');
-        targetIdEl.value = presetPc;
+        await loadTargetOptions('pc', presetPc);
     }
 
     // ---- Форма ------------------------------------------------------------------------
@@ -155,4 +175,5 @@
 
     await loadNotifications();
     await loadManualPicker();
+    setInterval(function () { if (!document.hidden) loadNotifications(); }, 30000);
 })();
