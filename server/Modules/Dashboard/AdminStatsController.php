@@ -44,6 +44,26 @@ class AdminStatsController
             FROM pcs WHERE excluded_from_stats = 0 GROUP BY agent_version ORDER BY count DESC
         ")->fetchAll();
 
+        // current_agent_version не задана явно (свежая установка/ещё не заходили на
+        // «Обновления») — считаем актуальной самую новую из реально отчитавшихся версий,
+        // как раньше вычислялось на клиенте. Явно заданная версия админом всегда важнее.
+        $baseline = Settings::get('current_agent_version', '');
+        if ($baseline === '') {
+            $baseline = null;
+            foreach ($versions as $v) {
+                if ($v['version'] === '—') {
+                    continue;
+                }
+                if ($baseline === null || VersionCompare::compare($v['version'], $baseline) > 0) {
+                    $baseline = $v['version'];
+                }
+            }
+        }
+        foreach ($versions as &$v) {
+            $v['outdated'] = $baseline !== null && VersionCompare::isOutdated($v['version'], $baseline);
+        }
+        unset($v);
+
         $day = "datetime('now', '-1 day')";
         $activity = array(
             'notifications_24h' => (int) $db->query("SELECT COUNT(*) FROM notifications WHERE created_at >= {$day}")->fetchColumn(),
@@ -73,6 +93,7 @@ class AdminStatsController
             'pcs'      => $pcs,
             'stores'   => $stores,
             'versions' => $versions,
+            'agent_version_baseline' => $baseline,
             'activity' => $activity,
             'events'   => $events,
             'log_level' => Settings::get('log_level', 'debug'),

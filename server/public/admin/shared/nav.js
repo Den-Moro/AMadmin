@@ -17,6 +17,7 @@ const Nav = (function () {
         sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
         key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.5"/><path d="m11.5 11.5 8-8"/><path d="m16 7 2.5 2.5"/><path d="m19 4 2 2"/></svg>',
         logout: '<svg viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="m15 8 4 4-4 4"/><path d="M9 12h10"/></svg>',
+        download: '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg>',
     };
 
     const items = [
@@ -27,6 +28,7 @@ const Nav = (function () {
         { href: '/admin/manuals', label: 'Мануалы', icon: 'book' },
         { href: '/admin/commands', label: 'Команды', icon: 'terminal' },
         { href: '/admin/stores', label: 'Справочники', icon: 'store' },
+        { href: '/admin/updates', label: 'Обновления', icon: 'download', roles: ['administrator', 'superadmin'] },
         { href: '/admin/logs', label: 'Логи', icon: 'scroll', roles: ['administrator', 'superadmin'] },
         { href: '/admin/settings', label: 'Настройки', icon: 'sliders' },
         { href: '/admin/users', label: 'Пользователи', icon: 'users', roles: ['superadmin'] },

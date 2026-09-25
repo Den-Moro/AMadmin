@@ -80,20 +80,14 @@
             ? st.versions.map(function (v) { return bar(v.version === '—' ? 'агент ещё не отчитался' : 'v' + v.version, +v.count, total, v.version === '—'); }).join('')
             : '<div class="muted">—</div>';
 
-        // "Устаревшие" — не на самой новой из реально отчитавшихся версий (сравнение по
-        // числам X.Y.Z, а не по строке — иначе "0.10.0" оказался бы "меньше" "0.9.0").
-        const parseVer = function (v) { return v.split('.').map(Number); };
-        const cmpVer = function (a, b) { for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); } return 0; };
-        const real = st.versions.filter(function (v) { return v.version !== '—'; });
-        if (real.length > 1) {
-            const latest = real.reduce(function (best, v) { return cmpVer(parseVer(v.version), parseVer(best.version)) > 0 ? v : best; });
-            const outdated = real.filter(function (v) { return v.version !== latest.version; }).reduce(function (sum, v) { return sum + (+v.count); }, 0);
-            $('statOutdated').textContent = outdated;
-            $('statOutdatedSub').textContent = outdated ? 'актуальная — v' + latest.version : 'все на v' + latest.version;
-        } else {
-            $('statOutdated').textContent = 0;
-            $('statOutdatedSub').textContent = real.length ? 'все на v' + real[0].version : '—';
-        }
+        // "Устаревшие" — теперь считает сервер (см. AdminStatsController::index,
+        // VersionCompare): явно заданная на «Обновлениях» версия, а если не задана —
+        // самая новая из реально отчитавшихся, как раньше вычислялось прямо здесь.
+        const outdatedCount = st.versions.filter(function (v) { return v.outdated; }).reduce(function (sum, v) { return sum + (+v.count); }, 0);
+        $('statOutdated').textContent = outdatedCount;
+        $('statOutdatedSub').textContent = st.agent_version_baseline
+            ? (outdatedCount ? 'актуальная — v' + st.agent_version_baseline : 'все на v' + st.agent_version_baseline)
+            : '—';
         $('events').innerHTML = st.events.length
             ? st.events.map(function (ev) {
                 return '<div class="event"><span class="when">' + esc(formatServerTime(ev.at)) + '</span><span class="what" title="' + esc(describeEvent(ev)) + '">' +

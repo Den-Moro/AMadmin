@@ -16,6 +16,11 @@ namespace AMadmin.ManagementAgent
         public string Status;   // success | failed | timeout
         public string Output;
 
+        // true только когда file_deploy только что заменил исполняемый файл САМОГО этого
+        // агента (см. FileDeployExecutor.IsSelf) — SafeReport завершает процесс после
+        // отправки результата, службу поднимает уже настроенный `sc failure` (Program.cs).
+        public bool RestartSelfAfterReport;
+
         public static Outcome Success(string output) { return new Outcome { Status = "success", Output = output }; }
         public static Outcome Failed(string output) { return new Outcome { Status = "failed", Output = output }; }
         public static Outcome Timeout(string output) { return new Outcome { Status = "timeout", Output = output }; }
@@ -268,6 +273,17 @@ namespace AMadmin.ManagementAgent
                 // опросе команда уже не придёт (строка claim есть). Пишем в лог, чтобы
                 // разобрать по логам "почему у этой кассы результат так и не появился".
                 Logger.Error("Не удалось отправить результат команды id=" + command.Id + ": " + ex.Message);
+            }
+
+            // Файл уже заменён на диске независимо от того, дошёл ли отчёт до сервера —
+            // продолжать работать со старым кодом в памяти до следующей перезагрузки
+            // бессмысленно, завершаемся в любом случае; SCM поднимет уже новый файл.
+            if (outcome.RestartSelfAfterReport)
+            {
+                Logger.Info("Команда id=" + command.Id + " заменила исполняемый файл самого агента — завершаемся " +
+                            "для перезапуска службы с новой версией (настроенный `sc failure`, см. Program.cs).");
+                await Task.Delay(TimeSpan.FromSeconds(2));
+                Environment.Exit(0);
             }
         }
     }

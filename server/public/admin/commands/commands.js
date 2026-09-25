@@ -307,7 +307,8 @@
             tr.dataset.id = c.id;
             tr.innerHTML =
                 '<td class="muted" style="white-space:nowrap">' + esc(formatServerTime(c.created_at)) + '</td>' +
-                '<td><span class="badge badge-neutral">' + (typeNames[c.type] || c.type) + '</span> ' + esc(describeCommand(c)) + '</td>' +
+                '<td><span class="badge badge-neutral">' + (typeNames[c.type] || c.type) + '</span> ' + esc(describeCommand(c)) +
+                    (c.update_batch_id ? ' <span class="badge badge-neutral" title="Часть одной отправки с страницы «Обновления» (batch ' + esc(c.update_batch_id) + ')">📦 пакет</span>' : '') + '</td>' +
                 '<td>' + esc(describeTarget(c)) + '</td>' +
                 '<td>' + esc(c.created_by_username || '—') + '</td>' +
                 '<td>' + resultsCell(c) + '</td>' +

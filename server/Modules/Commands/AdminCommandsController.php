@@ -11,7 +11,7 @@ class AdminCommandsController
 
         $sql = "
             SELECT
-                c.id, c.type, c.payload, c.target_type, c.target_id, c.created_at,
+                c.id, c.type, c.payload, c.target_type, c.target_id, c.created_at, c.update_batch_id,
                 u.username AS created_by_username,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'in_progress') AS in_progress_count,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'success') AS success_count,
@@ -141,6 +141,94 @@ class AdminCommandsController
         );
 
         echo json_encode(array('status' => 'ok', 'id' => $id));
+    }
+
+    // POST /admin/commands/batch   body: { target: {type, id}, items: [{payload: {file_id, target_path}}, ...] }
+    //
+    // Несколько file_deploy-команд одним логическим действием (страница «Обновления» —
+    // например, сразу оба файла агента на одни и те же кассы). Каждая команда — всё та
+    // же отдельная строка commands, что и всегда (агенту/исполнению это не меняет), но
+    // с общим update_batch_id, чтобы в истории команд показывались одной группой, а не
+    // неотличимыми друг от друга строками. Валидируем все элементы ДО первой вставки —
+    // одна плохая строка не должна создавать половину пачки.
+    public static function storeBatch()
+    {
+        AdminAuth::requireRole(array('administrator', 'superadmin'));
+
+        $body = json_decode(file_get_contents('php://input'), true);
+        $items = isset($body['items']) && is_array($body['items']) ? $body['items'] : array();
+        if (!$items) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'items_required'));
+            return;
+        }
+
+        $target = isset($body['target']) && is_array($body['target']) ? $body['target'] : array();
+        $targetType = isset($target['type']) ? $target['type'] : '';
+        $targetId = (!empty($target['id'])) ? (int) $target['id'] : null;
+
+        if (!in_array($targetType, array('all', 'store', 'group', 'pc', 'device_type'), true)) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'invalid_target_type'));
+            return;
+        }
+        if ($targetType !== 'all' && !$targetId) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'target_id_required'));
+            return;
+        }
+
+        $checkedItems = array();
+        foreach ($items as $i => $item) {
+            $itemType = isset($item['type']) ? $item['type'] : 'file_deploy';
+            if ($itemType !== 'file_deploy') {
+                http_response_code(400);
+                echo json_encode(array('error' => 'unsupported_type', 'index' => $i));
+                return;
+            }
+            $payload = isset($item['payload']) && is_array($item['payload']) ? $item['payload'] : array();
+            $checked = self::validateFileDeploy($payload);
+            if (isset($checked['error'])) {
+                http_response_code(400);
+                echo json_encode(array('error' => $checked['error'], 'index' => $i));
+                return;
+            }
+            $checkedItems[] = $checked;
+        }
+
+        $batchId = bin2hex(random_bytes(8));
+        $db = Db::get();
+        $stmt = $db->prepare('
+            INSERT INTO commands (type, payload, target_type, target_id, created_by, update_batch_id)
+            VALUES (:type, :payload, :target_type, :target_id, :created_by, :batch_id)
+        ');
+
+        $ids = array();
+        $db->beginTransaction();
+        try {
+            foreach ($checkedItems as $checked) {
+                $stmt->execute(array(
+                    'type'        => 'file_deploy',
+                    'payload'     => json_encode($checked['payload'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'target_type' => $targetType,
+                    'target_id'   => $targetType === 'all' ? null : $targetId,
+                    'created_by'  => $_SESSION['admin_id'],
+                    'batch_id'    => $batchId,
+                ));
+                $ids[] = $db->lastInsertId();
+            }
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollBack();
+            throw $e;
+        }
+
+        Logger::info(
+            'Пакетная команда создана: batch=' . $batchId . ' команд=' . count($ids) .
+            " таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " автор='{$_SESSION['admin_username']}'"
+        );
+
+        echo json_encode(array('status' => 'ok', 'update_batch_id' => $batchId, 'ids' => $ids));
     }
 
     // ---- Валидаторы по типам ------------------------------------------------------

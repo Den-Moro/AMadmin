@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -87,8 +88,37 @@ namespace AMadmin.ManagementAgent.Executors
             File.Move(temp, target);
 
             Logger.Info("Файл записан: " + target + (backup != null ? " (старый -> " + Path.GetFileName(backup) + ")" : ""));
-            return Outcome.Success("Записан " + target + " (" + size + " байт за " + seconds.ToString("0.#") + " с)" +
+            var outcome = Outcome.Success("Записан " + target + " (" + size + " байт за " + seconds.ToString("0.#") + " с)" +
                                    (backup != null ? "; прежний файл сохранён как " + Path.GetFileName(backup) : "; прежнего файла не было"));
+
+            // Обновление самого себя (страница «Обновления» на панели) — Windows позволяет
+            // переименовать/заменить файл уже запущенного процесса (он продолжает работать
+            // со старым содержимым через уже открытый хендл), но продолжать работать со
+            // СТАРЫМ кодом до следующей перезагрузки бессмысленно: явно завершаемся после
+            // отчёта, а служба перезапустится сама через уже настроенный `sc failure`
+            // (см. Program.cs) — уже с новым файлом.
+            if (IsSelf(target))
+            {
+                outcome.RestartSelfAfterReport = true;
+                outcome.Output += " Это исполняемый файл самого агента — служба перезапустится с новой версией.";
+            }
+
+            return outcome;
+        }
+
+        private static bool IsSelf(string target)
+        {
+            try
+            {
+                var selfPath = Process.GetCurrentProcess().MainModule.FileName;
+                return string.Equals(Path.GetFullPath(target), Path.GetFullPath(selfPath), StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                // Чтение MainModule в редких средах может бросить (например, нет прав) —
+                // тогда просто не считаем это самообновлением, не более того.
+                return false;
+            }
         }
 
         private static string Sha256Of(string path)

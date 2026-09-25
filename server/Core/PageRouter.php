@@ -31,6 +31,7 @@ class PageRouter
         '/admin/logs' => 'logs/logs.html',
         '/admin/settings' => 'settings/settings.html',
         '/admin/users' => 'users/users.html',
+        '/admin/updates' => 'updates/updates.html',
     );
 
     // Регистрирует в $router только 301-редиректы со старых .html-путей — они не

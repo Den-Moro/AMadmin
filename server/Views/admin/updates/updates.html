@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Обновления — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="page-head">
+        <div>
+            <h1>Обновления</h1>
+            <p class="muted">Загрузите новую версию агента (один или несколько файлов) и отправьте на выбранные
+            кассы за одно действие — под капотом это обычная раскатка файлов (со сравнением по хешу), просто
+            сгруппированная в истории команд.</p>
+        </div>
+    </div>
+
+    <div class="card compact" id="baselineCard" hidden>
+        <h2>Актуальная версия</h2>
+        <p class="muted" style="margin-top:0">Доступно только суперадмину. Показывается на дашборде и здесь как
+        «устаревшие агенты». Если не задать — считается версия, на которой отчиталось больше всего касс.</p>
+        <div class="row" style="align-items:center">
+            <label>Версия<input type="text" id="current_agent_version" placeholder="например, 1.2.3" style="max-width:160px"></label>
+            <button type="button" id="baselineSaveBtn">Сохранить</button>
+        </div>
+    </div>
+
+    <div class="card compact">
+        <h2>Устаревшие хосты</h2>
+        <p class="muted" id="outdatedSummary" style="margin-top:0">—</p>
+        <table id="outdatedTable">
+            <thead><tr><th>Хост</th><th>Магазин</th><th>Версия</th><th>На связи</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="card compact" id="filesAdminCard" hidden>
+        <h2>Файлы</h2>
+        <form id="uploadForm" class="row end">
+            <label>Файл
+                <span class="hint">Например, AMadmin.UiAgent.exe или AMadmin.ManagementAgent.exe. Уже загруженные — ниже.</span>
+                <input type="file" id="uploadFile" required>
+            </label>
+            <button type="submit">Загрузить</button>
+        </form>
+        <table id="filesTable">
+            <thead><tr><th></th><th>Имя</th><th>Размер</th><th>Загружен</th><th>Куда положить на кассе</th></tr></thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="row" style="margin-top:14px">
+            <label>Кому
+                <span class="hint">Перед отправкой панель спросит подтверждение.</span>
+                <select id="targetType">
+                    <option value="all">Всем</option>
+                    <option value="store">Магазину</option>
+                    <option value="group">Группе хостов</option>
+                    <option value="device_type">Типу устройства</option>
+                    <option value="pc">Конкретному ПК</option>
+                </select>
+            </label>
+            <label id="targetIdWrap" style="display:none">Кто именно
+                <select id="targetId"></select>
+                <div id="targetPcPicker" style="display:none"></div>
+            </label>
+        </div>
+        <div class="row">
+            <button type="button" id="sendUpdateBtn" class="primary">Отправить отмеченные файлы</button>
+        </div>
+    </div>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="/admin/updates/updates.js"></script>
+</body>
+</html>

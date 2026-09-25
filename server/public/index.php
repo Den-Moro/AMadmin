@@ -51,6 +51,7 @@ require __DIR__ . '/../Core/NtpClient.php';
 require __DIR__ . '/../Core/ServerMode.php';
 require __DIR__ . '/../Core/ServerMetrics.php';
 require __DIR__ . '/../Core/NetworkSiteMatcher.php';
+require __DIR__ . '/../Core/VersionCompare.php';
 require __DIR__ . '/../Core/Router.php';
 require __DIR__ . '/../Core/PageRouter.php';
 require __DIR__ . '/../Modules/Agent/AgentConfigController.php';
@@ -160,6 +161,7 @@ $router->delete('/admin/manuals/{id}', array('AdminManualsController', 'destroy'
 
 $router->get('/admin/commands', array('AdminCommandsController', 'index'));
 $router->post('/admin/commands', array('AdminCommandsController', 'store'));
+$router->post('/admin/commands/batch', array('AdminCommandsController', 'storeBatch'));
 $router->get('/admin/commands/{id}/results', array('AdminCommandsController', 'results'));
 $router->get('/admin/files', array('AdminFilesController', 'index'));
 $router->post('/admin/files', array('AdminFilesController', 'store'));
