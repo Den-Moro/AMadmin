@@ -18,6 +18,10 @@
     let lastRefresh = null;
 
     if (canEdit) $('adminActions').hidden = false;
+    if (me.role === 'superadmin') {
+        $('onlineWindowCard').hidden = false;
+        Ui.settingsFieldsPanel({ online_window_seconds: 'text' }, 'onlineWindowSaveBtn');
+    }
 
     // ---- Справочники --------------------------------------------------------------------
 

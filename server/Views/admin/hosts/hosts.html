@@ -101,6 +101,16 @@
         <select id="versionFilter"><option value="">Любая версия агента</option></select>
     </div>
 
+    <div class="card" id="onlineWindowCard" hidden style="margin-bottom:10px">
+        <label>Окно «онлайн», секунд
+            <span class="hint">Сколько секунд с последнего опроса касса считается онлайн (влияет на статус
+            здесь и на дашборде). Должно быть заметно больше интервала опроса агентов (обычно 30 с),
+            иначе статусы будут мигать. Доступно только суперадмину.</span>
+            <input type="number" id="online_window_seconds" min="30" max="86400" style="max-width:160px">
+        </label>
+        <div class="row"><button type="button" id="onlineWindowSaveBtn">Сохранить</button></div>
+    </div>
+
     <div class="bulk-bar" id="bulkBar">
         <span>Отмечено: <b id="bulkCount">0</b></span>
         <button type="button" class="small" data-bulk="group">В группу…</button>

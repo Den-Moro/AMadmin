@@ -116,7 +116,7 @@
                         <input type="text" id="deployTargetPath" placeholder="C:\ProfiT\config.ini">
                     </label>
                 </div>
-                <p class="note">Касса сравнит хеш файла у себя с хешем на сервере и скачает только если они отличаются. Скорость и фоновый режим — в Настройках → Команды и файлы.</p>
+                <p class="note">Касса сравнит хеш файла у себя с хешем на сервере и скачает только если они отличаются. Скорость и фоновый режим — на вкладке «Файлы для раскатки» ниже.</p>
             </div>
 
             <div class="row">
@@ -167,6 +167,45 @@
             <tbody></tbody>
         </table>
         <p class="muted">Нажмите на строку — результат с каждой кассы. Таблица обновляется сама каждые 15 секунд.</p>
+
+        <div class="card" id="cmdProtectionCard" data-admin hidden>
+            <h2>Защита от массовой ошибки</h2>
+            <label>Защищённые службы
+                <span class="hint">Эти службы нельзя остановить или перезапустить командой из панели —
+                даже случайно. Через запятую, системные имена как в services.msc. Запуск (start)
+                разрешён всегда.</span>
+                <input type="text" id="protected_services">
+            </label>
+            <label>Защищённые процессы
+                <span class="hint">Эти процессы нельзя завершить командой из панели. Через запятую, без
+                .exe. Обязательно добавьте сюда процесс кассовой программы (например, Профи-Т) —
+                одна ошибка иначе положит кассы во всех магазинах сразу.</span>
+                <input type="text" id="protected_processes">
+            </label>
+            <label>Таймаут скрипта по умолчанию, секунд
+                <span class="hint">Сколько агент ждёт завершения скрипта, если в самой команде время не
+                указано. Потом процесс убивается и приходит статус «timeout». Не больше 600.</span>
+                <input type="number" id="script_timeout_seconds_default" min="1" max="600">
+            </label>
+            <div class="row"><button type="button" id="cmdProtectionSaveBtn">Сохранить</button></div>
+        </div>
+
+        <div class="card" id="cmdServerCard" hidden>
+            <h2>Команды: срок жизни и объём</h2>
+            <p class="muted" style="margin-top:0">Доступно только суперадмину.</p>
+            <label>Срок жизни команды, часов
+                <span class="hint">Касса, которая была выключена дольше этого срока, старые команды уже
+                не получит — чтобы после месяца простоя на неё не обрушились все рестарты и
+                скрипты за это время. В истории панели команды остаются.</span>
+                <input type="number" id="command_ttl_hours" min="1" max="720">
+            </label>
+            <label>Потолок вывода одной команды, КБ
+                <span class="hint">Списки процессов и вывод скриптов длиннее этого обрезаются при сохранении. Хранить
+                мегабайты вывода с каждой из 3000 касс незачем.</span>
+                <input type="number" id="command_output_max_kb" min="1" max="10240">
+            </label>
+            <div class="row"><button type="button" id="cmdServerSaveBtn">Сохранить</button></div>
+        </div>
     </section>
 
     <section class="tab-panel" data-panel="files" hidden>
@@ -184,6 +223,30 @@
             <tbody></tbody>
         </table>
         <p class="muted">Удаляйте файл только когда команды с ним уже выполнены, иначе они завершатся ошибкой на кассах.</p>
+
+        <div class="card" id="fileDeploySettingsCard" data-admin hidden>
+            <h2>Настройки раскатки</h2>
+            <label>
+                <input type="checkbox" id="file_deploy_async">
+                Асинхронная загрузка файлов
+                <span class="hint">Включено: касса качает файл в фоне и тем временем выполняет остальные
+                команды и продолжает выходить на связь. Выключено: пока файл не скачан, другие команды
+                на этой кассе ждут — нужно только если порядок важен (например, сначала файл, потом
+                скрипт, который его использует).</span>
+            </label>
+            <label>Одновременных загрузок на кассу
+                <span class="hint">Сколько файлов одна касса может качать параллельно в асинхронном режиме.
+                1–2 достаточно; больше — только забьёт канал магазина.</span>
+                <input type="number" id="file_deploy_max_parallel" min="1" max="10">
+            </label>
+            <label>Ограничение скорости скачивания, КБ/с
+                <span class="hint">Потолок на одну кассу. 0 — без ограничения. На узком канале поставьте,
+                например, 200 — тогда даже десять касс магазина не заберут весь интернет. Если в config.json
+                кассы задан свой ненулевой лимит, он важнее этого.</span>
+                <input type="number" id="file_deploy_limit_kbps" min="0" max="1000000">
+            </label>
+            <div class="row"><button type="button" id="fileDeploySaveBtn">Сохранить</button></div>
+        </div>
     </section>
 </main>
 

@@ -19,9 +19,10 @@
 
     <div class="tabs">
         <button type="button" class="active" data-tab="notifications">Оповещения</button>
-        <button type="button" data-tab="commands">Команды и файлы</button>
         <button type="button" data-tab="server" id="serverTab" hidden>Сервер</button>
     </div>
+    <p class="muted">Защита команд, раскатка файлов и срок жизни команды — теперь на странице
+    «Команды». Окно «онлайн» — на странице «Хосты».</p>
 
 
     <form id="settingsForm">
@@ -161,56 +162,6 @@
         </div>
         </section>
 
-        <section class="tab-panel" data-panel="commands" hidden>
-        <div class="card">
-            <h2>Удалённое администрирование: защита от массовой ошибки</h2>
-
-            <label>Защищённые службы
-                <span class="hint">Эти службы нельзя остановить или перезапустить командой из панели —
-                даже случайно. Через запятую, системные имена как в services.msc. Запуск (start)
-                разрешён всегда.</span>
-                <input type="text" id="protected_services">
-            </label>
-
-            <label>Защищённые процессы
-                <span class="hint">Эти процессы нельзя завершить командой из панели. Через запятую, без
-                .exe. Обязательно добавьте сюда процесс кассовой программы (например, Профи-Т) —
-                одна ошибка иначе положит кассы во всех магазинах сразу.</span>
-                <input type="text" id="protected_processes">
-            </label>
-
-            <label>Таймаут скрипта по умолчанию, секунд
-                <span class="hint">Сколько агент ждёт завершения скрипта, если в самой команде время не
-                указано. Потом процесс убивается и приходит статус «timeout». Не больше 600.</span>
-                <input type="number" id="script_timeout_seconds_default" min="1" max="600">
-            </label>
-        </div>
-        <div class="card">
-            <h2>Раскатка файлов на кассы</h2>
-
-            <label>Асинхронная загрузка файлов
-                <span class="hint">Включено: касса качает файл в фоне и тем временем выполняет остальные
-                команды и продолжает выходить на связь. Выключено: пока файл не скачан, другие команды
-                на этой кассе ждут — нужно только если порядок важен (например, сначала файл, потом
-                скрипт, который его использует).</span>
-                <input type="checkbox" id="file_deploy_async">
-            </label>
-
-            <label>Одновременных загрузок на кассу
-                <span class="hint">Сколько файлов одна касса может качать параллельно в асинхронном режиме.
-                1–2 достаточно; больше — только забьёт канал магазина.</span>
-                <input type="number" id="file_deploy_max_parallel" min="1" max="10">
-            </label>
-
-            <label>Ограничение скорости скачивания, КБ/с
-                <span class="hint">Потолок на одну кассу. 0 — без ограничения. На узком канале поставьте,
-                например, 200 — тогда даже десять касс магазина не заберут весь интернет. Если в config.json
-                кассы задан свой ненулевой лимит, он важнее этого.</span>
-                <input type="number" id="file_deploy_limit_kbps" min="0" max="1000000">
-            </label>
-        </div>
-        </section>
-
         <section class="tab-panel" data-panel="server" hidden>
             <p class="note warn">Эти настройки меняют поведение самого сервера и защиту входа в панель — доступны только суперадмину.</p>
         <div class="card">
@@ -224,11 +175,6 @@
                     <option value="warning">warning — только подозрительное</option>
                     <option value="error">error — только сбои</option>
                 </select>
-            </label>
-            <label>Окно «онлайн», секунд
-                <span class="hint">Сколько секунд с последнего опроса касса считается онлайн на дашборде. Должно быть
-                заметно больше интервала опроса агентов (обычно 30 с), иначе статусы будут мигать.</span>
-                <input type="number" id="online_window_seconds" min="30" max="86400">
             </label>
         </div>
 
@@ -248,21 +194,6 @@
             </label>
         </div>
 
-        <div class="card">
-            <h2>Команды</h2>
-            <label>Срок жизни команды, часов
-                <span class="hint">Касса, которая была выключена дольше этого срока, старые команды уже
-                не получит — чтобы после месяца простоя на неё не обрушились все рестарты и
-                скрипты за это время. В истории панели команды остаются.</span>
-                <input type="number" id="command_ttl_hours" min="1" max="720">
-            </label>
-
-            <label>Потолок вывода одной команды, КБ
-                <span class="hint">Списки процессов и вывод скриптов длиннее этого обрезаются при сохранении. Хранить
-                мегабайты вывода с каждой из 3000 касс незачем.</span>
-                <input type="number" id="command_output_max_kb" min="1" max="10240">
-            </label>
-        </div>
         </section>
 
         <div class="card" id="saveBar">

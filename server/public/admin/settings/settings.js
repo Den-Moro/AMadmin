@@ -9,10 +9,7 @@
         accidental_tap_guard_ms: 'text', catchup_missed_default: 'bool', timezone: 'text',
         quiet_hours_enabled: 'bool', quiet_hours_from: 'text', quiet_hours_to: 'text', sound_on_important: 'bool',
         brand_name: 'text', brand_contact: 'text',
-        protected_services: 'text', protected_processes: 'text', script_timeout_seconds_default: 'text',
-        file_deploy_async: 'bool', file_deploy_max_parallel: 'text', file_deploy_limit_kbps: 'text',
-        log_level: 'text', online_window_seconds: 'text', login_max_attempts: 'text', login_lockout_minutes: 'text',
-        session_lifetime_hours: 'text', command_ttl_hours: 'text', command_output_max_kb: 'text',
+        log_level: 'text', login_max_attempts: 'text', login_lockout_minutes: 'text', session_lifetime_hours: 'text',
     };
 
     const canEdit = me.role === 'administrator' || me.role === 'superadmin';

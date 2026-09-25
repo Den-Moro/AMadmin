@@ -6,6 +6,16 @@
     if (canEdit) {
         $('adminActions').hidden = false;
         document.querySelectorAll('[data-admin]').forEach(function (el) { el.hidden = false; });
+        Ui.settingsFieldsPanel({
+            protected_services: 'text', protected_processes: 'text', script_timeout_seconds_default: 'text',
+        }, 'cmdProtectionSaveBtn');
+        Ui.settingsFieldsPanel({
+            file_deploy_async: 'bool', file_deploy_max_parallel: 'text', file_deploy_limit_kbps: 'text',
+        }, 'fileDeploySaveBtn');
+    }
+    if (me.role === 'superadmin') {
+        $('cmdServerCard').hidden = false;
+        Ui.settingsFieldsPanel({ command_ttl_hours: 'text', command_output_max_kb: 'text' }, 'cmdServerSaveBtn');
     }
 
     // ---- Вкладки и форма --------------------------------------------------------------

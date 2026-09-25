@@ -322,11 +322,46 @@ const Ui = (function () {
         return { getPicked: function () { return picked; } };
     }
 
+    // ---- Часть глобальных настроек вне страницы «Настройки» -----------------------------
+
+    // Часть ключей из общей таблицы settings удобнее редактировать там, где они реально
+    // применяются (например, лимиты раскатки файлов — на странице «Команды»), а не только
+    // в общем разделе «Настройки». Сам себя загружает (GET /admin/settings, как и полная
+    // страница настроек) и сохраняет по клику на saveBtnId — эта же таблица settings,
+    // те же ключи, просто разбросаны по разным страницам панели вместо одной.
+    //   fields: { key: 'text'|'bool', ... } — id полей в DOM должны совпадать с ключами.
+    function settingsFieldsPanel(fields, saveBtnId) {
+        async function load() {
+            const settings = await Api.get('/admin/settings');
+            Object.keys(fields).forEach(function (key) {
+                const el = $(key);
+                if (!el || settings[key] === undefined) return;
+                if (fields[key] === 'bool') el.checked = settings[key] === '1';
+                else el.value = settings[key];
+            });
+        }
+        $(saveBtnId).addEventListener('click', async function () {
+            const body = {};
+            Object.keys(fields).forEach(function (key) {
+                const el = $(key);
+                if (el) body[key] = fields[key] === 'bool' ? (el.checked ? '1' : '0') : el.value;
+            });
+            try {
+                await Api.request('PUT', '/admin/settings', body);
+                toast('Сохранено', 'success');
+            } catch (err) {
+                toast('Не удалось сохранить: ' + reason(err, { server_settings_require_superadmin: 'эти настройки может менять только суперадмин' }), 'error');
+            }
+        });
+        load();
+    }
+
     initTheme();
 
     return {
         $: $, escapeHtml: escapeHtml, formatSize: formatSize, toast: toast, reason: reason,
         modal: modal, confirm: confirm, prompt: prompt, menu: menu, toggleTheme: toggleTheme, toggleDetail: toggleDetail,
         makeSortable: makeSortable, compareBy: compareBy, pcLabel: pcLabel, pcMatches: pcMatches, pcPicker: pcPicker,
+        settingsFieldsPanel: settingsFieldsPanel,
     };
 })();
