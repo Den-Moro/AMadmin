@@ -97,6 +97,7 @@
                 '<td class="check"><input type="checkbox" data-select' + (selected.has(pc.id) ? ' checked' : '') + '></td>' +
                 '<td><span class="badge ' + (pc.online ? 'badge-online' : 'badge-offline') + '">' + (pc.online ? 'онлайн' : 'офлайн') + '</span></td>' +
                 '<td><a class="host-link" href="/admin/hosts/host?id=' + pc.id + '">' + esc(name) + '</a>' +
+                    (pc.excluded_from_stats ? ' <span class="muted" title="Исключён из статистики' + (pc.excluded_reason ? ': ' + esc(pc.excluded_reason) : '') + '">⊘</span>' : '') +
                     (pc.display_name ? '<div class="muted">' + esc(pc.hostname) + '</div>' : '') +
                     (pc.username ? '<div class="muted">' + esc(pc.username) + '</div>' : '') + '</td>' +
                 '<td>' + esc(pc.store_name) + '</td>' +
@@ -255,11 +256,15 @@
             body: '<label>Понятное имя<span class="hint">Пусто — будет показываться hostname.</span><input type="text" id="edName" value="' + esc(pc.display_name || '') + '"></label>' +
                 '<div class="row"><label>Магазин<select id="edStore">' + opts(stores, pc.store_id, storeLabel) + '</select></label>' +
                 '<label>Тип устройства<select id="edType">' + opts(deviceTypes, pc.device_type_id, nameLabel) + '</select></label></div>' +
+                '<label><input type="checkbox" id="edExcluded"' + (pc.excluded_from_stats ? ' checked' : '') + '> Исключить из статистики' +
+                '<span class="hint">Не учитывается в процентах онлайн/офлайн на дашборде — но остаётся в этом списке. Для планово недоступных касс (ремонт, переезд).</span></label>' +
+                '<label>Причина исключения (необязательно)<input type="text" id="edExcludedReason" value="' + esc(pc.excluded_reason || '') + '" placeholder="например, магазин закрыт на ремонт"></label>' +
                 '<p class="error modal-error"></p>',
             buttons: [{ label: 'Отмена', value: null }, { label: 'Сохранить', value: 'submit', kind: 'primary' }],
             onSubmit: async function (root) {
                 await Api.request('PUT', '/admin/pcs/' + pc.id, {
                     display_name: root.querySelector('#edName').value, store_id: root.querySelector('#edStore').value, device_type_id: root.querySelector('#edType').value,
+                    excluded_from_stats: root.querySelector('#edExcluded').checked ? 1 : 0, excluded_reason: root.querySelector('#edExcludedReason').value,
                 });
             },
         }).then(function (v) { if (v) { Ui.toast('Сохранено', 'success'); loadPcs(); } });

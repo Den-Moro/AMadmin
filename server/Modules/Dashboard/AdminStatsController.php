@@ -16,27 +16,32 @@ class AdminStatsController
 
         $onlineExpr = "(p.last_seen IS NOT NULL AND (julianday('now') - julianday(p.last_seen)) * 86400.0 <= {$window})";
 
+        // excluded_from_stats — планово недоступный хост (ремонт, переезд магазина и т.п.):
+        // остаётся в списке «Хосты», но не портит общие проценты онлайн/офлайн здесь.
         $pcs = $db->query("
             SELECT COUNT(*) AS total,
                    SUM(CASE WHEN {$onlineExpr} THEN 1 ELSE 0 END) AS online,
                    SUM(CASE WHEN p.last_seen IS NULL THEN 1 ELSE 0 END) AS never_seen,
                    SUM(CASE WHEN p.last_seen IS NOT NULL AND (julianday('now') - julianday(p.last_seen)) > 1 THEN 1 ELSE 0 END) AS silent_day
             FROM pcs p
+            WHERE p.excluded_from_stats = 0
         ")->fetch();
 
+        // Условие исключения — в самом LEFT JOIN, не в WHERE: иначе магазин, где остались
+        // только исключённые ПК, пропал бы из вывода целиком вместо total=0.
         $stores = $db->query("
             SELECT s.id, s.name, s.is_pilot,
                    COUNT(p.id) AS total,
                    SUM(CASE WHEN {$onlineExpr} THEN 1 ELSE 0 END) AS online
             FROM stores s
-            LEFT JOIN pcs p ON p.store_id = s.id
+            LEFT JOIN pcs p ON p.store_id = s.id AND p.excluded_from_stats = 0
             GROUP BY s.id
             ORDER BY s.name
         ")->fetchAll();
 
         $versions = $db->query("
             SELECT COALESCE(agent_version, '—') AS version, COUNT(*) AS count
-            FROM pcs GROUP BY agent_version ORDER BY count DESC
+            FROM pcs WHERE excluded_from_stats = 0 GROUP BY agent_version ORDER BY count DESC
         ")->fetchAll();
 
         $day = "datetime('now', '-1 day')";

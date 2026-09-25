@@ -54,6 +54,7 @@ class AdminPcsController
             SELECT
                 p.id, p.hostname, p.username, p.display_name, p.last_seen, p.agent_version, p.last_ip,
                 p.agent_token, p.store_id, p.device_type_id, p.created_at,
+                p.excluded_from_stats, p.excluded_reason,
                 s.name AS store_name,
                 dt.name AS device_type_name,
                 (julianday('now') - julianday(p.last_seen)) * 86400.0 AS seconds_since_seen,
@@ -236,6 +237,14 @@ class AdminPcsController
         if (!empty($body['device_type_id'])) {
             $fields[] = 'device_type_id = :device_type_id';
             $params['device_type_id'] = (int) $body['device_type_id'];
+        }
+        if (array_key_exists('excluded_from_stats', $body)) {
+            $fields[] = 'excluded_from_stats = :excluded_from_stats';
+            $params['excluded_from_stats'] = !empty($body['excluded_from_stats']) ? 1 : 0;
+        }
+        if (array_key_exists('excluded_reason', $body)) {
+            $fields[] = 'excluded_reason = :excluded_reason';
+            $params['excluded_reason'] = trim((string) $body['excluded_reason']) !== '' ? trim($body['excluded_reason']) : null;
         }
         if (!$fields) {
             http_response_code(400);
