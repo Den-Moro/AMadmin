@@ -42,7 +42,8 @@ class Auth
                 last_seen = CURRENT_TIMESTAMP,
                 agent_version = COALESCE(:version, agent_version),
                 hostname = COALESCE(:hostname, hostname),
-                username = COALESCE(:username, username)
+                username = COALESCE(:username, username),
+                last_ip = COALESCE(:ip, last_ip)
             WHERE id = :id
         ');
         $stmt->execute(array(
@@ -50,6 +51,7 @@ class Auth
             'version'  => isset($_SERVER['HTTP_X_AGENT_VERSION']) ? $_SERVER['HTTP_X_AGENT_VERSION'] : null,
             'hostname' => isset($_SERVER['HTTP_X_AGENT_HOSTNAME']) ? $_SERVER['HTTP_X_AGENT_HOSTNAME'] : null,
             'username' => $withUsername && isset($_SERVER['HTTP_X_AGENT_USERNAME']) ? $_SERVER['HTTP_X_AGENT_USERNAME'] : null,
+            'ip'       => isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null,
         ));
     }
 

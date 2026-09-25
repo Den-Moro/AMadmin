@@ -132,6 +132,7 @@
                 </label>
                 <label id="targetIdWrap" style="display:none">Кто именно
                     <select id="targetId"></select>
+                    <div id="targetPcPicker" style="display:none"></div>
                 </label>
             </div>
 
@@ -155,10 +156,10 @@
         <table id="commandsTable">
             <thead>
                 <tr>
-                    <th>Когда</th>
+                    <th class="sortable desc" data-sort="created_at">Когда</th>
                     <th>Команда</th>
                     <th>Кому</th>
-                    <th>Автор</th>
+                    <th class="sortable" data-sort="created_by_username">Автор</th>
                     <th>Результаты</th>
                     <th></th>
                 </tr>

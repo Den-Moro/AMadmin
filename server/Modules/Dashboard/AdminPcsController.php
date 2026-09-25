@@ -52,7 +52,7 @@ class AdminPcsController
         $window = Settings::int('online_window_seconds', self::ONLINE_WINDOW_SECONDS);
         $sql = "
             SELECT
-                p.id, p.hostname, p.username, p.display_name, p.last_seen, p.agent_version,
+                p.id, p.hostname, p.username, p.display_name, p.last_seen, p.agent_version, p.last_ip,
                 p.agent_token, p.store_id, p.device_type_id, p.created_at,
                 s.name AS store_name,
                 dt.name AS device_type_name,

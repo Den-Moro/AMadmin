@@ -49,16 +49,21 @@
             fact('Hostname', esc(pc.hostname)) +
             fact('Понятное имя', esc(pc.display_name || '—')) +
             fact('Пользователь Windows', esc(pc.username || '—')) +
+            fact('IP', pc.last_ip ? '<span class="ip-copy" data-ip="' + esc(pc.last_ip) + '" title="Скопировать IP">' + esc(pc.last_ip) + '</span>' : '—') +
             fact('Магазин', '<a href="/admin/hosts/hosts.html?store_id=' + pc.store_id + '">' + esc(pc.store_name) + '</a>') +
             fact('Тип устройства', esc(pc.device_type_name)) +
             fact('Версия агента', esc(pc.agent_version || 'не отчитался')) +
             fact('Заведён', esc(formatServerTime(pc.created_at))) +
             fact('ID', '#' + pc.id);
 
+        const okCount = data.totals.results - data.totals.failed;
+        const rate = data.totals.results ? Math.round((okCount / data.totals.results) * 100) : null;
         $('totals').innerHTML =
             fact('Подтверждений оповещений', data.totals.acks) +
             fact('Выполнено команд', data.totals.results) +
-            fact('Из них с ошибкой', data.totals.failed);
+            fact('Успешно', '<span class="badge badge-success">' + okCount + '</span>') +
+            fact('С ошибкой', data.totals.failed ? '<span class="badge badge-failed">' + data.totals.failed + '</span>' : '0') +
+            (rate !== null ? fact('Надёжность', rate + '%') : '');
 
         $('groups').innerHTML = data.groups.length
             ? data.groups.map(function (g) { return '<a href="/admin/hosts/hosts.html?group_id=' + g.id + '"><span class="badge badge-accent">' + esc(g.name) + '</span></a> '; }).join('')
@@ -96,6 +101,12 @@
             if (v === 'download') { const a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(buildConfigText(token)); a.download = 'config.json'; a.click(); }
         });
     }
+
+    $('facts').addEventListener('click', function (e) {
+        const ip = e.target.closest('.ip-copy');
+        if (!ip) return;
+        navigator.clipboard.writeText(ip.dataset.ip).then(function () { Ui.toast('IP скопирован: ' + ip.dataset.ip, 'success'); });
+    });
 
     $('refreshBtn').addEventListener('click', async function () { await load(); Ui.toast('Обновлено', 'success'); });
     $('notifyBtn').addEventListener('click', function () { window.location.href = '/admin/notifications/notifications.html?pc=' + id; });

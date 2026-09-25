@@ -328,6 +328,13 @@ table {
 
 th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
 th { background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text); }
+th.sortable::after { content: ''; display: inline-block; width: 0; height: 0; margin-left: 5px; vertical-align: middle;
+    border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid currentColor;
+    opacity: 0; transition: opacity .15s, transform .15s; }
+th.sortable.asc::after, th.sortable.desc::after { opacity: .6; }
+th.sortable.desc::after { transform: rotate(180deg); }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--surface-2); }
 tbody tr.open td { background: var(--surface-2); }
@@ -448,6 +455,25 @@ pre.output {
 .menu button:hover { background: var(--surface-2); }
 .menu button.danger { color: var(--danger); }
 .menu button.danger:hover { background: var(--danger-soft); }
+
+/* ---------- Поиск ПК (Ui.pcPicker) — вместо голого <select> там, где выбирают хост ---------- */
+
+.pc-picker { position: relative; }
+.pc-picker-search { width: 100%; }
+.pc-picker-list {
+    position: absolute; z-index: 800; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow-y: auto;
+    padding: 6px; background: var(--surface-3); border: 1px solid var(--border-strong); border-radius: 12px;
+    box-shadow: 0 16px 40px -14px rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; gap: 2px;
+}
+.pc-picker-list button {
+    justify-content: flex-start; text-align: left; border: none; background: transparent; border-radius: 8px;
+    padding: 8px 10px; font-weight: 400; font-size: 13px; width: 100%;
+}
+.pc-picker-list button:hover { background: var(--surface-2); }
+.pc-picker-empty { padding: 8px 10px; color: var(--muted); font-size: 13px; }
+
+.ip-copy { cursor: pointer; border-bottom: 1px dotted var(--muted); font-variant-numeric: tabular-nums; }
+.ip-copy:hover { color: var(--text); border-bottom-color: var(--text); }
 
 /* ---------- Список с чекбоксами (выбор ПК) ---------- */
 

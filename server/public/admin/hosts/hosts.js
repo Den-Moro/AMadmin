@@ -14,7 +14,6 @@
     let stores = [], deviceTypes = [], groups = [];
     let pcs = [];                 // то, что вернул сервер по текущим фильтрам
     let page = 0;
-    let sort = { key: 'last_seen', dir: 'desc' };
     const selected = new Set();   // id отмеченных ПК
     let lastRefresh = null;
 
@@ -69,14 +68,8 @@
     function visibleRows() {
         const v = $('versionFilter').value;
         let rows = pcs.filter(function (p) { return !v || (p.agent_version || '—') === v; });
-        const k = sort.key, dir = sort.dir === 'asc' ? 1 : -1;
         rows.sort(function (a, b) {
-            let x = a[k], y = b[k];
-            if (k === 'online') { x = a.online ? 1 : 0; y = b.online ? 1 : 0; }
-            if (x == null) return 1;
-            if (y == null) return -1;
-            if (typeof x === 'string') return x.localeCompare(y) * dir;
-            return (x - y) * dir;
+            return Ui.compareBy(a, b, sort, sort.key === 'online' ? { map: function (p) { return p.online ? 1 : 0; } } : null);
         });
         return rows;
     }
@@ -90,7 +83,7 @@
         tbody.innerHTML = '';
 
         if (!slice.length) {
-            tbody.innerHTML = '<tr><td colspan="9" class="empty">Ничего не найдено.' + (canEdit && !pcs.length ? ' Добавьте ПК кнопкой справа сверху.' : '') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="empty">Ничего не найдено.' + (canEdit && !pcs.length ? ' Добавьте ПК кнопкой справа сверху.' : '') + '</td></tr>';
         }
         slice.forEach(function (pc) {
             const tr = document.createElement('tr');
@@ -103,6 +96,7 @@
                     (pc.display_name ? '<div class="muted">' + esc(pc.hostname) + '</div>' : '') +
                     (pc.username ? '<div class="muted">' + esc(pc.username) + '</div>' : '') + '</td>' +
                 '<td>' + esc(pc.store_name) + '</td>' +
+                '<td class="muted">' + (pc.last_ip ? '<span class="ip-copy" data-ip="' + esc(pc.last_ip) + '" title="Скопировать IP">' + esc(pc.last_ip) + '</span>' : '—') + '</td>' +
                 '<td>' + esc(pc.device_type_name) + '</td>' +
                 '<td class="muted">' + esc(pc.groups || '—') + '</td>' +
                 '<td>' + esc(pc.agent_version || '—') + '</td>' +
@@ -153,15 +147,7 @@
 
     // ---- Сортировка, страницы, фильтры -----------------------------------------------
 
-    document.querySelectorAll('th.sortable').forEach(function (th) {
-        th.addEventListener('click', function () {
-            if (sort.key === th.dataset.sort) sort.dir = sort.dir === 'asc' ? 'desc' : 'asc';
-            else { sort.key = th.dataset.sort; sort.dir = 'asc'; }
-            document.querySelectorAll('th.sortable').forEach(function (x) { x.classList.remove('asc', 'desc'); });
-            th.classList.add(sort.dir);
-            render();
-        });
-    });
+    const sort = Ui.makeSortable(document.querySelector('#pcsTable'), { key: 'last_seen', dir: 'desc' }, render);
     $('prevBtn').addEventListener('click', function () { page--; render(); });
     $('nextBtn').addEventListener('click', function () { page++; render(); });
 
@@ -276,6 +262,9 @@
     }
 
     document.querySelector('#pcsTable tbody').addEventListener('click', async function (e) {
+        const ip = e.target.closest('.ip-copy');
+        if (ip) { navigator.clipboard.writeText(ip.dataset.ip).then(function () { Ui.toast('IP скопирован: ' + ip.dataset.ip, 'success'); }); return; }
+
         const btn = e.target.closest('button[data-act]');
         if (!btn) return;
         const pc = pcs.find(function (p) { return String(p.id) === btn.closest('tr').dataset.id; });

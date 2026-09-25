@@ -232,10 +232,101 @@ const Ui = (function () {
         return row;
     }
 
+    // ---- Сортировка таблиц по клику на заголовок -----------------------------------------
+
+    // Вешает обработчики на все th.sortable[data-sort] внутри container. При клике меняет
+    // sort.key/sort.dir (тот же объект, что возвращён — страница читает его в своей
+    // функции рендера) и красит стрелку (.asc/.desc), затем вызывает onSort(). Сам не
+    // перерисовывает таблицу — так каждая страница остаётся владельцем своих данных и
+    // прочих клиентских фильтров (как уже было в hosts.js, только без copy-paste).
+    function makeSortable(container, initial, onSort) {
+        const sort = { key: initial.key, dir: initial.dir };
+        const ths = container.querySelectorAll('th.sortable');
+        ths.forEach(function (th) {
+            if (th.dataset.sort === sort.key) th.classList.add(sort.dir);
+            th.addEventListener('click', function () {
+                if (sort.key === th.dataset.sort) sort.dir = sort.dir === 'asc' ? 'desc' : 'asc';
+                else { sort.key = th.dataset.sort; sort.dir = 'asc'; }
+                ths.forEach(function (x) { x.classList.remove('asc', 'desc'); });
+                th.classList.add(sort.dir);
+                onSort();
+            });
+        });
+        return sort;
+    }
+
+    // Сравнение двух строк по sort.key/sort.dir — null-ы в конец, строки через localeCompare,
+    // числа/даты вычитанием. opts.map(row) — если значение для сравнения не лежит прямо в
+    // row[key] (например булево online -> 0/1, как в hosts.js).
+    function compareBy(a, b, sort, opts) {
+        opts = opts || {};
+        const x = opts.map ? opts.map(a) : a[sort.key];
+        const y = opts.map ? opts.map(b) : b[sort.key];
+        const d = sort.dir === 'asc' ? 1 : -1;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        if (typeof x === 'string') return x.localeCompare(y) * d;
+        return (x - y) * d;
+    }
+
+    // ---- Поиск/фильтр списка хостов — используется везде, где раньше был голый <select>
+    // со всеми ПК (командам/оповещениям — кого выбрать; группам — кого добавить). ------------
+
+    // pcs: [{id, hostname, display_name, store_name, last_ip, ...}]. Возвращает подпись
+    // "имя · магазин · ip" — IP виден сразу, без отдельного похода в профиль хоста.
+    function pcLabel(pc) {
+        const name = pc.display_name || pc.hostname;
+        const bits = [name];
+        if (pc.store_name) bits.push(pc.store_name);
+        if (pc.last_ip) bits.push(pc.last_ip);
+        return bits.join(' · ');
+    }
+
+    function pcMatches(pc, q) {
+        if (!q) return true;
+        q = q.toLowerCase();
+        return [pc.hostname, pc.display_name, pc.store_name, pc.last_ip].some(function (v) {
+            return v && String(v).toLowerCase().indexOf(q) !== -1;
+        });
+    }
+
+    // Заменяет обычный <select multiple=false> живым текстовым поиском + списком: строит
+    // разметку внутри container (должен быть пустым div), фильтрует pcs клиентски (наборы
+    // тут не тысячи строк — отдельный API для поиска не нужен). onChange(pc|null).
+    function pcPicker(container, pcs, onChange) {
+        container.classList.add('pc-picker');
+        container.innerHTML =
+            '<input type="text" class="pc-picker-search" placeholder="Поиск: имя, магазин, IP…">' +
+            '<div class="pc-picker-list" hidden></div>';
+        const input = container.querySelector('.pc-picker-search');
+        const list = container.querySelector('.pc-picker-list');
+        let picked = null;
+
+        function render(q) {
+            const rows = pcs.filter(function (pc) { return pcMatches(pc, q); }).slice(0, 50);
+            list.innerHTML = rows.length
+                ? rows.map(function (pc) { return '<button type="button" data-id="' + pc.id + '">' + escapeHtml(pcLabel(pc)) + '</button>'; }).join('')
+                : '<div class="pc-picker-empty">Ничего не найдено</div>';
+        }
+        input.addEventListener('focus', function () { render(input.value); list.hidden = false; });
+        input.addEventListener('input', function () { render(input.value); list.hidden = false; });
+        input.addEventListener('blur', function () { setTimeout(function () { list.hidden = true; }, 150); });
+        list.addEventListener('mousedown', function (e) {
+            const btn = e.target.closest('button[data-id]');
+            if (!btn) return;
+            picked = pcs.find(function (pc) { return String(pc.id) === btn.dataset.id; }) || null;
+            input.value = picked ? pcLabel(picked) : '';
+            list.hidden = true;
+            onChange(picked);
+        });
+        return { getPicked: function () { return picked; } };
+    }
+
     initTheme();
 
     return {
         $: $, escapeHtml: escapeHtml, formatSize: formatSize, toast: toast, reason: reason,
         modal: modal, confirm: confirm, prompt: prompt, menu: menu, toggleTheme: toggleTheme, toggleDetail: toggleDetail,
+        makeSortable: makeSortable, compareBy: compareBy, pcLabel: pcLabel, pcMatches: pcMatches, pcPicker: pcPicker,
     };
 })();

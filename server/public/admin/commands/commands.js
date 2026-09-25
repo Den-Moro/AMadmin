@@ -39,14 +39,36 @@
     const targetIdEl = $('targetId');
     const optionsCache = {};
 
+    const targetPcPickerEl = $('targetPcPicker');
+
+    // Для type=pc список ПК может быть большим — вместо голого <select> даём поиск по
+    // имени/магазину/IP (Ui.pcPicker). Выбор пишется обратно в скрытый #targetId, чтобы
+    // весь остальной код (submit, estimateTargetCount, prefill) не знал о разнице.
     async function loadTargetOptions(type, selectedId) {
         if (type === 'all') { targetIdWrap.style.display = 'none'; return; }
         targetIdWrap.style.display = '';
-        targetIdEl.innerHTML = '<option value="">Загрузка…</option>';
         if (!optionsCache[type]) {
             const endpoints = { store: '/admin/stores', group: '/admin/host-groups', device_type: '/admin/device-types', pc: '/admin/pcs' };
             optionsCache[type] = await Api.get(endpoints[type]);
         }
+
+        if (type === 'pc') {
+            targetIdEl.style.display = 'none';
+            targetPcPickerEl.style.display = '';
+            targetIdEl.innerHTML = '';
+            const selected = selectedId && optionsCache.pc.find(function (pc) { return String(pc.id) === String(selectedId); });
+            Ui.pcPicker(targetPcPickerEl, optionsCache.pc, function (pc) {
+                targetIdEl.innerHTML = pc ? '<option value="' + pc.id + '" selected>' + Ui.escapeHtml(Ui.pcLabel(pc)) + '</option>' : '';
+            });
+            if (selected) {
+                targetPcPickerEl.querySelector('.pc-picker-search').value = Ui.pcLabel(selected);
+                targetIdEl.innerHTML = '<option value="' + selected.id + '" selected>' + Ui.escapeHtml(Ui.pcLabel(selected)) + '</option>';
+            }
+            return;
+        }
+
+        targetIdEl.style.display = '';
+        targetPcPickerEl.style.display = 'none';
         targetIdEl.innerHTML = '';
         optionsCache[type].forEach(function (item) {
             const opt = document.createElement('option');
@@ -264,7 +286,7 @@
         tbody.innerHTML = '';
         const visible = commands.filter(function (c) {
             return (!tf || c.type === tf) && (!q || describeCommand(c).toLowerCase().indexOf(q) >= 0);
-        });
+        }).sort(function (a, b) { return Ui.compareBy(a, b, sort); });
         if (!visible.length) {
             tbody.innerHTML = '<tr><td colspan="6" class="empty">Команд пока не было.</td></tr>';
             return;
@@ -314,6 +336,7 @@
     $('search').addEventListener('input', loadCommands);
     $('typeFilter').addEventListener('change', loadCommands);
     $('refreshBtn').addEventListener('click', loadCommands);
+    const sort = Ui.makeSortable(document.querySelector('#commandsTable'), { key: 'created_at', dir: 'desc' }, loadCommands);
 
     await loadFiles();
     await loadCommands();
