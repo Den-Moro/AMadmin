@@ -29,6 +29,8 @@ class AdminPcsController
     // Фильтры списка из query string. Одни и те же для таблицы хостов и для выгрузки
     // конфигов архивом — "что вижу в списке, то и выгружается".
     //   store_id, device_type_id, group_id — привязки;
+    //   site_id — узел («Узлы» на странице «Хосты»); специальное значение "none" —
+    //   ПК без узла (питает кнопку «Разобрать»), не настоящий id;
     //   search — hostname / пользователь / понятное имя / магазин;
     //   state — online | offline | never (ни разу не выходил) | silent (молчит > суток);
     //   ids — "1,2,3": только эти ПК (выгрузка конфигов для отмеченных строк).
@@ -38,6 +40,7 @@ class AdminPcsController
             'store_id'       => isset($_GET['store_id']) && $_GET['store_id'] !== '' ? (int) $_GET['store_id'] : null,
             'device_type_id' => isset($_GET['device_type_id']) && $_GET['device_type_id'] !== '' ? (int) $_GET['device_type_id'] : null,
             'group_id'       => isset($_GET['group_id']) && $_GET['group_id'] !== '' ? (int) $_GET['group_id'] : null,
+            'site_id'        => isset($_GET['site_id']) && $_GET['site_id'] !== '' ? $_GET['site_id'] : null,
             'search'         => isset($_GET['search']) ? trim($_GET['search']) : '',
             'state'          => isset($_GET['state']) ? $_GET['state'] : '',
             'ids'            => isset($_GET['ids']) && $_GET['ids'] !== ''
@@ -73,6 +76,14 @@ class AdminPcsController
         if (!empty($f['device_type_id'])) {
             $sql .= ' AND p.device_type_id = :device_type_id';
             $params['device_type_id'] = $f['device_type_id'];
+        }
+        if (!empty($f['site_id'])) {
+            if ($f['site_id'] === 'none') {
+                $sql .= ' AND p.id NOT IN (SELECT pc_id FROM network_site_members)';
+            } else {
+                $sql .= ' AND p.id IN (SELECT pc_id FROM network_site_members WHERE site_id = :site_id)';
+                $params['site_id'] = (int) $f['site_id'];
+            }
         }
         if (!empty($f['group_id'])) {
             $sql .= ' AND p.id IN (SELECT pc_id FROM host_group_members WHERE group_id = :group_id)';

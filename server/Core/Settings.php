@@ -22,6 +22,8 @@ class Settings
         'ntp_server_address',
         'ntp_drift_threshold_seconds',
         'ntp_check_interval_seconds',
+        'network_site_status_green_min_percent',
+        'network_site_status_red_max_percent',
     );
 
     public static function all()

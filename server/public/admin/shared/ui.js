@@ -357,12 +357,38 @@ const Ui = (function () {
         load();
     }
 
+    // ---- Drag-n-drop: перетаскивание хоста между узлами (вкладка «Узлы») ----------------
+
+    // Источник перетаскивания — в dataTransfer кладётся value текстом (например, id ПК).
+    // Нативный HTML5 DnD, без библиотек.
+    function makeDraggable(el, value) {
+        el.draggable = true;
+        el.addEventListener('dragstart', function (e) {
+            e.dataTransfer.setData('text/plain', String(value));
+            e.dataTransfer.effectAllowed = 'move';
+        });
+    }
+
+    // Цель — onDrop(value) вызывается с тем, что положил makeDraggable; hoverClass
+    // подсвечивает цель, пока над ней тащат.
+    function makeDropTarget(el, onDrop, hoverClass) {
+        hoverClass = hoverClass || 'drop-hover';
+        el.addEventListener('dragover', function (e) { e.preventDefault(); el.classList.add(hoverClass); });
+        el.addEventListener('dragleave', function () { el.classList.remove(hoverClass); });
+        el.addEventListener('drop', function (e) {
+            e.preventDefault();
+            el.classList.remove(hoverClass);
+            const value = e.dataTransfer.getData('text/plain');
+            if (value) onDrop(value);
+        });
+    }
+
     initTheme();
 
     return {
         $: $, escapeHtml: escapeHtml, formatSize: formatSize, toast: toast, reason: reason,
         modal: modal, confirm: confirm, prompt: prompt, menu: menu, toggleTheme: toggleTheme, toggleDetail: toggleDetail,
         makeSortable: makeSortable, compareBy: compareBy, pcLabel: pcLabel, pcMatches: pcMatches, pcPicker: pcPicker,
-        settingsFieldsPanel: settingsFieldsPanel,
+        settingsFieldsPanel: settingsFieldsPanel, makeDraggable: makeDraggable, makeDropTarget: makeDropTarget,
     };
 })();

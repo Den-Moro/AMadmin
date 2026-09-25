@@ -23,6 +23,24 @@
     th.sortable.asc::after { content: " ▲"; } th.sortable.desc::after { content: " ▼"; }
     .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: -12px; }
     @media (max-width: 900px) { .filters-grid { grid-template-columns: 1fr 1fr; } }
+
+    /* Вкладка «Узлы»: карточки сетей + карточка «Без узла», раскрываются по клику. */
+    .sites-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+    .site-card { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    .site-card.drop-hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+    .site-card.open { border-color: var(--border-strong); }
+    .site-card-head { display: flex; align-items: center; gap: 8px; }
+    .site-card-head b { flex: 1; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+    .status-dot.green { background: var(--success); }
+    .status-dot.yellow { background: var(--warning); }
+    .status-dot.red { background: var(--danger); }
+    .status-dot.empty { background: none; border: 2px solid var(--border-strong); }
+    .site-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .site-detail { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+    .site-member-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+    .site-member-row[draggable="true"] { cursor: grab; }
+    .site-member-row .grow { flex: 1; }
 </style>
 </head>
 <body class="app">
@@ -42,6 +60,13 @@
             </span>
         </div>
     </div>
+
+    <div class="tabs" id="pageTabs">
+        <button type="button" class="active" data-tab="hosts">Хосты</button>
+        <button type="button" data-tab="sites">Узлы</button>
+    </div>
+
+    <section class="tab-panel" data-panel="hosts">
 
     <!-- Панель добавления ПК: один или списком. Скрыта, пока не нажали «Добавить ПК». -->
     <div id="addPanel" class="card" hidden>
@@ -107,6 +132,10 @@
         </form>
     </div>
 
+    <div class="note" id="siteFilterBanner" hidden style="margin-bottom:10px">
+        Показаны ПК без узла. <button type="button" class="ghost small" id="clearSiteFilterBtn">Показать все ×</button>
+    </div>
+
     <!-- Фильтры. Всё, кроме поиска, применяется мгновенно. -->
     <div class="filters-grid">
         <input type="search" id="search" placeholder="Поиск: hostname, пользователь, имя, магазин…">
@@ -165,6 +194,44 @@
         <button type="button" class="small" id="prevBtn">‹</button>
         <button type="button" class="small" id="nextBtn">›</button>
     </div>
+    </section>
+
+    <section class="tab-panel" data-panel="sites" hidden>
+        <div class="page-head">
+            <p class="muted" style="margin:0">Узел — хосты на одной локальной сети. Можно назначать вручную
+            (перетаскиванием или кнопкой «Добавить») или по правилу подсети (IP хоста, приоритет — если сети
+            пересекаются, более точная подсеть побеждает более широкую при равном приоритете).</p>
+            <span id="sitesAdminActions" hidden>
+                <button type="button" id="addSiteBtn" class="primary">＋ Узел</button>
+                <button type="button" id="recomputeSitesBtn" title="Пересчитать автоматическое членство по текущим IP — вручную назначенные хосты не тронет">Пересчитать</button>
+            </span>
+        </div>
+
+        <div id="siteEditCard" class="card" hidden>
+            <h2 id="siteEditTitle">Новый узел</h2>
+            <div class="row">
+                <label>Название<input type="text" id="siteName" required></label>
+                <label>Подсеть CIDR (необязательно)<input type="text" id="siteCidr" placeholder="например, 192.168.1.0/24"></label>
+                <label>Приоритет<input type="number" id="sitePriority" value="0" style="max-width:100px"><span class="hint">При пересечении подсетей побеждает больший; при равном — более точная (длиннее /маска).</span></label>
+            </div>
+            <div class="row">
+                <button type="button" id="siteSaveBtn">Сохранить</button>
+                <button type="button" class="ghost" id="siteCancelBtn">Отмена</button>
+            </div>
+        </div>
+
+        <div class="card" id="siteThresholdsCard" hidden>
+            <h2>Пороги статуса узла</h2>
+            <p class="muted" style="margin-top:0">Доступно только суперадмину. 🟢 — доля онлайн не меньше первого порога, 🔴 — не больше второго, иначе 🟡.</p>
+            <div class="row">
+                <label>🟢 Полностью активен, % онлайн не меньше<input type="number" id="network_site_status_green_min_percent" min="0" max="100" style="max-width:120px"></label>
+                <label>🔴 Неактивен, % онлайн не больше<input type="number" id="network_site_status_red_max_percent" min="0" max="100" style="max-width:120px"></label>
+            </div>
+            <div class="row"><button type="button" id="siteThresholdsSaveBtn">Сохранить</button></div>
+        </div>
+
+        <div id="sitesGrid" class="sites-grid"></div>
+    </section>
 </main>
 
 <script src="/admin/shared/api.js"></script>

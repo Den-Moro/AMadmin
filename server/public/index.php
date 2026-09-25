@@ -50,6 +50,7 @@ require __DIR__ . '/../Core/TargetMatcher.php';
 require __DIR__ . '/../Core/NtpClient.php';
 require __DIR__ . '/../Core/ServerMode.php';
 require __DIR__ . '/../Core/ServerMetrics.php';
+require __DIR__ . '/../Core/NetworkSiteMatcher.php';
 require __DIR__ . '/../Core/Router.php';
 require __DIR__ . '/../Core/PageRouter.php';
 require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';
@@ -59,6 +60,7 @@ require __DIR__ . '/../Modules/Auth/AdminAuthController.php';
 require __DIR__ . '/../Modules/Auth/AdminUsersController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminPcsController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminServerMetricsController.php';
+require __DIR__ . '/../Modules/Dashboard/AdminNetworkSitesController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminStatsController.php';
 require __DIR__ . '/../Modules/Logs/AdminLogsController.php';
 require __DIR__ . '/../Modules/Meta/AdminMetaController.php';
@@ -140,6 +142,14 @@ $router->delete('/admin/host-groups/{id}', array('AdminHostGroupsController', 'd
 $router->get('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'members'));
 $router->post('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'addMember'));
 $router->delete('/admin/host-groups/{id}/members/{pcId}', array('AdminHostGroupsController', 'removeMember'));
+
+$router->get('/admin/network-sites', array('AdminNetworkSitesController', 'index'));
+$router->post('/admin/network-sites', array('AdminNetworkSitesController', 'store'));
+$router->post('/admin/network-sites/recompute', array('AdminNetworkSitesController', 'recompute'));
+$router->put('/admin/network-sites/{id}', array('AdminNetworkSitesController', 'update'));
+$router->delete('/admin/network-sites/{id}', array('AdminNetworkSitesController', 'destroy'));
+$router->post('/admin/network-sites/{id}/members', array('AdminNetworkSitesController', 'addMember'));
+$router->delete('/admin/network-sites/{id}/members/{pcId}', array('AdminNetworkSitesController', 'removeMember'));
 
 $router->get('/admin/manuals', array('AdminManualsController', 'index'));
 $router->post('/admin/manuals', array('AdminManualsController', 'store'));
