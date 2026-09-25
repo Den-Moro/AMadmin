@@ -9,5 +9,9 @@ RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 # редиректом 301 на /admin/stores/ вместо JSON. Поэтому: реальный файл — отдать как есть,
 # всё остальное (включая имена папок) — в index.php.
 DirectorySlash Off
-RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^index\.php$ - [L]
+# Страницы панели живут в server/Views. Старый admin/*.html, оставшийся после обновления
+# распаковкой поверх, не должен отдаваться как файл — только через index.php (редирект).
+RewriteCond %{REQUEST_FILENAME} !-f [OR]
+RewriteCond %{REQUEST_URI} /admin/.+\.html$
 RewriteRule ^ index.php [QSA,L]

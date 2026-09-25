@@ -10,8 +10,13 @@
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $fullPath = __DIR__ . $path;
 
-if ($path !== '/' && file_exists($fullPath) && !is_dir($fullPath)) {
-    return false; // отдать как есть — статический файл (html/css/js)
+// Страницы панели живут в server/Views, а не в public. Старый public/admin/*.html,
+// оставшийся после обновления "распаковкой поверх", не должен перекрывать редирект
+// со старой ссылки на чистый URL — такие запросы всегда идут в index.php.
+$isStalePanelHtml = (bool) preg_match('~^/admin/.+\.html$~', $path);
+
+if ($path !== '/' && !$isStalePanelHtml && file_exists($fullPath) && !is_dir($fullPath)) {
+    return false; // отдать как есть — статический файл (css/js/картинки)
 }
 
 require __DIR__ . '/index.php';
