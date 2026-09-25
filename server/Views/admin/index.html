@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>Дашборд — AMadmin</title>
-<link rel="stylesheet" href="shared/admin.css">
-<script src="shared/ui.js"></script>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
@@ -17,7 +17,7 @@
         </div>
         <div class="actions">
             <button type="button" id="refreshBtn" title="Перечитать всё прямо сейчас">↻ Обновить</button>
-            <a href="/admin/hosts/hosts.html"><button type="button" class="primary">Все хосты →</button></a>
+            <a href="/admin/hosts"><button type="button" class="primary">Все хосты →</button></a>
         </div>
     </div>
 
@@ -52,7 +52,7 @@
     <div class="card compact" id="attentionCard">
         <div class="row" style="justify-content:space-between;align-items:center">
             <h2>Требуют внимания</h2>
-            <a href="/admin/hosts/hosts.html?state=offline" class="muted">все офлайн →</a>
+            <a href="/admin/hosts?state=offline" class="muted">все офлайн →</a>
         </div>
         <p class="muted" style="margin:0">Кассы, которые молчат дольше суток или ни разу не выходили на связь.</p>
         <input type="search" id="attentionSearch" placeholder="Поиск: хост, магазин, IP…" style="width:100%;margin:10px 0">
@@ -63,8 +63,8 @@
     </div>
 </main>
 
-<script src="shared/api.js"></script>
-<script src="shared/nav.js"></script>
-<script src="dashboard.js"></script>
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="/admin/dashboard.js"></script>
 </body>
 </html>

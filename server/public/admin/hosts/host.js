@@ -1,4 +1,4 @@
-// Профиль хоста (/admin/hosts/host.html?id=N). Порядок работы:
+// Профиль хоста (/admin/hosts/host?id=N). Порядок работы:
 //   1. id из адресной строки -> GET /admin/pcs/{id} (карточка + группы + история).
 //   2. Кнопки сверху: «Оповестить» и «Команда…» ведут на соответствующие страницы с
 //      уже выбранным этим ПК (?pc=N); «Изменить», ключ и удаление — здесь же.
@@ -9,7 +9,7 @@
     const $ = Ui.$, esc = Ui.escapeHtml;
 
     const id = parseInt(new URLSearchParams(window.location.search).get('id'), 10);
-    if (!id) { window.location.href = '/admin/hosts/hosts.html'; return; }
+    if (!id) { window.location.href = '/admin/hosts'; return; }
     if (canEdit) $('adminActions').hidden = false;
 
     let data = null, stores = [], deviceTypes = [];
@@ -35,7 +35,7 @@
 
     async function load() {
         try { data = await Api.get('/admin/pcs/' + id); }
-        catch (err) { Ui.toast('Хост не найден', 'error'); window.location.href = '/admin/hosts/hosts.html'; return; }
+        catch (err) { Ui.toast('Хост не найден', 'error'); window.location.href = '/admin/hosts'; return; }
         const pc = data.pc;
         const name = pc.display_name || pc.hostname;
         document.title = name + ' — AMadmin';
@@ -50,7 +50,7 @@
             fact('Понятное имя', esc(pc.display_name || '—')) +
             fact('Пользователь Windows', esc(pc.username || '—')) +
             fact('IP', pc.last_ip ? '<span class="ip-copy" data-ip="' + esc(pc.last_ip) + '" title="Скопировать IP">' + esc(pc.last_ip) + '</span>' : '—') +
-            fact('Магазин', '<a href="/admin/hosts/hosts.html?store_id=' + pc.store_id + '">' + esc(pc.store_name) + '</a>') +
+            fact('Магазин', '<a href="/admin/hosts?store_id=' + pc.store_id + '">' + esc(pc.store_name) + '</a>') +
             fact('Тип устройства', esc(pc.device_type_name)) +
             fact('Версия агента', esc(pc.agent_version || 'не отчитался')) +
             fact('Заведён', esc(formatServerTime(pc.created_at))) +
@@ -66,7 +66,7 @@
             (rate !== null ? fact('Надёжность', rate + '%') : '');
 
         $('groups').innerHTML = data.groups.length
-            ? data.groups.map(function (g) { return '<a href="/admin/hosts/hosts.html?group_id=' + g.id + '"><span class="badge badge-accent">' + esc(g.name) + '</span></a> '; }).join('')
+            ? data.groups.map(function (g) { return '<a href="/admin/hosts?group_id=' + g.id + '"><span class="badge badge-accent">' + esc(g.name) + '</span></a> '; }).join('')
             : 'ни в одной группе';
 
         const rt = document.querySelector('#resultsTable tbody');
@@ -109,8 +109,8 @@
     });
 
     $('refreshBtn').addEventListener('click', async function () { await load(); Ui.toast('Обновлено', 'success'); });
-    $('notifyBtn').addEventListener('click', function () { window.location.href = '/admin/notifications/notifications.html?pc=' + id; });
-    $('commandBtn').addEventListener('click', function () { window.location.href = '/admin/commands/commands.html?pc=' + id; });
+    $('notifyBtn').addEventListener('click', function () { window.location.href = '/admin/notifications?pc=' + id; });
+    $('commandBtn').addEventListener('click', function () { window.location.href = '/admin/commands?pc=' + id; });
 
     $('editBtn').addEventListener('click', async function () {
         if (!stores.length) { stores = await Api.get('/admin/stores'); deviceTypes = await Api.get('/admin/device-types'); }
@@ -143,7 +143,7 @@
         }
         if (act === 'delete') {
             if (!await Ui.confirm('Удалить ' + data.pc.hostname + ' вместе с историей?', { danger: true, okLabel: 'Удалить' })) return;
-            try { await Api.request('DELETE', '/admin/pcs/' + id); Ui.toast('Хост удалён', 'success'); window.location.href = '/admin/hosts/hosts.html'; }
+            try { await Api.request('DELETE', '/admin/pcs/' + id); Ui.toast('Хост удалён', 'success'); window.location.href = '/admin/hosts'; }
             catch (err) { Ui.toast('Не удалось: ' + Ui.reason(err), 'error'); }
         }
     });

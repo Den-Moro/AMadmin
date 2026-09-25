@@ -70,7 +70,7 @@ function Read-AdminPassword {
 
 function Wait-Server($url) {
     for ($i = 0; $i -lt 60; $i++) {
-        try { if ((Invoke-WebRequest -UseBasicParsing "$url/admin/login.html" -TimeoutSec 3).StatusCode -eq 200) { return $true } } catch { }
+        try { if ((Invoke-WebRequest -UseBasicParsing -Headers @{ Accept = 'text/html' } "$url/admin/login" -TimeoutSec 3).StatusCode -eq 200) { return $true } } catch { }
         Start-Sleep -Seconds 2
     }
     return $false
@@ -139,7 +139,7 @@ if ($Mode -eq 'Docker') {
 
     $url = "http://localhost:$Port"
     Step 'Ожидание сервера'
-    if (-not (Wait-Server $url)) { throw "Сервер не ответил на $url/admin/login.html за 2 минуты. Смотрите: docker compose logs" }
+    if (-not (Wait-Server $url)) { throw "Сервер не ответил на $url/admin/login за 2 минуты. Смотрите: docker compose logs" }
 
     if ($Seed) {
         Step 'Тестовые данные (dev-seed.sql)'
@@ -285,7 +285,7 @@ else {
 $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1).IPAddress
 Write-Host ''
 Write-Host 'Сервер работает.' -ForegroundColor Green
-Write-Host "  Панель:           http://localhost:$Port/admin/login.html"
+Write-Host "  Панель:           http://localhost:$Port/admin/login"
 if ($ip) { Write-Host "  Для касс (server_url): http://${ip}:$Port" }
 Write-Host "  Логин:            $AdminUser (суперадмин)"
 Write-Host '  Дальше: Справочники → добавить магазин; Дашборд → добавить ПК → конфиг на кассу.'

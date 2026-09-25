@@ -92,7 +92,7 @@
             tr.innerHTML =
                 '<td class="check"><input type="checkbox" data-select' + (selected.has(pc.id) ? ' checked' : '') + '></td>' +
                 '<td><span class="badge ' + (pc.online ? 'badge-online' : 'badge-offline') + '">' + (pc.online ? 'онлайн' : 'офлайн') + '</span></td>' +
-                '<td><a class="host-link" href="/admin/hosts/host.html?id=' + pc.id + '">' + esc(name) + '</a>' +
+                '<td><a class="host-link" href="/admin/hosts/host?id=' + pc.id + '">' + esc(name) + '</a>' +
                     (pc.display_name ? '<div class="muted">' + esc(pc.hostname) + '</div>' : '') +
                     (pc.username ? '<div class="muted">' + esc(pc.username) + '</div>' : '') + '</td>' +
                 '<td>' + esc(pc.store_name) + '</td>' +
@@ -278,7 +278,7 @@
             ]);
             if (!act) return;
         }
-        if (act === 'open') window.location.href = '/admin/hosts/host.html?id=' + pc.id;
+        if (act === 'open') window.location.href = '/admin/hosts/host?id=' + pc.id;
         if (act === 'config') showConfig(pc, pc.agent_token);
         if (act === 'edit') editPc(pc);
         if (act === 'token') {

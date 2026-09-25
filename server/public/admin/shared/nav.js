@@ -20,17 +20,17 @@ const Nav = (function () {
     };
 
     const items = [
-        { href: '/admin/index.html', label: 'Дашборд', icon: 'grid' },
-        { href: '/admin/hosts/hosts.html', label: 'Хосты', icon: 'monitor', match: '/admin/hosts/' },
-        { href: '/admin/notifications/notifications.html', label: 'Оповещения', icon: 'bell' },
-        { href: '/admin/groups/groups.html', label: 'Группы', icon: 'layers' },
-        { href: '/admin/manuals/manuals.html', label: 'Мануалы', icon: 'book' },
-        { href: '/admin/commands/commands.html', label: 'Команды', icon: 'terminal' },
-        { href: '/admin/stores/stores.html', label: 'Справочники', icon: 'store' },
-        { href: '/admin/logs/logs.html', label: 'Логи', icon: 'scroll', roles: ['administrator', 'superadmin'] },
-        { href: '/admin/settings/settings.html', label: 'Настройки', icon: 'sliders' },
-        { href: '/admin/users/users.html', label: 'Пользователи', icon: 'users', roles: ['superadmin'] },
-        { href: '/admin/users/users.html', label: 'Мой пароль', icon: 'key', roles: ['operator', 'administrator'] },
+        { href: '/admin', label: 'Дашборд', icon: 'grid' },
+        { href: '/admin/hosts', label: 'Хосты', icon: 'monitor', match: '/admin/hosts' },
+        { href: '/admin/notifications', label: 'Оповещения', icon: 'bell' },
+        { href: '/admin/groups', label: 'Группы', icon: 'layers' },
+        { href: '/admin/manuals', label: 'Мануалы', icon: 'book' },
+        { href: '/admin/commands', label: 'Команды', icon: 'terminal' },
+        { href: '/admin/stores', label: 'Справочники', icon: 'store' },
+        { href: '/admin/logs', label: 'Логи', icon: 'scroll', roles: ['administrator', 'superadmin'] },
+        { href: '/admin/settings', label: 'Настройки', icon: 'sliders' },
+        { href: '/admin/users', label: 'Пользователи', icon: 'users', roles: ['superadmin'] },
+        { href: '/admin/users', label: 'Мой пароль', icon: 'key', roles: ['operator', 'administrator'] },
     ];
 
     const roleNames = { operator: 'оператор', administrator: 'администратор', superadmin: 'суперадмин' };
@@ -39,12 +39,12 @@ const Nav = (function () {
         const host = document.getElementById('sidebar');
         if (!host) return;
 
-        const path = window.location.pathname.replace(/\/$/, '') || '/admin/index.html';
-        let html = '<a class="brand" href="/admin/index.html"><span class="mark">A</span>' +
+        const path = window.location.pathname.replace(/\/$/, '') || '/admin';
+        let html = '<a class="brand" href="/admin"><span class="mark">A</span>' +
             '<span><span class="name">AMadmin</span><span class="tag">панель администратора</span></span></a><nav>';
         items.forEach(function (item) {
             // match — префикс для разделов из нескольких страниц (список хостов + профиль).
-            const active = path === item.href || (item.match && path.indexOf(item.match) === 0) || (item.href === '/admin/index.html' && path === '/admin');
+            const active = path === item.href || (item.match && path.indexOf(item.match) === 0);
             html += '<a href="' + item.href + '" class="' + (active ? 'active' : '') + '"' +
                 (item.roles ? ' data-roles="' + item.roles.join(',') + '" style="display:none"' : '') + '>' +
                 icons[item.icon] + '<span>' + item.label + '</span></a>';
@@ -59,7 +59,7 @@ const Nav = (function () {
         document.getElementById('themeBtn').addEventListener('click', function () { Ui.toggleTheme(); });
         document.getElementById('logoutBtn').addEventListener('click', async function () {
             try { await Api.post('/admin/logout'); } catch (e) { /* сессии уже нет — всё равно на логин */ }
-            window.location.href = '/admin/login.html';
+            window.location.href = '/admin/login';
         });
     }
 

@@ -14,7 +14,7 @@ AMADMIN_PORT="$PORT" docker compose --progress quiet up -d --build
 
 echo "== Ожидание сервера"
 for i in $(seq 1 60); do
-    if curl -fs "http://localhost:$PORT/admin/login.html" >/dev/null 2>&1; then break; fi
+    if curl -fs -H "Accept: text/html" "http://localhost:$PORT/admin/login" >/dev/null 2>&1; then break; fi
     sleep 2
 done
 
@@ -36,6 +36,6 @@ fi
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 echo
 echo "Сервер работает."
-echo "  Панель:                http://localhost:$PORT/admin/login.html"
+echo "  Панель:                http://localhost:$PORT/admin/login"
 [ -n "$IP" ] && echo "  Для касс (server_url): http://$IP:$PORT"
 echo "  Логин:                 $ADMIN (суперадмин)"

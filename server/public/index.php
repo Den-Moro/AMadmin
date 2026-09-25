@@ -48,6 +48,7 @@ set_error_handler(function ($severity, $message, $file, $line) {
 });
 require __DIR__ . '/../Core/TargetMatcher.php';
 require __DIR__ . '/../Core/Router.php';
+require __DIR__ . '/../Core/PageRouter.php';
 require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';
 require __DIR__ . '/../Modules/Notifications/AckController.php';
 require __DIR__ . '/../Modules/Notifications/AdminNotificationsController.php';
@@ -79,6 +80,9 @@ $router = new Router();
 // Корень сайта — сразу на вход в панель: человек, набравший просто адрес сервера,
 // не должен видеть {"error":"not_found"}.
 $router->get('/', array('AdminAuthController', 'root'));
+
+// Страницы панели (server/Views/admin/...) по чистым путям + 301 со старых .html-ссылок.
+PageRouter::register($router);
 
 // Агенты (токен в заголовке, не сессия)
 $router->get('/occurrences', array('OccurrencesController', 'index'));
@@ -146,7 +150,14 @@ $router->get('/admin/settings', array('AdminSettingsController', 'index'));
 $router->put('/admin/settings', array('AdminSettingsController', 'update'));
 
 try {
-    $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
+    // У части страниц чистый путь совпадает с путём JSON-эндпоинта того же раздела
+    // (например, GET /admin/stores — и страница «Справочники», и список магазинов,
+    // который эта страница сама же запрашивает через fetch). PageRouter отличает
+    // навигацию браузера от fetch/агента по Accept и отдаёт страницу первым; для
+    // остального (в т.ч. для того же пути без text/html в Accept) — обычный роутер.
+    if (!PageRouter::maybeServe($_SERVER['REQUEST_URI'])) {
+        $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
+    }
 } catch (Exception $e) {
     // Ловим тут же, не даём PHP напечатать сырой стектрейс с путями сервера наружу.
     Logger::error($e->getMessage());

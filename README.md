@@ -71,7 +71,7 @@ Windows 7 ставится через Windows Update или отдельным �
 
 Вручную то же самое: `docker compose up -d --build`, затем
 `docker compose exec server php bin/create-admin.php admin <пароль> superadmin`
-(`php bin/seed.php` — тестовые данные). Панель: `http://localhost:8000/admin/login.html`.
+(`php bin/seed.php` — тестовые данные). Панель: `http://localhost:8000/admin/login`.
 
 ### Без Docker
 
@@ -80,9 +80,9 @@ Windows 7 ставится через Windows Update или отдельным �
    архивом и файлов для раскатки — ещё и `zip`)
 3. `php server/bin/create-admin.php admin <пароль> [operator|administrator|superadmin]`
 4. Для разработки: `php -S localhost:8000 -t server/public server/public/router.php`
-   (`router.php` обязателен — без него встроенный сервер отдаёт `admin/index.html` вместо
-   API; на nginx/Apache/IIS эту роль играют правила перезаписи — см. `server/docker/nginx.conf`
-   или `.htaccess`).
+   (`router.php` обязателен — без него встроенный сервер отдаёт директорию как 404 вместо
+   API/страниц панели; на nginx/Apache/IIS эту роль играют правила перезаписи — см.
+   `server/docker/nginx.conf` или `.htaccess`).
 
 ## Клиент вручную (без скриптов)
 

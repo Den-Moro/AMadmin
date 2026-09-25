@@ -31,11 +31,11 @@
         const p = st.pcs, a = st.activity;
         const total = +p.total, online = +p.online;
         $('statTotal').textContent = total;
-        $('statNever').innerHTML = +p.never_seen ? '<a href="/admin/hosts/hosts.html?state=never">ни разу не выходили: ' + p.never_seen + '</a>' : 'все выходили на связь';
+        $('statNever').innerHTML = +p.never_seen ? '<a href="/admin/hosts?state=never">ни разу не выходили: ' + p.never_seen + '</a>' : 'все выходили на связь';
         $('statOnline').textContent = online;
         $('statOnlinePct').textContent = total ? Math.round(online / total * 100) + '% парка' : '';
         $('statOffline').textContent = total - online;
-        $('statSilent').innerHTML = +p.silent_day ? '<a href="/admin/hosts/hosts.html?state=silent">молчат больше суток: ' + p.silent_day + '</a>' : '';
+        $('statSilent').innerHTML = +p.silent_day ? '<a href="/admin/hosts?state=silent">молчат больше суток: ' + p.silent_day + '</a>' : '';
         $('statStores').textContent = st.stores.length;
         $('statGroups').textContent = 'групп: ' + a.groups + ', администраторов: ' + a.admins;
 
@@ -48,7 +48,7 @@
         $('actFilesSize').textContent = Ui.formatSize(a.files_bytes);
 
         $('storeBars').innerHTML = st.stores.length
-            ? st.stores.map(function (s) { return bar(s.name + (s.is_pilot ? ' (пилот)' : ''), +s.online, +s.total, s.total > 0 && +s.online === 0, '/admin/hosts/hosts.html?store_id=' + s.id); }).join('')
+            ? st.stores.map(function (s) { return bar(s.name + (s.is_pilot ? ' (пилот)' : ''), +s.online, +s.total, s.total > 0 && +s.online === 0, '/admin/hosts?store_id=' + s.id); }).join('')
             : '<div class="muted">Магазинов пока нет — добавьте в Справочниках.</div>';
         $('versionBars').innerHTML = st.versions.length
             ? st.versions.map(function (v) { return bar(v.version === '—' ? 'агент ещё не отчитался' : 'v' + v.version, +v.count, total, v.version === '—'); }).join('')
@@ -93,7 +93,7 @@
         const rows = attentionRows.filter(function (pc) { return Ui.pcMatches(pc, q); }).slice(0, 10);
         const tbody = document.querySelector('#attentionTable tbody');
         tbody.innerHTML = rows.length ? rows.map(function (pc) {
-            return '<tr><td><a class="host-link" href="/admin/hosts/host.html?id=' + pc.id + '" style="color:var(--text);font-weight:600;text-decoration:none">' + esc(pc.display_name || pc.hostname) + '</a></td>' +
+            return '<tr><td><a class="host-link" href="/admin/hosts/host?id=' + pc.id + '" style="color:var(--text);font-weight:600;text-decoration:none">' + esc(pc.display_name || pc.hostname) + '</a></td>' +
                 '<td>' + esc(pc.store_name) + '</td><td class="muted">' + esc(pc.last_ip || '—') + '</td><td>' + esc(pc.agent_version || '—') + '</td>' +
                 '<td class="muted">' + (pc.last_seen ? esc(formatServerTime(pc.last_seen)) : 'никогда') + '</td></tr>';
         }).join('') : '<tr><td colspan="5" class="empty">' + (q ? 'Ничего не найдено.' : 'Все кассы на связи.') + '</td></tr>';

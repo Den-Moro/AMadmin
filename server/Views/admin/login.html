@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>Вход — AMadmin</title>
-<link rel="stylesheet" href="shared/admin.css">
-<script src="shared/ui.js"></script>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
 </head>
 <body class="login-page">
 <form id="loginForm" class="login-form">
@@ -21,7 +21,7 @@
     <button type="submit">Войти</button>
     <p id="error" class="error"></p>
 </form>
-<script src="shared/api.js"></script>
+<script src="/admin/shared/api.js"></script>
 <script>
 document.getElementById('loginForm').addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -32,7 +32,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
 
     try {
         await Api.post('/admin/login', { username: username, password: password });
-        window.location.href = 'index.html';
+        window.location.href = '/admin';
     } catch (err) {
         if (err.status === 423) {
             errorEl.textContent = 'Слишком много неудачных попыток — вход временно заблокирован.';

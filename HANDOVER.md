@@ -114,7 +114,7 @@ deploy\server\install-server.cmd -Mode Native    # без Docker; сам пос�
 deploy\client\build-client.cmd                   # комплект агентов в dist\client
 ```
 
-Панель: `http://localhost:8000/admin/login.html` (корень сайта туда же редиректит).
+Панель: `http://localhost:8000/admin/login` (корень сайта туда же редиректит; старые `/admin/*.html`-ссылки 301 на чистые пути).
 Тестовые учётки локальной Docker-базы: `admin` / `Admin123!` (superadmin),
 `operator1` / `Operator123!`. Пароли — только для локального стенда.
 
