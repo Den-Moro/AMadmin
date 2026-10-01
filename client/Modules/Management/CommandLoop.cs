@@ -17,8 +17,8 @@ namespace AMadmin.ManagementAgent
         public string Output;
 
         // true только когда file_deploy только что заменил исполняемый файл САМОГО этого
-        // агента (см. FileDeployExecutor.IsSelf) — SafeReport завершает процесс после
-        // отправки результата, службу поднимает уже настроенный `sc failure` (Program.cs).
+        // агента (см. FileDeployExecutor.IsSelf) — RunAsync завершает процесс, когда
+        // допишутся остальные файлы; службу поднимает уже настроенный `sc failure` (Program.cs).
         public bool RestartSelfAfterReport;
 
         public static Outcome Success(string output) { return new Outcome { Status = "success", Output = output }; }
@@ -51,6 +51,11 @@ namespace AMadmin.ManagementAgent
         private SemaphoreSlim _parallel;
         private int _parallelLimit;
 
+        // Выставляется, когда file_deploy заменил exe самого агента. Выходим не сразу, а
+        // когда допишутся остальные файлы того же пакета (AMadmin.Core.dll и т.п.) —
+        // иначе служба поднялась бы с новым exe и старой библиотекой.
+        private volatile bool _restartPending;
+
         public CommandLoop(AgentConfig config, ApiClient api, string baseDir)
         {
             _config = config;
@@ -69,6 +74,8 @@ namespace AMadmin.ManagementAgent
         {
             while (!ct.IsCancellationRequested)
             {
+                if (_restartPending) await RestartSelfAsync();
+
                 try
                 {
                     await PollOnceAsync(ct);
@@ -82,6 +89,8 @@ namespace AMadmin.ManagementAgent
                     // Сеть/сервер недоступны — это штатно для магазина, просто ждём следующий опрос.
                     Logger.Error("Опрос не удался: " + ex.Message);
                 }
+
+                if (_restartPending) await RestartSelfAsync();
 
                 try
                 {
@@ -103,7 +112,7 @@ namespace AMadmin.ManagementAgent
             Task[] pending;
             lock (_backgroundSync)
             {
-                pending = _background.ToArray();
+                pending = _background.Where(t => !t.IsCompleted).ToArray();
             }
             if (pending.Length == 0) return;
 
@@ -277,14 +286,20 @@ namespace AMadmin.ManagementAgent
 
             // Файл уже заменён на диске независимо от того, дошёл ли отчёт до сервера —
             // продолжать работать со старым кодом в памяти до следующей перезагрузки
-            // бессмысленно, завершаемся в любом случае; SCM поднимет уже новый файл.
+            // бессмысленно; перезапуск — в RunAsync, когда закончатся остальные загрузки.
             if (outcome.RestartSelfAfterReport)
             {
-                Logger.Info("Команда id=" + command.Id + " заменила исполняемый файл самого агента — завершаемся " +
-                            "для перезапуска службы с новой версией (настроенный `sc failure`, см. Program.cs).");
-                await Task.Delay(TimeSpan.FromSeconds(2));
-                Environment.Exit(0);
+                Logger.Info("Команда id=" + command.Id + " заменила исполняемый файл самого агента — " +
+                            "перезапуск после завершения остальных загрузок.");
+                _restartPending = true;
             }
+        }
+
+        private async Task RestartSelfAsync()
+        {
+            await WaitForBackgroundAsync(TimeSpan.FromMinutes(30));
+            Logger.Info("Завершаемся для перезапуска службы с новой версией (настроенный `sc failure`, см. Program.cs).");
+            Environment.Exit(0);
         }
     }
 }
