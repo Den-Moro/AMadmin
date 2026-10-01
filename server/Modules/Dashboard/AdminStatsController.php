@@ -39,25 +39,33 @@ class AdminStatsController
             ORDER BY s.name
         ")->fetchAll();
 
-        $versions = $db->query("
-            SELECT COALESCE(agent_version, '—') AS version, COUNT(*) AS count
-            FROM pcs WHERE excluded_from_stats = 0 GROUP BY agent_version ORDER BY count DESC
-        ")->fetchAll();
+        // Версия хоста — младшая из службы и окна оповещений (см. VersionCompare::lowest),
+        // поэтому группируем в PHP, а не GROUP BY.
+        $versionCounts = array();
+        $newestSeen = null;
+        foreach ($db->query('SELECT agent_version, ui_agent_version FROM pcs WHERE excluded_from_stats = 0') as $row) {
+            foreach (array($row['agent_version'], $row['ui_agent_version']) as $reported) {
+                if (VersionCompare::lowest($reported, null) !== null
+                    && ($newestSeen === null || VersionCompare::compare($reported, $newestSeen) > 0)) {
+                    $newestSeen = $reported;
+                }
+            }
+            $v = VersionCompare::lowest($row['agent_version'], $row['ui_agent_version']);
+            $v = $v === null ? '—' : $v;
+            $versionCounts[$v] = isset($versionCounts[$v]) ? $versionCounts[$v] + 1 : 1;
+        }
+        arsort($versionCounts);
+        $versions = array();
+        foreach ($versionCounts as $v => $count) {
+            $versions[] = array('version' => (string) $v, 'count' => $count);
+        }
 
         // current_agent_version не задана явно (свежая установка/ещё не заходили на
         // «Обновления») — считаем актуальной самую новую из реально отчитавшихся версий,
         // как раньше вычислялось на клиенте. Явно заданная версия админом всегда важнее.
         $baseline = Settings::get('current_agent_version', '');
         if ($baseline === '') {
-            $baseline = null;
-            foreach ($versions as $v) {
-                if ($v['version'] === '—') {
-                    continue;
-                }
-                if ($baseline === null || VersionCompare::compare($v['version'], $baseline) > 0) {
-                    $baseline = $v['version'];
-                }
-            }
+            $baseline = $newestSeen;
         }
         foreach ($versions as &$v) {
             $v['outdated'] = $baseline !== null && VersionCompare::isOutdated($v['version'], $baseline);

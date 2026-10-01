@@ -55,7 +55,7 @@ class AdminPcsController
         $window = Settings::int('online_window_seconds', self::ONLINE_WINDOW_SECONDS);
         $sql = "
             SELECT
-                p.id, p.hostname, p.username, p.display_name, p.last_seen, p.agent_version, p.last_ip,
+                p.id, p.hostname, p.username, p.display_name, p.last_seen, p.agent_version, p.ui_agent_version, p.last_ip,
                 p.agent_token, p.store_id, p.device_type_id, p.created_at,
                 p.excluded_from_stats, p.excluded_reason,
                 s.name AS store_name,
@@ -121,6 +121,10 @@ class AdminPcsController
         foreach ($rows as &$row) {
             $row['online'] = $row['last_seen'] !== null && $row['seconds_since_seen'] <= $window;
             unset($row['seconds_since_seen']);
+            // agent_version в ответе — версия хоста целиком (младшая из службы и окна, как
+            // в статистике); по ней работают фильтр, гистограмма и «Обновления».
+            $row['mgmt_agent_version'] = $row['agent_version'];
+            $row['agent_version'] = VersionCompare::lowest($row['agent_version'], $row['ui_agent_version']);
         }
         unset($row);
 

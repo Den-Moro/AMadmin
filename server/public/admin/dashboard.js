@@ -114,7 +114,7 @@
         const tbody = document.querySelector('#attentionTable tbody');
         tbody.innerHTML = rows.length ? rows.map(function (pc) {
             return '<tr><td><a class="host-link" href="/admin/hosts/host?id=' + pc.id + '" style="color:var(--text);font-weight:600;text-decoration:none">' + esc(pc.display_name || pc.hostname) + '</a></td>' +
-                '<td>' + esc(pc.store_name) + '</td><td class="muted">' + esc(pc.last_ip || '—') + '</td><td>' + esc(pc.agent_version || '—') + '</td>' +
+                '<td>' + esc(pc.store_name) + '</td><td class="muted">' + esc(pc.last_ip || '—') + '</td><td>' + Ui.agentVersionHtml(pc) + '</td>' +
                 '<td class="muted">' + (pc.last_seen ? esc(formatServerTime(pc.last_seen)) : 'никогда') + '</td></tr>';
         }).join('') : '<tr><td colspan="5" class="empty">' + (q ? 'Ничего не найдено.' : 'Все кассы на связи.') + '</td></tr>';
     }

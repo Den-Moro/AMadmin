@@ -35,19 +35,22 @@ class Auth
     // стоит (заголовки X-Agent-*). Вызывается из обоих агентских опросов. Имя
     // пользователя берём только от UI-агента ($withUsername): агент управления работает
     // от SYSTEM и иначе затирал бы имя кассира на дашборде словом "SYSTEM".
+    // Версию каждый агент пишет в своё поле (миграция 020): в одном общем она менялась бы
+    // на каждом опросе, пока окно оповещений не перезапустится после обновления.
     public static function heartbeat($pc, $withUsername)
     {
         $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null;
+        $versionColumn = $withUsername ? 'ui_agent_version' : 'agent_version';
 
-        $stmt = Db::get()->prepare('
+        $stmt = Db::get()->prepare("
             UPDATE pcs SET
                 last_seen = CURRENT_TIMESTAMP,
-                agent_version = COALESCE(:version, agent_version),
+                {$versionColumn} = COALESCE(:version, {$versionColumn}),
                 hostname = COALESCE(:hostname, hostname),
                 username = COALESCE(:username, username),
                 last_ip = COALESCE(:ip, last_ip)
             WHERE id = :id
-        ');
+        ");
         $stmt->execute(array(
             'id'       => $pc['id'],
             'version'  => isset($_SERVER['HTTP_X_AGENT_VERSION']) ? $_SERVER['HTTP_X_AGENT_VERSION'] : null,

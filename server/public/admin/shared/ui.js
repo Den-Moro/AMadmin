@@ -385,8 +385,18 @@ const Ui = (function () {
 
     initTheme();
 
+    // Версия хоста (младшая из службы и окна оповещений) и пометка, если они разошлись:
+    // окно подхватывает обновление только при следующем входе пользователя.
+    function agentVersionHtml(pc, emptyText) {
+        const v = escapeHtml(pc.agent_version || emptyText || '—');
+        const m = pc.mgmt_agent_version, u = pc.ui_agent_version;
+        if (!m || !u || m === u) return v;
+        return v + ' <span class="muted" title="Окно оповещений обновится при следующем входе пользователя">' +
+            '(служба ' + escapeHtml(m) + ', окно ' + escapeHtml(u) + ')</span>';
+    }
+
     return {
-        $: $, escapeHtml: escapeHtml, formatSize: formatSize, toast: toast, reason: reason,
+        $: $, escapeHtml: escapeHtml, formatSize: formatSize, toast: toast, reason: reason, agentVersionHtml: agentVersionHtml,
         modal: modal, confirm: confirm, prompt: prompt, menu: menu, toggleTheme: toggleTheme, toggleDetail: toggleDetail,
         makeSortable: makeSortable, compareBy: compareBy, pcLabel: pcLabel, pcMatches: pcMatches, pcPicker: pcPicker,
         settingsFieldsPanel: settingsFieldsPanel, makeDraggable: makeDraggable, makeDropTarget: makeDropTarget,

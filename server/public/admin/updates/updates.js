@@ -40,7 +40,7 @@
         const rows = pcs.filter(function (pc) { return outdatedVersions.has(pc.agent_version || '—'); });
         tbody.innerHTML = rows.length ? rows.map(function (pc) {
             return '<tr><td><a class="host-link" href="/admin/hosts/host?id=' + pc.id + '">' + esc(pc.display_name || pc.hostname) + '</a></td>' +
-                '<td>' + esc(pc.store_name) + '</td><td>' + esc(pc.agent_version || '—') + '</td>' +
+                '<td>' + esc(pc.store_name) + '</td><td>' + Ui.agentVersionHtml(pc) + '</td>' +
                 '<td class="muted">' + (pc.last_seen ? esc(formatServerTime(pc.last_seen)) : 'никогда') + '</td></tr>';
         }).join('') : '<tr><td colspan="4" class="empty">—</td></tr>';
     }

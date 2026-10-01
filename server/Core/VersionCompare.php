@@ -32,6 +32,20 @@ class VersionCompare
         return self::compare($version, $current) < 0;
     }
 
+    // Младшая из двух версий: служба управления и окно оповещений обновляются в разное
+    // время (окно — только при следующем входе пользователя), и хост обновлён полностью,
+    // лишь когда новые обе. Нераспознанная версия пропускается; обе — null.
+    public static function lowest($a, $b)
+    {
+        if (!self::isValid($a)) {
+            return self::isValid($b) ? (string) $b : null;
+        }
+        if (!self::isValid($b)) {
+            return (string) $a;
+        }
+        return self::compare($a, $b) <= 0 ? (string) $a : (string) $b;
+    }
+
     private static function isValid($version)
     {
         return $version !== null && preg_match('/^\d/', (string) $version) === 1;

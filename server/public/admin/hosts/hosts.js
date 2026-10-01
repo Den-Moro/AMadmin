@@ -114,7 +114,7 @@
                 '<td class="muted">' + (pc.last_ip ? '<span class="ip-copy" data-ip="' + esc(pc.last_ip) + '" title="Скопировать IP">' + esc(pc.last_ip) + '</span>' : '—') + '</td>' +
                 '<td>' + esc(pc.device_type_name) + '</td>' +
                 '<td class="muted">' + esc(pc.groups || '—') + '</td>' +
-                '<td>' + esc(pc.agent_version || '—') + '</td>' +
+                '<td>' + Ui.agentVersionHtml(pc) + '</td>' +
                 '<td class="muted" style="white-space:nowrap">' + (pc.last_seen ? esc(formatServerTime(pc.last_seen)) : 'никогда') + '</td>' +
                 '<td><div class="actions" style="flex-wrap:nowrap">' +
                     (pc.agent_token ? '<button type="button" data-act="config">Конфиг</button>' : '') +

@@ -52,7 +52,7 @@
             fact('IP', pc.last_ip ? '<span class="ip-copy" data-ip="' + esc(pc.last_ip) + '" title="Скопировать IP">' + esc(pc.last_ip) + '</span>' : '—') +
             fact('Магазин', '<a href="/admin/hosts?store_id=' + pc.store_id + '">' + esc(pc.store_name) + '</a>') +
             fact('Тип устройства', esc(pc.device_type_name)) +
-            fact('Версия агента', esc(pc.agent_version || 'не отчитался')) +
+            fact('Версия агента', Ui.agentVersionHtml(pc, 'не отчитался')) +
             fact('Заведён', esc(formatServerTime(pc.created_at))) +
             fact('ID', '#' + pc.id);
 
