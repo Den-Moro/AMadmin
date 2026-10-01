@@ -41,6 +41,19 @@ namespace AMadmin.ManagementAgent
             }
 
             _loopTask = Task.Run(() => loop.RunAsync(_cts.Token));
+
+            // Цикл опроса может закончиться только по OnStop. Если он вышел сам (ошибка в
+            // коде), процесс "Running" без опроса — худший вариант: на дашборде касса онлайн
+            // (окно оповещений шлёт heartbeat), а команды и обновления до неё не доходят.
+            // Завершаемся — служба перезапустится через настроенный `sc failure`.
+            _loopTask.ContinueWith(t =>
+            {
+                if (_cts.IsCancellationRequested) return;
+                Logger.Error("Цикл опроса неожиданно завершился" +
+                             (t.IsFaulted ? ": " + t.Exception.GetBaseException().Message : "") +
+                             " — перезапуск службы.");
+                Environment.Exit(1);
+            });
         }
 
         protected override void OnStop()

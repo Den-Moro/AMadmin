@@ -66,15 +66,16 @@ namespace AMadmin.ManagementAgent.Executors
                             (limitKbps > 0 ? ", не быстрее " + limitKbps + " КБ/с" : "") + ")");
                 await _api.DownloadFileAsync(fileId, temp, expected, limitKbps, ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 try { File.Delete(temp); } catch { }
                 throw;
             }
             catch (Exception ex)
             {
+                // Сюда же — таймаут скачивания: это отказ команды, а не остановка агента.
                 try { File.Delete(temp); } catch { }
-                return Outcome.Failed("Скачивание не удалось: " + ex.Message);
+                return Outcome.Failed("Скачивание не удалось: " + CommandLoop.Describe(ex));
             }
             var seconds = (DateTime.UtcNow - started).TotalSeconds;
 

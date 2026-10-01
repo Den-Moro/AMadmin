@@ -117,9 +117,11 @@ namespace AMadmin.Core
             return JsonSerializer.Deserialize<AgentServerConfig>(json);
         }
 
-        public async Task<List<Command>> GetCommandsAsync()
+        // afterRestart — первый опрос после запуска агента: сервер добавит застолблённые
+        // этим ПК, но не завершённые команды (прерванные прошлым процессом).
+        public async Task<List<Command>> GetCommandsAsync(bool afterRestart = false)
         {
-            var json = await GetStringAsync("/commands");
+            var json = await GetStringAsync(afterRestart ? "/commands?after_restart=1" : "/commands");
             return JsonSerializer.Deserialize<List<Command>>(json) ?? new List<Command>();
         }
 

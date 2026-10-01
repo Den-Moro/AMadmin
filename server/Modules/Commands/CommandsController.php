@@ -10,6 +10,8 @@ class CommandsController
     // токен привязан к ПК, а не к конкретному процессу на нём), на которые от этого ПК
     // ещё нет ни одной строки в command_results — т.е. ещё не "застолблены" (claim) и не
     // выполнены. "pending" в терминах AGENTS.md — это именно отсутствие строки, не статус.
+    // ?after_restart=1 — первый опрос после запуска агента: плюс прерванные (in_progress),
+    // агент закроет их как failed «повторно не запускалось».
     public static function index()
     {
         $pc = Auth::authenticatePc();
@@ -24,7 +26,8 @@ class CommandsController
         // этого касса на дашборде выглядела бы офлайн, хотя служба управления на связи.
         Auth::heartbeat($pc, false);
 
-        $rows = self::commandsForPc($pc, true);
+        $afterRestart = !empty($_GET['after_restart']);
+        $rows = self::commandsForPc($pc, true, null, null, $afterRestart);
 
         // Настройки раскатки файлов подмешиваем в момент отдачи, а не при создании
         // команды — тот же приём, что и с настройками окна в /occurrences: админ меняет
@@ -48,7 +51,7 @@ class CommandsController
         }
         unset($row);
 
-        Logger::debug('GET /commands: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
+        Logger::debug('GET /commands: pc_id=' . $pc['id'] . ' отдано=' . count($rows) . ($afterRestart ? ' (первый опрос после запуска агента)' : ''));
 
         echo json_encode($rows);
     }
@@ -58,21 +61,27 @@ class CommandsController
     //                  (то, что отдаём агенту на выполнение); false — все адресованные.
     //   $commandId   — ограничить одной командой (проверка "а этому ли ПК она адресована").
     //   $type        — ограничить типом (например, только file_deploy для скачивания файла).
+    //   $includeInterrupted — вместе с $onlyPending: добавить застолблённые этим ПК, но так
+    //                  и не завершённые (in_progress). Агент просит их один раз после своего
+    //                  запуска: новый процесс их точно не выполняет, значит, прерваны.
+    // Срок жизни (command_ttl_hours) к уже застолблённым этим ПК не применяется: он
+    // защищает от выполнения старых команд, а отчитаться о прерванной нужно и через неделю.
     //
     // Таргетинг похож на TargetMatcher, но commands хранит target_type/target_id
     // прямо на своей строке (не через отдельную join-таблицу, как
     // notification_targets), поэтому условие здесь своё, не переиспользует класс.
-    public static function commandsForPc($pc, $onlyPending, $commandId = null, $type = null)
+    public static function commandsForPc($pc, $onlyPending, $commandId = null, $type = null, $includeInterrupted = false)
     {
         $ttlHours = (int) Settings::int('command_ttl_hours', 24);
 
+        $pending = $includeInterrupted ? "(r.id IS NULL OR r.status = 'in_progress')" : 'r.id IS NULL';
         $sql = "
             SELECT c.id, c.type, c.payload, c.created_at
             FROM commands c
             LEFT JOIN command_results r ON r.command_id = c.id AND r.pc_id = :pc_id1
             LEFT JOIN host_group_members hgm ON hgm.pc_id = :pc_id2 AND hgm.group_id = c.target_id
-            WHERE " . ($onlyPending ? 'r.id IS NULL' : '1 = 1') . "
-              AND c.created_at >= datetime('now', :ttl)
+            WHERE " . ($onlyPending ? $pending : '1 = 1') . "
+              AND (c.created_at >= datetime('now', :ttl) OR r.status = 'in_progress')
               AND (
                     c.target_type = 'all'
                  OR (c.target_type = 'store' AND c.target_id = :store_id)

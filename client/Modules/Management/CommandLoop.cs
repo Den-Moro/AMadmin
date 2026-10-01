@@ -56,6 +56,9 @@ namespace AMadmin.ManagementAgent
         // иначе служба поднялась бы с новым exe и старой библиотекой.
         private volatile bool _restartPending;
 
+        // До первого удачного опроса просим у сервера и прерванные прошлым процессом команды.
+        private bool _firstPoll = true;
+
         public CommandLoop(AgentConfig config, ApiClient api, string baseDir)
         {
             _config = config;
@@ -80,14 +83,16 @@ namespace AMadmin.ManagementAgent
                 {
                     await PollOnceAsync(ct);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
                     break;
                 }
                 catch (Exception ex)
                 {
                     // Сеть/сервер недоступны — это штатно для магазина, просто ждём следующий опрос.
-                    Logger.Error("Опрос не удался: " + ex.Message);
+                    // Таймаут HttpClient — тоже OperationCanceledException, но это не остановка
+                    // службы (фильтр выше): раньше один таймаут навсегда завершал этот цикл.
+                    Logger.Error("Опрос не удался: " + Describe(ex));
                 }
 
                 if (_restartPending) await RestartSelfAsync();
@@ -123,7 +128,8 @@ namespace AMadmin.ManagementAgent
         private async Task PollOnceAsync(CancellationToken ct)
         {
             Logger.Debug("Опрос " + _config.ServerUrl + "/commands");
-            var commands = await _api.GetCommandsAsync();
+            var commands = await _api.GetCommandsAsync(_firstPoll);
+            _firstPoll = false;
             Logger.Debug("Получено команд: " + commands.Count + BackgroundSuffix());
 
             foreach (var command in commands)
@@ -133,7 +139,7 @@ namespace AMadmin.ManagementAgent
                 {
                     await HandleAsync(command, ct);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
                     throw;
                 }
@@ -141,7 +147,7 @@ namespace AMadmin.ManagementAgent
                 {
                     // Сервер отказал в claim (403: команда устарела или не нам) или сеть моргнула —
                     // одна команда не должна срывать выполнение остальных из этого опроса.
-                    Logger.Error("Команда id=" + command.Id + " пропущена: " + ex.Message);
+                    Logger.Error("Команда id=" + command.Id + " пропущена: " + Describe(ex));
                 }
             }
         }
@@ -203,7 +209,7 @@ namespace AMadmin.ManagementAgent
             {
                 outcome = await executor.ExecuteAsync(payload, ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 await SafeReport(command, Outcome.Failed("Агент остановлен во время выполнения."));
                 throw;
@@ -211,7 +217,7 @@ namespace AMadmin.ManagementAgent
             catch (Exception ex)
             {
                 Logger.Error("Команда id=" + command.Id + " упала: " + ex);
-                outcome = Outcome.Failed("Ошибка агента: " + ex.Message);
+                outcome = Outcome.Failed("Ошибка агента: " + Describe(ex));
             }
 
             Logger.Info("Команда id=" + command.Id + " -> " + outcome.Status);
@@ -293,6 +299,13 @@ namespace AMadmin.ManagementAgent
                             "перезапуск после завершения остальных загрузок.");
                 _restartPending = true;
             }
+        }
+
+        // Таймаут HttpClient приходит как TaskCanceledException с сообщением «Отменена
+        // задача» — в логе и в результате команды это ничего не объясняет.
+        internal static string Describe(Exception ex)
+        {
+            return ex is OperationCanceledException ? "сервер не ответил вовремя (таймаут)" : ex.Message;
         }
 
         private async Task RestartSelfAsync()
