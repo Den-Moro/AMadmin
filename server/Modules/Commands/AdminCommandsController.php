@@ -2,49 +2,84 @@
 
 class AdminCommandsController
 {
-    // GET /admin/commands — последние команды со сводкой по статусам среди уже
-    // поступивших command_results (агенты узнают о команде только на следующем опросе,
-    // поэтому сразу после создания результатов обычно ещё нет — это нормально).
+    // GET /admin/commands — последние команды со сводкой: сколько касс адресовано,
+    // сколько отчитались и сколько ещё не забрали (из них — на связи прямо сейчас, то есть
+    // заберут на ближайшем опросе). expired — срок жизни команды истёк: кто не забрал, уже
+    // не получит.
     public static function index()
     {
         AdminAuth::requireLogin();
 
+        $notClaimed = 'NOT EXISTS (SELECT 1 FROM command_results r WHERE r.command_id = c.id AND r.pc_id = p.id)';
+        // Окно «онлайн» — целым числом прямо в SQL, не параметром: PDO передаёт параметры
+        // строкой, а в SQLite число всегда «меньше» строки — сравнение было бы всегда истинным.
+        $window = self::onlineWindow();
         $sql = "
             SELECT
                 c.id, c.type, c.payload, c.target_type, c.target_id, c.created_at, c.update_batch_id,
                 u.username AS created_by_username,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'in_progress') AS in_progress_count,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'success') AS success_count,
-                (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status IN ('failed', 'timeout')) AS failed_count
+                (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status IN ('failed', 'timeout')) AS failed_count,
+                (SELECT COUNT(*) FROM pcs p WHERE " . CommandsController::TARGETS_PC . ") AS target_count,
+                (SELECT COUNT(*) FROM pcs p WHERE " . CommandsController::TARGETS_PC . " AND {$notClaimed}) AS pending_count,
+                (SELECT COUNT(*) FROM pcs p WHERE " . CommandsController::TARGETS_PC . " AND {$notClaimed}
+                    AND p.last_seen IS NOT NULL AND (julianday('now') - julianday(p.last_seen)) * 86400.0 <= {$window}) AS pending_online_count,
+                (c.created_at < datetime('now', :ttl)) AS expired
             FROM commands c
             LEFT JOIN admin_users u ON u.id = c.created_by
             ORDER BY c.created_at DESC
             LIMIT 100
         ";
-        echo json_encode(Db::get()->query($sql)->fetchAll());
+        $stmt = Db::get()->prepare($sql);
+        $stmt->execute(array('ttl' => self::ttlModifier()));
+        echo json_encode($stmt->fetchAll());
     }
 
-    // GET /admin/commands/{id}/results — по хостам, только те, что уже отозвались
-    // (застолбили и/или выполнили). ПК, которые ещё не опрашивали сервер с момента
-    // создания команды, здесь не появятся — у нас нет способа заранее перечислить "кого
-    // именно затронет" таргет без дублирования логики таргетинга агентов, а раз агент сам
-    // вот-вот появится по факту опроса — это осознанное упрощение, не забытая деталь.
+    // GET /admin/commands/{id}/results — все кассы, которым адресована команда: и
+    // отчитавшиеся, и ещё не забравшие её (status = 'pending', с пометкой «на связи»).
+    // Кого команда затронет, считает то же условие, по которому её получают агенты
+    // (CommandsController::TARGETS_PC). Касса, переведённая в другой магазин уже после
+    // своего отчёта, остаётся в списке — по строке результата.
     public static function results($commandId)
     {
         AdminAuth::requireLogin();
 
-        $stmt = Db::get()->prepare('
+        $window = self::onlineWindow();
+        $stmt = Db::get()->prepare("
             SELECT r.status, r.output, r.claimed_at, r.executed_at,
-                   p.id AS pc_id, p.hostname, p.display_name, s.name AS store_name
-            FROM command_results r
-            JOIN pcs p ON p.id = r.pc_id
+                   p.id AS pc_id, p.hostname, p.display_name, p.last_seen, s.name AS store_name,
+                   (p.last_seen IS NOT NULL AND (julianday('now') - julianday(p.last_seen)) * 86400.0 <= {$window}) AS online
+            FROM commands c
+            JOIN pcs p
             JOIN stores s ON s.id = p.store_id
-            WHERE r.command_id = :command_id
-            ORDER BY r.claimed_at DESC
-        ');
+            LEFT JOIN command_results r ON r.command_id = c.id AND r.pc_id = p.id
+            WHERE c.id = :command_id
+              AND (r.id IS NOT NULL OR " . CommandsController::TARGETS_PC . ")
+            ORDER BY (r.id IS NULL) DESC, r.claimed_at DESC, s.name, p.hostname
+        ");
         $stmt->execute(array('command_id' => (int) $commandId));
 
-        echo json_encode($stmt->fetchAll());
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            if ($row['status'] === null) {
+                $row['status'] = 'pending';
+            }
+            $row['online'] = (bool) $row['online'];
+        }
+        unset($row);
+
+        echo json_encode($rows);
+    }
+
+    private static function onlineWindow()
+    {
+        return (int) Settings::int('online_window_seconds', AdminPcsController::ONLINE_WINDOW_SECONDS);
+    }
+
+    private static function ttlModifier()
+    {
+        return '-' . max(1, Settings::int('command_ttl_hours', 24)) . ' hours';
     }
 
     // POST /admin/commands   body: { type, payload: {...}, target: {type, id} }

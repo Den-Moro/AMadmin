@@ -2,6 +2,18 @@
 
 class CommandsController
 {
+    // «Команда c адресована ПК p» — одно условие на всех: по нему агент получает команды
+    // (commandsForPc) и по нему же панель показывает, кого команда ещё ждёт
+    // (AdminCommandsController), поэтому они не могут разойтись. Группа — по текущему
+    // составу, как и при выдаче агенту.
+    const TARGETS_PC = "(
+            c.target_type = 'all'
+         OR (c.target_type = 'store' AND c.target_id = p.store_id)
+         OR (c.target_type = 'pc' AND c.target_id = p.id)
+         OR (c.target_type = 'device_type' AND c.target_id = p.device_type_id)
+         OR (c.target_type = 'group' AND p.id IN (SELECT pc_id FROM host_group_members WHERE group_id = c.target_id))
+    )";
+
     // Потолок на вывод одной команды с одного ПК (байт) — см. result().
     const MAX_OUTPUT_BYTES = 65536;
 
@@ -69,7 +81,7 @@ class CommandsController
     //
     // Таргетинг похож на TargetMatcher, но commands хранит target_type/target_id
     // прямо на своей строке (не через отдельную join-таблицу, как
-    // notification_targets), поэтому условие здесь своё, не переиспользует класс.
+    // notification_targets), поэтому условие своё — TARGETS_PC.
     public static function commandsForPc($pc, $onlyPending, $commandId = null, $type = null, $includeInterrupted = false)
     {
         $ttlHours = (int) Settings::int('command_ttl_hours', 24);
@@ -78,25 +90,15 @@ class CommandsController
         $sql = "
             SELECT c.id, c.type, c.payload, c.created_at
             FROM commands c
-            LEFT JOIN command_results r ON r.command_id = c.id AND r.pc_id = :pc_id1
-            LEFT JOIN host_group_members hgm ON hgm.pc_id = :pc_id2 AND hgm.group_id = c.target_id
+            JOIN pcs p ON p.id = :pc_id
+            LEFT JOIN command_results r ON r.command_id = c.id AND r.pc_id = p.id
             WHERE " . ($onlyPending ? $pending : '1 = 1') . "
               AND (c.created_at >= datetime('now', :ttl) OR r.status = 'in_progress')
-              AND (
-                    c.target_type = 'all'
-                 OR (c.target_type = 'store' AND c.target_id = :store_id)
-                 OR (c.target_type = 'pc' AND c.target_id = :pc_id3)
-                 OR (c.target_type = 'device_type' AND c.target_id = :device_type_id)
-                 OR (c.target_type = 'group' AND hgm.pc_id IS NOT NULL)
-              )
+              AND " . self::TARGETS_PC . "
         ";
         $params = array(
-            'pc_id1'         => $pc['id'],
-            'pc_id2'         => $pc['id'],
-            'pc_id3'         => $pc['id'],
-            'store_id'       => $pc['store_id'],
-            'device_type_id' => $pc['device_type_id'],
-            'ttl'            => '-' . max(1, $ttlHours) . ' hours',
+            'pc_id' => $pc['id'],
+            'ttl'   => '-' . max(1, $ttlHours) . ' hours',
         );
 
         if ($commandId !== null) {

@@ -148,8 +148,12 @@
         if (!await Ui.confirm('Отправить ' + items.length + ' файл(ов)? Отменить после отправки нельзя.', { okLabel: 'Отправить', danger: true })) return;
 
         try {
-            await Api.post('/admin/commands/batch', { target: { type: targetType, id: targetId }, items: items });
-            Ui.toast('Отправлено — результаты появятся на странице «Команды» по мере опроса касс.', 'success');
+            const sent = await Api.post('/admin/commands/batch', { target: { type: targetType, id: targetId }, items: items });
+            Ui.toast('Отправлено — кассы заберут файлы на ближайшем опросе.', 'success');
+            const status = $('sendUpdateStatus');
+            status.innerHTML = 'Отправлено ' + items.length + ' файл(ов). <a href="/admin/commands?watch=' +
+                encodeURIComponent((sent.ids || []).join(',')) + '">Смотреть выполнение →</a>';
+            status.hidden = false;
             document.querySelectorAll('#filesTable [data-select-file]').forEach(function (cb) { cb.checked = false; });
         } catch (err) {
             Ui.toast('Не удалось отправить: ' + Ui.reason(err, { target_path_must_be_absolute_windows_path: 'путь на кассе должен быть полным, например C:\\Папка\\файл.exe' }), 'error');

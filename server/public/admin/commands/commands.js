@@ -165,8 +165,9 @@
         if (scary && !await Ui.confirm('Отправить команду на ' + count + ' хост(ов)? Отменить после отправки нельзя.', { okLabel: 'Отправить', danger: count > 1 })) return;
 
         try {
-            await Api.post('/admin/commands', { type: type, payload: collectPayload(type), target: { type: targetType, id: targetId } });
-            Ui.toast('Команда отправлена. Результаты появятся по мере опроса касс.', 'success');
+            const created = await Api.post('/admin/commands', { type: type, payload: collectPayload(type), target: { type: targetType, id: targetId } });
+            Ui.toast('Команда отправлена — ход выполнения раскрыт в списке и обновляется сам.', 'success');
+            if (created && created.id) watch([created.id]);
             $('createForm').reset();
             $('createForm').hidden = true;
             showTypeFields();
@@ -284,7 +285,28 @@
         if (c.success_count) parts.push('<span class="badge badge-success">' + c.success_count + ' ок</span>');
         if (c.failed_count) parts.push('<span class="badge badge-failed">' + c.failed_count + ' ошибка</span>');
         if (c.in_progress_count) parts.push('<span class="badge badge-in_progress">' + c.in_progress_count + ' в работе</span>');
-        return parts.length ? parts.join(' ') : '<span class="muted">ещё никто не забрал</span>';
+        const pending = +c.pending_count, online = +c.pending_online_count;
+        if (pending && +c.expired) {
+            parts.push('<span class="badge badge-neutral" title="Срок жизни команды истёк — эти кассы её уже не получат">' + pending + ' не получат</span>');
+        } else if (pending) {
+            parts.push('<span class="badge badge-neutral" title="Ещё не забрали команду. На связи — заберут на ближайшем опросе; остальные — когда выйдут на связь">ждут ' +
+                pending + (online < pending ? ' (на связи ' + online + ')' : '') + '</span>');
+        }
+        if (!parts.length) return '<span class="muted">' + (+c.target_count ? '—' : 'нет касс под этот таргет') + '</span>';
+        return parts.join(' ');
+    }
+
+    // Команда «в процессе», пока кто-то её выполняет или её вот-вот заберёт касса на связи.
+    function isActive(c) {
+        return +c.in_progress_count > 0 || (+c.pending_online_count > 0 && !+c.expired);
+    }
+
+    const STATUS_LABELS = { pending: 'ждёт', in_progress: 'в работе', success: 'ок', failed: 'ошибка', timeout: 'таймаут' };
+
+    function pendingNote(r, c) {
+        if (+c.expired) return '<span class="muted">не получит — срок жизни команды истёк</span>';
+        if (r.online) return '<span class="muted">на связи — заберёт на ближайшем опросе</span>';
+        return '<span class="muted">не на связи' + (r.last_seen ? ' с ' + esc(formatServerTime(r.last_seen)) : ' ни разу') + ' — заберёт, когда выйдет</span>';
     }
 
     async function loadCommands() {
@@ -293,10 +315,19 @@
         const tf = $('typeFilter').value;
         const tbody = document.querySelector('#commandsTable tbody');
         const open = new Set([...tbody.querySelectorAll('tr.open')].map(function (tr) { return tr.dataset.id; }));
-        tbody.innerHTML = '';
+        watched.forEach(function (id) { open.add(id); });
         const visible = commands.filter(function (c) {
             return (!tf || c.type === tf) && (!q || describeCommand(c).toLowerCase().indexOf(q) >= 0);
         }).sort(function (a, b) { return Ui.compareBy(a, b, sort); });
+
+        // Детали раскрытых строк — до перерисовки и параллельно: при частом обновлении
+        // во время наблюдения таблица не мигает пустой.
+        const details = {};
+        await Promise.all(visible.filter(function (c) { return open.has(String(c.id)); }).map(async function (c) {
+            details[c.id] = await Api.get('/admin/commands/' + c.id + '/results');
+        }));
+
+        tbody.innerHTML = '';
         if (!visible.length) {
             tbody.innerHTML = '<tr><td colspan="6" class="empty">Команд пока не было.</td></tr>';
             return;
@@ -314,25 +345,55 @@
                 '<td>' + resultsCell(c) + '</td>' +
                 '<td><div class="actions">' + (canEdit ? '<button type="button" data-act="repeat" title="Заполнить форму этой командой">Повторить</button>' : '') + '</div></td>';
             tbody.appendChild(tr);
-            if (open.has(String(c.id))) await showResults(tr, c);
+            if (details[c.id]) Ui.toggleDetail(tr, resultsHtml(c, details[c.id]), 6);
         }
+        finishWatchIfDone();
+    }
+
+    function resultsHtml(c, results) {
+        if (!results.length) return '<p class="muted">Под этот таргет сейчас не подходит ни одна касса.</p>';
+        const done = +c.success_count + +c.failed_count;
+        return '<p class="muted" style="margin:0 0 8px">Выполнено ' + done + ' из ' + results.length +
+            (+c.failed_count ? ', с ошибкой ' + c.failed_count : '') +
+            (+c.in_progress_count ? ', в работе ' + c.in_progress_count : '') +
+            (+c.pending_count ? ', не забрали ' + c.pending_count : '') +
+            (watched.has(String(c.id)) && isActive(c) ? ' · обновляется само' : '') + '</p>' +
+            '<table><thead><tr><th>Магазин</th><th>Хост</th><th>Статус</th><th>Результат</th><th>Выполнено</th></tr></thead><tbody>' +
+            results.map(function (r) {
+                const badge = r.status === 'pending' ? 'neutral' : r.status;
+                return '<tr><td>' + esc(r.store_name) + '</td><td>' + esc(r.display_name || r.hostname) + '</td>' +
+                    '<td><span class="badge badge-' + esc(badge) + '">' + esc(STATUS_LABELS[r.status] || r.status) + '</span></td>' +
+                    '<td style="max-width:520px">' + (r.status === 'pending' ? pendingNote(r, c)
+                        : (r.output ? '<pre class="output">' + esc(r.output) + '</pre>' : '<span class="muted">—</span>')) + '</td>' +
+                    '<td class="muted" style="white-space:nowrap">' + (r.executed_at ? esc(formatServerTime(r.executed_at)) : '') + '</td></tr>';
+            }).join('') + '</tbody></table>';
     }
 
     async function showResults(tr, c) {
-        const results = await Api.get('/admin/commands/' + c.id + '/results');
-        let html;
-        if (!results.length) {
-            html = '<p class="muted">Пока ни одна касса не опросила сервер с момента отправки.</p>';
-        } else {
-            html = '<table><thead><tr><th>Магазин</th><th>Хост</th><th>Статус</th><th>Результат</th><th>Выполнено</th></tr></thead><tbody>' +
-                results.map(function (r) {
-                    return '<tr><td>' + esc(r.store_name) + '</td><td>' + esc(r.display_name || r.hostname) + '</td>' +
-                        '<td><span class="badge badge-' + esc(r.status) + '">' + esc(r.status) + '</span></td>' +
-                        '<td style="max-width:520px">' + (r.output ? '<pre class="output">' + esc(r.output) + '</pre>' : '<span class="muted">—</span>') + '</td>' +
-                        '<td class="muted" style="white-space:nowrap">' + esc(formatServerTime(r.executed_at)) + '</td></tr>';
-                }).join('') + '</tbody></table>';
-        }
-        Ui.toggleDetail(tr, html, 6);
+        if (tr.classList.contains('open')) { Ui.toggleDetail(tr, '', 6); watched.delete(String(c.id)); return; }
+        Ui.toggleDetail(tr, resultsHtml(c, await Api.get('/admin/commands/' + c.id + '/results')), 6);
+    }
+
+    // Наблюдение за только что отправленными командами: их строки раскрыты, список
+    // обновляется каждые 3 с, пока кто-то выполняет или вот-вот заберёт (не дольше 10 мин),
+    // в конце — итог тостом.
+    let watched = new Set();
+    let watchUntil = 0;
+
+    function watch(ids) {
+        ids.forEach(function (id) { watched.add(String(id)); });
+        watchUntil = Date.now() + 10 * 60 * 1000;
+    }
+
+    function finishWatchIfDone() {
+        if (!watched.size) return;
+        const ours = commands.filter(function (c) { return watched.has(String(c.id)); });
+        if (ours.some(isActive) && Date.now() < watchUntil) return;
+        const sum = function (key) { return ours.reduce(function (s, c) { return s + +c[key]; }, 0); };
+        const failed = sum('failed_count'), waiting = sum('pending_count');
+        Ui.toast('Готово: ' + sum('success_count') + ' ок' + (failed ? ', ' + failed + ' с ошибкой' : '') +
+            (waiting ? '. Не на связи, заберут позже: ' + waiting : ''), failed ? 'error' : 'success');
+        watched = new Set();
     }
 
     document.querySelector('#commandsTable').addEventListener('click', async function (e) {
@@ -349,7 +410,15 @@
     $('refreshBtn').addEventListener('click', loadCommands);
     const sort = Ui.makeSortable(document.querySelector('#commandsTable'), { key: 'created_at', dir: 'desc' }, loadCommands);
 
+    // ?watch=1,2,3 — пришли со страницы «Обновления» смотреть, как раскатывается пакет.
+    const watchParam = new URLSearchParams(location.search).get('watch');
+    if (watchParam) watch(watchParam.split(',').filter(Boolean));
+
     await loadFiles();
     await loadCommands();
-    setInterval(function () { if (!document.hidden) loadCommands(); }, 15000);
+    let lastFull = Date.now();
+    setInterval(function () {
+        if (document.hidden) return;
+        if (watched.size || Date.now() - lastFull >= 15000) { lastFull = Date.now(); loadCommands(); }
+    }, 3000);
 })();
