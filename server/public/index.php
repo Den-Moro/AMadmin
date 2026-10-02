@@ -94,6 +94,7 @@ PageRouter::register($router);
 
 // Агенты (токен в заголовке, не сессия)
 $router->get('/agent/config', array('AgentConfigController', 'index'));
+$router->get('/admin/agent-config/status', array('AgentConfigController', 'adminStatus'));
 $router->get('/occurrences', array('OccurrencesController', 'index'));
 $router->post('/occurrences/{id}/ack', array('AckController', 'store'));
 $router->get('/commands', array('CommandsController', 'index'));

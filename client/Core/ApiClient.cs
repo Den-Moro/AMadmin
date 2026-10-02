@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -44,13 +45,14 @@ namespace AMadmin.Core
     }
 
     // GET /agent/config — настройки, нужные самому агенту (не панели): пароль защиты
-    // клиента и версия, которая считается актуальной. Опрашивается реже, чем
-    // /occurrences и /commands (см. AgentServerConfig.FetchAndCache).
+    // клиента и версия, которая считается актуальной. Перечитывается, когда сервер
+    // присылает другой отпечаток (Revision) в ответе на /occurrences.
     public class AgentServerConfig
     {
         [JsonPropertyName("client_lock_enabled")] public bool ClientLockEnabled { get; set; }
         [JsonPropertyName("client_lock_password_hash")] public string ClientLockPasswordHash { get; set; }
         [JsonPropertyName("current_agent_version")] public string CurrentAgentVersion { get; set; }
+        [JsonPropertyName("revision")] public string Revision { get; set; }
     }
 
     // Единственное место, где клиент разговаривает с сервером. Токен — всегда заголовком
@@ -186,27 +188,49 @@ namespace AMadmin.Core
             }
         }
 
+        // Отпечаток настроек агента: применённый уходит заголовком в каждом запросе (по нему
+        // панель видит, на каких кассах настройка уже действует), текущий серверный приходит
+        // в ответах. Задаёт окно оповещений; у службы управления оба пустые.
+        public string AppliedConfigRevision { get; set; }
+        public string ServerConfigRevision { get; private set; }
+
         private async Task<string> GetStringAsync(string path)
         {
-            var response = await _http.GetAsync(_baseUrl + path);
-            var body = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
+            using (var request = new HttpRequestMessage(HttpMethod.Get, _baseUrl + path))
             {
-                throw new HttpRequestException("GET " + path + " -> " + (int)response.StatusCode + ": " + body);
+                return await SendAsync(request, "GET " + path);
             }
-            return body;
         }
 
         private async Task<string> PostJsonAsync(string path, object payload)
         {
-            var content = new StringContent(payload == null ? "{}" : JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-            var response = await _http.PostAsync(_baseUrl + path, content);
-            var body = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
+            using (var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl + path))
             {
-                throw new HttpRequestException("POST " + path + " -> " + (int)response.StatusCode + ": " + body);
+                request.Content = new StringContent(payload == null ? "{}" : JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                return await SendAsync(request, "POST " + path);
             }
-            return body;
+        }
+
+        private async Task<string> SendAsync(HttpRequestMessage request, string what)
+        {
+            if (!string.IsNullOrEmpty(AppliedConfigRevision))
+            {
+                request.Headers.Add("X-Agent-Config-Rev", AppliedConfigRevision);
+            }
+            using (var response = await _http.SendAsync(request))
+            {
+                IEnumerable<string> rev;
+                if (response.Headers.TryGetValues("X-Agent-Config-Rev", out rev))
+                {
+                    ServerConfigRevision = rev.FirstOrDefault();
+                }
+                var body = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException(what + " -> " + (int)response.StatusCode + ": " + body);
+                }
+                return body;
+            }
         }
     }
 }

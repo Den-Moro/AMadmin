@@ -20,6 +20,10 @@ class OccurrencesController
         // пользователь — с этого опроса дашборд знает, что реально стоит на кассе.
         Auth::heartbeat($pc, true);
 
+        // Отпечаток текущих настроек агента — если он разошёлся с применённым на кассе,
+        // агент сразу перечитает /agent/config (см. AgentConfigController).
+        header('X-Agent-Config-Rev: ' . AgentConfigController::revision());
+
         $sql = "
             SELECT DISTINCT
                 o.id AS occurrence_id,

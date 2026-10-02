@@ -19,6 +19,9 @@ class AdminSettingsController
         // Хеш пароля клиента сюда не отдаём — эту ручку видит любая роль (в т.ч. operator),
         // а форме он не нужен: там только checkbox client_lock_enabled и всегда пустое
         // write-only поле нового пароля. Меньше повод для офлайн-подбора почём зря.
+        // Но задан ли пароль вообще — форме знать нужно: включённая защита без пароля
+        // на кассе ничего не закрывает.
+        $settings['client_lock_password_set'] = !empty($settings['client_lock_password_hash']);
         unset($settings['client_lock_password_hash']);
 
         echo json_encode($settings);

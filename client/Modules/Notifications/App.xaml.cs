@@ -24,7 +24,6 @@ namespace AMadmin.UiAgent
         // отдельно, а не гоняем его вместе с каждым обычным опросом.
         private AgentServerConfig _agentServerConfig;
         private DateTime _agentServerConfigFetchedAt = DateTime.MinValue;
-        private static readonly TimeSpan AgentServerConfigInterval = TimeSpan.FromMinutes(5);
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -61,6 +60,7 @@ namespace AMadmin.UiAgent
             AgentState.Version = _version;
 
             _api = new ApiClient(_config, _version);
+            _api.AppliedConfigRevision = _agentServerConfig?.Revision;
 
             SetupTray();
 
@@ -80,20 +80,12 @@ namespace AMadmin.UiAgent
 
             try
             {
-                // Пароль защиты клиента и актуальная версия — раз в 5 минут, не на каждом
-                // опросе, и обязательно ДО показа оповещений: NotificationWindow.ShowDialog()
-                // ниже блокирует этот метод, пока кассир не закроет окно (может быть минуты),
-                // а этот запрос не должен от него зависеть. FetchAndCache сама не бросает
-                // исключений (см. AgentConfigCache) — сетевая ошибка здесь не должна срывать
-                // остальной опрос.
-                if (DateTime.Now - _agentServerConfigFetchedAt > AgentServerConfigInterval)
-                {
-                    _agentServerConfigFetchedAt = DateTime.Now;
-                    _agentServerConfig = await AgentConfigCache.FetchAndCache(_api, _baseDir);
-                }
-
                 Logger.Debug("Опрос " + _config.ServerUrl + "/occurrences");
                 var occurrences = await _api.GetOccurrencesAsync();
+
+                // Обязательно ДО показа оповещений: NotificationWindow.ShowDialog() ниже
+                // блокирует этот метод, пока кассир не закроет окно (может быть минуты).
+                await RefreshAgentServerConfigIfNeeded();
 
                 AgentState.LastPollAt = DateTime.Now;
                 AgentState.LastSuccessAt = DateTime.Now;
@@ -122,6 +114,32 @@ namespace AMadmin.UiAgent
             finally
             {
                 _polling = false;
+            }
+        }
+
+        // Настройки агента (пароль защиты клиента, актуальная версия): сервер в ответе на
+        // /occurrences присылает отпечаток текущих — перечитываем /agent/config, только если
+        // он отличается от применённого, поэтому смена пароля в панели доезжает за один
+        // опрос. Без отпечатка (старый сервер или прокси срезал заголовок) — раз в 5 минут,
+        // с ним — для страховки раз в 30. FetchAndCache сама не бросает исключений: при
+        // ошибке сети остаётся последний сохранённый конфиг.
+        private async System.Threading.Tasks.Task RefreshAgentServerConfigIfNeeded()
+        {
+            var serverRev = _api.ServerConfigRevision;
+            var appliedRev = _agentServerConfig?.Revision;
+            var fallback = TimeSpan.FromMinutes(string.IsNullOrEmpty(serverRev) ? 5 : 30);
+            var changed = !string.IsNullOrEmpty(serverRev) && serverRev != appliedRev;
+            if (!changed && DateTime.Now - _agentServerConfigFetchedAt <= fallback) return;
+
+            _agentServerConfigFetchedAt = DateTime.Now;
+            var fresh = await AgentConfigCache.FetchAndCache(_api, _baseDir);
+            if (fresh == null) return;
+            _agentServerConfig = fresh;
+            _api.AppliedConfigRevision = fresh.Revision;
+            if (changed && fresh.Revision != appliedRev)
+            {
+                Logger.Info("Настройки агента обновлены с сервера (защита паролем: " +
+                            (fresh.ClientLockEnabled ? "включена" : "выключена") + ", отпечаток " + fresh.Revision + ")");
             }
         }
 
@@ -190,6 +208,7 @@ namespace AMadmin.UiAgent
             Logger.SetLevel(_config.LogLevel);
             AgentState.ServerUrl = _config.ServerUrl;
             _api = new ApiClient(_config, _version);
+            _api.AppliedConfigRevision = _agentServerConfig?.Revision;
             _pollTimer.Interval = TimeSpan.FromSeconds(_config.PollIntervalSeconds);
             _tray.Icon = ResolveTrayIcon();
             Logger.Info("Конфиг обновлён из окна настроек (сервер " + _config.ServerUrl +

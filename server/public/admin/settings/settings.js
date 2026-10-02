@@ -25,8 +25,11 @@
             activeTab = b.dataset.tab;
             document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('active', x === b); });
             document.querySelectorAll('.tab-panel').forEach(function (p) { p.hidden = p.dataset.panel !== activeTab; });
+            if (activeTab === 'client') loadClientRollout();
         });
     });
+
+    let passwordSet = false;
 
     async function loadSettings() {
         const settings = await Api.get('/admin/settings');
@@ -36,7 +39,54 @@
             if (FIELDS[key] === 'bool') el.checked = settings[key] === '1';
             else el.value = settings[key];
         });
+        passwordSet = !!settings.client_lock_password_set;
+        updateNoPasswordNote();
     }
+
+    // Включённая защита без пароля на кассе ничего не закрывает — предупреждаем сразу.
+    function updateNoPasswordNote() {
+        $('clientLockNoPassword').hidden = !($('client_lock_enabled').checked && !passwordSet && !$('client_lock_password').value);
+    }
+    $('client_lock_enabled').addEventListener('change', updateNoPasswordNote);
+    $('client_lock_password').addEventListener('input', updateNoPasswordNote);
+
+    // ---- Применено на кассах ------------------------------------------------------------
+    // Касса сообщает, какие настройки агента у неё уже действуют; пока кто-то на связи
+    // их ещё не применил, обновляем часто — смену пароля видно в течение одного опроса.
+
+    const ROLLOUT_REASONS = {
+        waiting: '<span class="badge badge-online">на связи</span> применит на ближайшем опросе',
+        offline: '<span class="badge badge-offline">не на связи</span> применит, когда выйдет на связь',
+        no_ui: 'окно оповещений не запускалось (в Windows ещё никто не входил)',
+        old_agent: 'агент старой версии не сообщает о применении — обновите агента',
+    };
+    let rolloutHasWaiting = false;
+
+    async function loadClientRollout() {
+        let st;
+        try { st = await Api.get('/admin/agent-config/status'); } catch (e) { return; }
+        rolloutHasWaiting = st.pending.some(function (p) { return p.reason === 'waiting'; });
+        const head = st.total === 0 ? 'Касс пока нет.'
+            : st.applied === st.total ? 'Все ' + st.total + ' касс(ы) уже работают с текущими настройками.'
+            : 'Текущие настройки действуют на <strong>' + st.applied + ' из ' + st.total + '</strong> касс' +
+              (rolloutHasWaiting ? ' — обновляется само.' : '.');
+        const shown = st.pending.slice(0, 50);
+        $('clientRollout').innerHTML = '<p style="margin-top:0">' + head + '</p>' + (shown.length
+            ? '<table><thead><tr><th>Магазин</th><th>Хост</th><th>Состояние</th></tr></thead><tbody>' +
+                shown.map(function (p) {
+                    return '<tr><td>' + Ui.escapeHtml(p.store_name) + '</td>' +
+                        '<td><a class="host-link" href="/admin/hosts/host?id=' + p.id + '">' + Ui.escapeHtml(p.display_name || p.hostname) + '</a></td>' +
+                        '<td>' + (ROLLOUT_REASONS[p.reason] || '') + '</td></tr>';
+                }).join('') + '</tbody></table>' +
+                (st.pending.length > shown.length ? '<p class="muted">и ещё ' + (st.pending.length - shown.length) + '</p>' : '')
+            : '');
+    }
+
+    let lastRollout = 0;
+    setInterval(function () {
+        if (document.hidden || activeTab !== 'client') return;
+        if (rolloutHasWaiting || Date.now() - lastRollout >= 30000) { lastRollout = Date.now(); loadClientRollout(); }
+    }, 5000);
 
     $('settingsForm').addEventListener('submit', async function (e) {
         e.preventDefault();
@@ -57,7 +107,13 @@
         try {
             await Api.request('PUT', '/admin/settings', body);
             if (pwEl) pwEl.value = '';
-            Ui.toast(activeTab === 'server' ? 'Настройки сервера сохранены' : 'Сохранено — кассы подхватят при следующем опросе', 'success');
+            if (activeTab === 'client') {
+                await loadSettings();
+                await loadClientRollout();
+                Ui.toast('Сохранено — ход применения на кассах виден ниже', 'success');
+            } else {
+                Ui.toast(activeTab === 'server' ? 'Настройки сервера сохранены' : 'Сохранено — кассы подхватят при следующем опросе', 'success');
+            }
         } catch (err) {
             Ui.toast('Не удалось сохранить: ' + Ui.reason(err, {
                 server_settings_require_superadmin: 'настройки сервера может менять только суперадмин',

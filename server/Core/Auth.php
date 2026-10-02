@@ -48,11 +48,14 @@ class Auth
                 {$versionColumn} = COALESCE(:version, {$versionColumn}),
                 hostname = COALESCE(:hostname, hostname),
                 username = COALESCE(:username, username),
-                last_ip = COALESCE(:ip, last_ip)
+                last_ip = COALESCE(:ip, last_ip),
+                ui_config_rev = COALESCE(:config_rev, ui_config_rev)
             WHERE id = :id
         ");
         $stmt->execute(array(
             'id'       => $pc['id'],
+            // Какие настройки агента окно оповещений уже применило (см. AgentConfigController).
+            'config_rev' => $withUsername && isset($_SERVER['HTTP_X_AGENT_CONFIG_REV']) ? substr((string) $_SERVER['HTTP_X_AGENT_CONFIG_REV'], 0, 40) : null,
             'version'  => isset($_SERVER['HTTP_X_AGENT_VERSION']) ? $_SERVER['HTTP_X_AGENT_VERSION'] : null,
             'hostname' => isset($_SERVER['HTTP_X_AGENT_HOSTNAME']) ? $_SERVER['HTTP_X_AGENT_HOSTNAME'] : null,
             'username' => $withUsername && isset($_SERVER['HTTP_X_AGENT_USERNAME']) ? $_SERVER['HTTP_X_AGENT_USERNAME'] : null,
