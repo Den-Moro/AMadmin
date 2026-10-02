@@ -465,6 +465,9 @@ pre.output {
     padding: 6px; background: var(--surface-3); border: 1px solid var(--border-strong); border-radius: 12px;
     box-shadow: 0 16px 40px -14px rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; gap: 2px;
 }
+/* display: flex выше перебивает атрибут hidden — без этого список после выбора ПК
+   оставался висеть поверх кнопки «Отправить команду». */
+.pc-picker-list[hidden] { display: none; }
 .pc-picker-list button {
     justify-content: flex-start; text-align: left; border: none; background: transparent; border-radius: 8px;
     padding: 8px 10px; font-weight: 400; font-size: 13px; width: 100%;
