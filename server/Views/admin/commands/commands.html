@@ -13,20 +13,25 @@
     <div class="page-head">
         <div>
             <h1>Удалённое администрирование</h1>
-            <p class="muted">Команды выполняет агент управления на кассе при следующем опросе (обычно в пределах минуты). Результат с каждой кассы — в строке команды.</p>
+            <p class="muted">Службы, процессы и скрипты на кассах. Команду выполняет агент управления при следующем
+            опросе (обычно в пределах минуты), результат с каждой кассы — в строке команды. Разложить файлы по
+            кассам — в разделе <a href="/admin/files">«Файлы»</a>.</p>
         </div>
         <div class="actions" id="adminActions" hidden>
-            <button type="button" id="newBtn" class="primary">＋ Новая команда</button>
+            <button type="button" id="newBtn" class="primary" title="Открыть форму новой команды"></button>
         </div>
     </div>
 
-    <div class="tabs">
-        <button type="button" class="active" data-tab="commands">Команды</button>
-        <button type="button" data-tab="files">Файлы для раскатки</button>
-    </div>
-
-    <section class="tab-panel" data-panel="commands">
+    <section>
         <form id="createForm" class="card" hidden>
+            <div class="card-head">
+                <h2>Новая команда</h2>
+                <button type="button" class="ghost icon-only" id="closeNewBtn" title="Закрыть форму"></button>
+            </div>
+            <div>
+                <span class="muted">Частые команды — заполнят форму, останется выбрать, кому:</span>
+                <div class="chips" id="presets" style="margin-top:8px"></div>
+            </div>
             <label>Что сделать
                 <span class="hint">Тип команды. От него зависит, какие поля появятся ниже.</span>
                 <select id="type">
@@ -90,7 +95,7 @@
                     </label>
                 </div>
                 <label>Текст скрипта
-                    <span class="hint">Выполнится от SYSTEM на каждой кассе. Вывод (stdout/stderr, код возврата) вернётся в результаты. Либо текст, либо путь ниже — не оба.</span>
+                    <span class="hint keep">Выполнится от SYSTEM на каждой кассе. Вывод (stdout/stderr, код возврата) вернётся в результаты. Либо текст, либо путь ниже — не оба.</span>
                     <textarea id="scriptText" rows="6" placeholder="Get-Date&#10;Get-Service Spooler | Select-Object Status"></textarea>
                 </label>
                 <div class="row">
@@ -106,44 +111,27 @@
             </div>
 
             <div class="type-fields" data-type="file_deploy" style="display:none">
-                <div class="row">
-                    <label>Файл с сервера
-                        <span class="hint">Сначала загрузите его на вкладке «Файлы для раскатки».</span>
-                        <select id="deployFileId"></select>
-                    </label>
-                    <label>Куда положить на ПК
-                        <span class="hint">Полный путь вместе с именем файла, например C:\ProfiT\config.ini. Старый файл сохранится рядом как .bak.</span>
-                        <input type="text" id="deployTargetPath" placeholder="C:\ProfiT\config.ini">
-                    </label>
-                </div>
-                <p class="note">Касса сравнит хеш файла у себя с хешем на сервере и скачает только если они отличаются. Скорость и фоновый режим — на вкладке «Файлы для раскатки» ниже.</p>
+                <div class="note">Раскатка файлов переехала в раздел «Файлы»: там загрузка перетаскиванием, выбор
+                папки на кассе из справочника, переименование и проверка итогового пути до отправки.
+                <div style="margin-top:8px"><button type="button" class="small primary" id="goFilesBtn">Перейти в «Файлы» →</button></div></div>
             </div>
 
-            <div class="row">
-                <label>Кому
-                    <span class="hint">Перед отправкой панель спросит подтверждение с числом хостов.</span>
-                    <select id="targetType">
-                        <option value="all">Всем</option>
-                        <option value="store">Магазину</option>
-                        <option value="group">Группе хостов</option>
-                        <option value="device_type">Типу устройства</option>
-                        <option value="pc">Конкретному ПК</option>
-                    </select>
-                </label>
-                <label id="targetIdWrap" style="display:none">Кто именно
-                    <select id="targetId"></select>
-                    <div id="targetPcPicker" style="display:none"></div>
-                </label>
-            </div>
+            <div id="targetBox"></div>
 
-            <div class="row">
-                <button type="submit">Отправить команду</button>
+            <div class="form-actions">
+                <button type="submit" id="submitBtn">Отправить команду</button>
                 <button type="button" class="ghost" id="cancelNewBtn">Отмена</button>
             </div>
         </form>
 
+        <div class="tabs">
+            <button type="button" class="active" data-tab="list">История команд</button>
+            <button type="button" data-tab="settings" data-admin hidden>Защита и лимиты</button>
+        </div>
+
+        <div class="tab-panel" data-panel="list">
         <div class="toolbar">
-            <input type="search" id="search" placeholder="Поиск по команде…">
+            <div class="search-wrap"><span id="searchIcon"></span><input type="search" id="search" placeholder="Поиск по команде, цели, автору…"></div>
             <select id="typeFilter">
                 <option value="">Все типы</option>
                 <option value="service_control">Службы</option>
@@ -151,7 +139,7 @@
                 <option value="script_run">Скрипты</option>
                 <option value="file_deploy">Файлы</option>
             </select>
-            <button type="button" id="refreshBtn" class="ghost" title="Обновить">↻ Обновить</button>
+            <button type="button" id="refreshBtn" class="ghost" title="Перечитать список прямо сейчас (он и так обновляется сам)"></button>
         </div>
         <table id="commandsTable">
             <thead>
@@ -160,14 +148,16 @@
                     <th>Команда</th>
                     <th>Кому</th>
                     <th class="sortable" data-sort="created_by_username">Автор</th>
-                    <th>Результаты</th>
+                    <th title="Сколько касс выполнили команду, с ошибкой, ещё выполняют или пока не забрали">Ход выполнения</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody></tbody>
         </table>
         <p class="muted">Нажмите на строку — результат с каждой кассы. Таблица обновляется сама каждые 15 секунд.</p>
+        </div>
 
+        <div class="tab-panel" data-panel="settings" hidden>
         <div class="card" id="cmdProtectionCard" data-admin hidden>
             <h2>Защита от массовой ошибки</h2>
             <label>Защищённые службы
@@ -187,7 +177,7 @@
                 указано. Потом процесс убивается и приходит статус «timeout». Не больше 600.</span>
                 <input type="number" id="script_timeout_seconds_default" min="1" max="600">
             </label>
-            <div class="row"><button type="button" id="cmdProtectionSaveBtn">Сохранить</button></div>
+            <div class="form-actions"><button type="button" id="cmdProtectionSaveBtn" class="primary">Сохранить</button></div>
         </div>
 
         <div class="card" id="cmdServerCard" hidden>
@@ -204,50 +194,11 @@
                 мегабайты вывода с каждой из 3000 касс незачем.</span>
                 <input type="number" id="command_output_max_kb" min="1" max="10240">
             </label>
-            <div class="row"><button type="button" id="cmdServerSaveBtn">Сохранить</button></div>
+            <div class="form-actions"><button type="button" id="cmdServerSaveBtn" class="primary">Сохранить</button></div>
+        </div>
         </div>
     </section>
 
-    <section class="tab-panel" data-panel="files" hidden>
-        <form id="uploadForm" class="card" data-admin hidden>
-            <div class="row end">
-                <label>Файл
-                    <span class="hint">Любой файл: конфиг, установщик, dll. Загружается один раз — потом раскладывается любым числом команд. Лимит размера — в php.ini сервера.</span>
-                    <input type="file" id="uploadFile" required>
-                </label>
-                <button type="submit">Загрузить</button>
-            </div>
-        </form>
-        <table id="filesTable">
-            <thead><tr><th>Имя</th><th>Размер</th><th>SHA-256</th><th>Загружен</th><th>Кем</th><th></th></tr></thead>
-            <tbody></tbody>
-        </table>
-        <p class="muted">Удаляйте файл только когда команды с ним уже выполнены, иначе они завершатся ошибкой на кассах.</p>
-
-        <div class="card" id="fileDeploySettingsCard" data-admin hidden>
-            <h2>Настройки раскатки</h2>
-            <label>
-                <input type="checkbox" id="file_deploy_async">
-                Асинхронная загрузка файлов
-                <span class="hint">Включено: касса качает файл в фоне и тем временем выполняет остальные
-                команды и продолжает выходить на связь. Выключено: пока файл не скачан, другие команды
-                на этой кассе ждут — нужно только если порядок важен (например, сначала файл, потом
-                скрипт, который его использует).</span>
-            </label>
-            <label>Одновременных загрузок на кассу
-                <span class="hint">Сколько файлов одна касса может качать параллельно в асинхронном режиме.
-                1–2 достаточно; больше — только забьёт канал магазина.</span>
-                <input type="number" id="file_deploy_max_parallel" min="1" max="10">
-            </label>
-            <label>Ограничение скорости скачивания, КБ/с
-                <span class="hint">Потолок на одну кассу. 0 — без ограничения. На узком канале поставьте,
-                например, 200 — тогда даже десять касс магазина не заберут весь интернет. Если в config.json
-                кассы задан свой ненулевой лимит, он важнее этого.</span>
-                <input type="number" id="file_deploy_limit_kbps" min="0" max="1000000">
-            </label>
-            <div class="row"><button type="button" id="fileDeploySaveBtn">Сохранить</button></div>
-        </div>
-    </section>
 </main>
 
 <script src="/admin/shared/api.js"></script>

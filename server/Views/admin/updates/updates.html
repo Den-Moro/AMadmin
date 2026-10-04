@@ -52,22 +52,7 @@
             <tbody></tbody>
         </table>
 
-        <div class="row" style="margin-top:14px">
-            <label>Кому
-                <span class="hint">Перед отправкой панель спросит подтверждение.</span>
-                <select id="targetType">
-                    <option value="all">Всем</option>
-                    <option value="store">Магазину</option>
-                    <option value="group">Группе хостов</option>
-                    <option value="device_type">Типу устройства</option>
-                    <option value="pc">Конкретному ПК</option>
-                </select>
-            </label>
-            <label id="targetIdWrap" style="display:none">Кто именно
-                <select id="targetId"></select>
-                <div id="targetPcPicker" style="display:none"></div>
-            </label>
-        </div>
+        <div id="targetBox" style="margin-top:14px"></div>
         <div class="row">
             <button type="button" id="sendUpdateBtn" class="primary">Отправить отмеченные файлы</button>
             <span id="sendUpdateStatus" class="muted" hidden></span>

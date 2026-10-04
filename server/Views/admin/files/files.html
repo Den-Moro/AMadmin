@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Файлы — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+<style>
+    /* Страница «Файлы»: библиотека загруженных файлов + мастер раскатки «Что → Куда → Кому». */
+    .file-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .file-name .icon { width: 20px; height: 20px; color: var(--accent); flex: none; }
+    .file-name b { word-break: break-all; }
+    .file-name .sub { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+    .deploy-info { font-size: 12.5px; line-height: 1.4; min-width: 200px; max-width: 340px; }
+    #filesTable td:nth-child(2) { min-width: 230px; }
+    #filesTable .actions { flex-wrap: nowrap; }
+    .deploy-info code.path { font-size: 11.5px; }
+    #deployCard { border-color: var(--accent-line); }
+    .names-table { display: flex; flex-direction: column; gap: 6px; }
+    .name-row { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }
+    .name-row .orig { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .folder-line { display: flex; gap: 8px; align-items: center; }
+    .folder-line input { flex: 1; }
+    .sent-list { display: flex; flex-direction: column; gap: 10px; }
+    .sent-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
+    .sent-item .progress-seg { grid-column: 1 / -1; }
+    .dest-path { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+    @media (max-width: 900px) { .name-row { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="page-head">
+        <div>
+            <h1>Файлы</h1>
+            <p class="muted">Загрузите файл один раз — и раскладывайте его по кассам в нужную папку. Касса скачает
+            файл, только если у неё другая версия (сравнение по SHA-256), а прежний файл сохранит рядом как
+            <code class="inline">.bak</code>.</p>
+        </div>
+        <div class="actions" id="adminActions" hidden>
+            <button type="button" id="deployBtn" class="primary" data-tip="Мастер: выбрать файлы, папку на кассе и кому отправить"></button>
+        </div>
+    </div>
+
+    <!-- Мастер раскатки. Открывается кнопкой «Раскатать» (вверху или у файла). -->
+    <form id="deployCard" class="card" hidden novalidate>
+        <div class="card-head">
+            <h2>Раскатка файлов на кассы</h2>
+            <button type="button" class="ghost icon-only" id="deployCloseBtn" title="Закрыть мастер"></button>
+        </div>
+
+        <div class="steps">
+            <div class="step" data-step="files">
+                <span class="step-num">1</span>
+                <div class="step-body">
+                    <div class="step-title">Что раскатать</div>
+                    <div class="chips" id="pickedFiles"></div>
+                    <div class="row" style="max-width:520px">
+                        <label>Добавить файл
+                            <span class="hint">Можно раскатать сразу несколько файлов в одну папку — они уйдут одной пачкой. Нового файла нет в списке? Загрузите его ниже, в область «Перетащите файлы».</span>
+                            <select id="addFileSelect"></select>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step" data-step="where">
+                <span class="step-num">2</span>
+                <div class="step-body">
+                    <div class="step-title">Куда положить на кассе</div>
+                    <div class="choice-grid" id="destChoices"></div>
+                    <div id="recentWrap" hidden>
+                        <span class="muted">Недавно раскатывали в:</span>
+                        <div class="chips" id="recentFolders" style="margin-top:6px"></div>
+                    </div>
+                    <label>Папка на кассе
+                        <span class="hint">Полный путь к папке, например C:\ProfiT или C:\Users\Public\Desktop. Если папки нет — агент создаст её сам. Можно выбрать плитку выше или вписать свою.</span>
+                        <span class="folder-line">
+                            <input type="text" id="folderInput" class="mono" placeholder="C:\ProfiT" autocomplete="off" spellcheck="false">
+                            <button type="button" id="saveDestBtn" class="small" hidden title="Добавить эту папку в справочник «Папки назначения», чтобы в следующий раз выбрать её одним кликом">☆ В справочник</button>
+                        </span>
+                    </label>
+                    <div id="namesBox"></div>
+                    <div class="path-preview" id="pathPreview"></div>
+                </div>
+            </div>
+
+            <div class="step" data-step="who">
+                <span class="step-num">3</span>
+                <div class="step-body">
+                    <div class="step-title">Кому</div>
+                    <div id="targetBox"></div>
+                </div>
+            </div>
+
+            <div class="step" data-step="send">
+                <span class="step-num">4</span>
+                <div class="step-body">
+                    <div class="step-title">Проверьте и отправьте</div>
+                    <dl class="summary" id="summary"></dl>
+                    <p class="error" id="deployError"></p>
+                    <div class="form-actions">
+                        <button type="submit" id="deploySubmitBtn"></button>
+                        <button type="button" class="ghost" id="deployCancelBtn">Отмена</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- После отправки: ход раскатки прямо здесь, без перехода на другую страницу. -->
+    <div class="card" id="sentCard" hidden>
+        <div class="card-head">
+            <h2>Раскатка отправлена</h2>
+            <button type="button" class="ghost icon-only" id="sentCloseBtn" title="Скрыть"></button>
+        </div>
+        <div class="sent-list" id="sentList"></div>
+        <div class="form-actions">
+            <a id="sentWatchLink" href="/admin/commands"><button type="button" class="small">Результат по каждой кассе →</button></a>
+            <span class="muted" id="sentNote"></span>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button type="button" class="active" data-tab="files">Файлы <span class="count" id="filesCount">0</span></button>
+        <button type="button" data-tab="dests">Папки назначения <span class="count" id="destsCount">0</span></button>
+        <button type="button" data-tab="settings" data-admin hidden>Настройки раскатки</button>
+    </div>
+
+    <section class="tab-panel" data-panel="files">
+        <label class="dropzone" id="dropzone" data-admin hidden>
+            <input type="file" id="uploadInput" multiple>
+            <span id="dropIcon"></span>
+            <b>Перетащите файлы сюда или нажмите, чтобы выбрать</b>
+            <span>Можно несколько сразу. Конфиг, установщик, dll, ярлык — что угодно. Тот же файл второй раз не задублируется.</span>
+            <div class="upload-list" id="uploadList"></div>
+        </label>
+
+        <div class="toolbar" style="margin-top:16px">
+            <div class="search-wrap"><span id="searchIcon"></span><input type="search" id="search" placeholder="Поиск по имени файла…"></div>
+            <span class="muted" id="selectedInfo"></span>
+            <button type="button" id="deploySelectedBtn" class="small" hidden>Раскатать отмеченные →</button>
+        </div>
+        <table id="filesTable">
+            <thead>
+                <tr>
+                    <th class="check" style="width:34px"><input type="checkbox" id="checkAll" title="Отметить все"></th>
+                    <th class="sortable" data-sort="original_name">Файл</th>
+                    <th class="sortable" data-sort="size" style="text-align:right">Размер</th>
+                    <th class="sortable desc" data-sort="created_at">Загружен</th>
+                    <th class="sortable" data-sort="deploy_count" title="Сколько раз файл отправляли на кассы и куда — в последний раз">Раскатки</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <p class="muted">Нажмите на строку — история раскаток этого файла. Удаляйте файл, только когда раскатки
+        с ним завершены: кассы, которые ещё не скачали его, получат ошибку.</p>
+    </section>
+
+    <section class="tab-panel" data-panel="dests" hidden>
+        <div class="section-head" style="margin-top:0">
+            <p class="muted" style="margin:0;max-width:760px">Именованные папки на кассах — в мастере раскатки они
+            выбираются одним кликом вместо ввода пути. Уже отправленные раскатки правки здесь не затрагивают: в
+            них записан полный путь.</p>
+            <button type="button" id="addDestBtn" class="primary" data-admin hidden></button>
+        </div>
+        <table id="destsTable">
+            <thead><tr><th>Название</th><th>Папка на кассе</th><th>Пояснение</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+    <section class="tab-panel" data-panel="settings" hidden>
+        <div class="card">
+            <h2>Как кассы скачивают файлы</h2>
+            <label>
+                <input type="checkbox" id="file_deploy_async">
+                Асинхронная загрузка файлов
+                <span class="hint">Включено: касса качает файл в фоне и тем временем выполняет остальные
+                команды и продолжает выходить на связь. Выключено: пока файл не скачан, другие команды
+                на этой кассе ждут — нужно, только если порядок важен (например, сначала файл, потом
+                скрипт, который его использует).</span>
+            </label>
+            <div class="row">
+                <label>Одновременных загрузок на кассу
+                    <span class="hint">Сколько файлов одна касса может качать параллельно в асинхронном режиме.
+                    1–2 достаточно; больше — только забьёт канал магазина.</span>
+                    <input type="number" id="file_deploy_max_parallel" min="1" max="10">
+                </label>
+                <label>Ограничение скорости, КБ/с
+                    <span class="hint">Потолок на одну кассу. 0 — без ограничения. На узком канале поставьте,
+                    например, 200 — тогда даже десять касс магазина не заберут весь интернет. Если в config.json
+                    кассы задан свой ненулевой лимит, он важнее этого.</span>
+                    <input type="number" id="file_deploy_limit_kbps" min="0" max="1000000">
+                </label>
+            </div>
+            <div class="form-actions"><button type="button" id="fileDeploySaveBtn" class="primary">Сохранить</button></div>
+        </div>
+    </section>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="/admin/files/files.js"></script>
+</body>
+</html>

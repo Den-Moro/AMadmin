@@ -18,6 +18,13 @@ class AdminCommandsController
             SELECT
                 c.id, c.type, c.payload, c.target_type, c.target_id, c.created_at, c.update_batch_id,
                 u.username AS created_by_username,
+                -- Имя цели, чтобы в списке было «Магазин Центральный», а не «Магазин #3».
+                CASE c.target_type
+                    WHEN 'store' THEN (SELECT name FROM stores WHERE id = c.target_id)
+                    WHEN 'group' THEN (SELECT name FROM host_groups WHERE id = c.target_id)
+                    WHEN 'device_type' THEN (SELECT name FROM device_types WHERE id = c.target_id)
+                    WHEN 'pc' THEN (SELECT COALESCE(NULLIF(display_name, ''), hostname) FROM pcs WHERE id = c.target_id)
+                END AS target_name,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'in_progress') AS in_progress_count,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status = 'success') AS success_count,
                 (SELECT COUNT(*) FROM command_results r WHERE r.command_id = c.id AND r.status IN ('failed', 'timeout')) AS failed_count,
@@ -396,6 +403,17 @@ class AdminCommandsController
         // Полный путь Windows вместе с именем файла: C:\... или \\server\share\...
         if ($targetPath === '' || !preg_match('#^([A-Za-z]:\\\\|\\\\\\\\)#', $targetPath)) {
             return array('error' => 'target_path_must_be_absolute_windows_path');
+        }
+
+        // Путь заканчивается на «\» — это папка без имени файла: агент попытался бы
+        // записать файл с пустым именем. Раньше так легко было ошибиться, вписав папку.
+        if (substr($targetPath, -1) === '\\') {
+            return array('error' => 'target_path_is_folder');
+        }
+
+        // Символы, недопустимые в путях Windows (двоеточие — только после буквы диска).
+        if (preg_match('#[<>"|?*]#', $targetPath) || strpos(substr($targetPath, 2), ':') !== false) {
+            return array('error' => 'target_path_invalid_chars');
         }
 
         $stmt = Db::get()->prepare('SELECT id, original_name, sha256, size FROM deploy_files WHERE id = :id');

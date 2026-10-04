@@ -63,7 +63,7 @@
     }
 
     // Загрузка — multipart, не JSON: браузер сам ставит boundary, обёртка Api не подходит
-    // (тот же приём, что на «Командах» → «Файлы для раскатки»).
+    // (тот же приём, что на странице «Файлы»).
     $('uploadForm').addEventListener('submit', async function (e) {
         e.preventDefault();
         const input = $('uploadFile');
@@ -91,40 +91,9 @@
         }
     });
 
-    // ---- Таргет (тот же паттерн, что на «Командах») ------------------------------------
+    // ---- Кому — общий компонент со строкой «Попадёт на N касс» ---------------------------
 
-    const targetTypeEl = $('targetType'), targetIdWrap = $('targetIdWrap'), targetIdEl = $('targetId'), targetPcPickerEl = $('targetPcPicker');
-    const optionsCache = {};
-
-    async function loadTargetOptions(type) {
-        if (type === 'all') { targetIdWrap.style.display = 'none'; return; }
-        targetIdWrap.style.display = '';
-        if (!optionsCache[type]) {
-            const endpoints = { store: '/admin/stores', group: '/admin/host-groups', device_type: '/admin/device-types', pc: '/admin/pcs' };
-            optionsCache[type] = await Api.get(endpoints[type]);
-        }
-
-        if (type === 'pc') {
-            targetIdEl.style.display = 'none';
-            targetPcPickerEl.style.display = '';
-            targetIdEl.innerHTML = '';
-            Ui.pcPicker(targetPcPickerEl, optionsCache.pc, function (pc) {
-                targetIdEl.innerHTML = pc ? '<option value="' + pc.id + '" selected>' + esc(Ui.pcLabel(pc)) + '</option>' : '';
-            });
-            return;
-        }
-
-        targetIdEl.style.display = '';
-        targetPcPickerEl.style.display = 'none';
-        targetIdEl.innerHTML = '';
-        optionsCache[type].forEach(function (item) {
-            const opt = document.createElement('option');
-            opt.value = item.id;
-            opt.textContent = item.name;
-            targetIdEl.appendChild(opt);
-        });
-    }
-    targetTypeEl.addEventListener('change', function () { loadTargetOptions(targetTypeEl.value); });
+    const target = canEdit ? Ui.targetPicker($('targetBox')) : null;
 
     $('sendUpdateBtn').addEventListener('click', async function () {
         const selected = Array.prototype.filter.call(document.querySelectorAll('#filesTable tbody tr[data-id]'), function (tr) {
@@ -133,9 +102,10 @@
         });
         if (!selected.length) { Ui.toast('Отметьте хотя бы один файл', 'error'); return; }
 
-        const targetType = targetTypeEl.value;
-        const targetId = targetType === 'all' ? null : targetIdEl.value;
-        if (targetType !== 'all' && !targetId) { Ui.toast('Выберите, кому именно', 'error'); return; }
+        const t = target.value();
+        if (t.type !== 'all' && !t.id) { Ui.toast('Выберите, кому именно', 'error'); return; }
+        const count = target.stats().total;
+        if (!count) { Ui.toast('Под выбранную цель сейчас не подходит ни одна касса', 'error'); return; }
 
         const items = selected.map(function (tr) {
             return { type: 'file_deploy', payload: { file_id: tr.dataset.id, target_path: tr.querySelector('[data-target-path]').value.trim() } };
@@ -145,10 +115,11 @@
             return;
         }
 
-        if (!await Ui.confirm('Отправить ' + items.length + ' файл(ов)? Отменить после отправки нельзя.', { okLabel: 'Отправить', danger: true })) return;
+        if (!await Ui.confirm('Отправить ' + items.length + ' ' + Ui.plural(items.length, 'файл', 'файла', 'файлов') + ' на ' + count + ' ' +
+            Ui.plural(count, 'кассу', 'кассы', 'касс') + ' (' + target.describe() + ')? Отменить после отправки нельзя.', { okLabel: 'Отправить', danger: true })) return;
 
         try {
-            const sent = await Api.post('/admin/commands/batch', { target: { type: targetType, id: targetId }, items: items });
+            const sent = await Api.post('/admin/commands/batch', { target: t, items: items });
             Ui.toast('Отправлено — кассы заберут файлы на ближайшем опросе.', 'success');
             const status = $('sendUpdateStatus');
             status.innerHTML = 'Отправлено ' + items.length + ' файл(ов). <a href="/admin/commands?watch=' +

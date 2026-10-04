@@ -73,6 +73,7 @@ require __DIR__ . '/../Modules/Commands/AdminCommandsController.php';
 require __DIR__ . '/../Modules/Commands/FileStorage.php';
 require __DIR__ . '/../Modules/Commands/FilesController.php';
 require __DIR__ . '/../Modules/Commands/AdminFilesController.php';
+require __DIR__ . '/../Modules/Commands/AdminDeployDestinationsController.php';
 require __DIR__ . '/../Modules/Settings/AdminSettingsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -166,7 +167,12 @@ $router->post('/admin/commands/batch', array('AdminCommandsController', 'storeBa
 $router->get('/admin/commands/{id}/results', array('AdminCommandsController', 'results'));
 $router->get('/admin/files', array('AdminFilesController', 'index'));
 $router->post('/admin/files', array('AdminFilesController', 'store'));
+$router->get('/admin/files/recent-folders', array('AdminFilesController', 'recentFolders'));
 $router->delete('/admin/files/{id}', array('AdminFilesController', 'destroy'));
+$router->get('/admin/deploy-destinations', array('AdminDeployDestinationsController', 'index'));
+$router->post('/admin/deploy-destinations', array('AdminDeployDestinationsController', 'store'));
+$router->put('/admin/deploy-destinations/{id}', array('AdminDeployDestinationsController', 'update'));
+$router->delete('/admin/deploy-destinations/{id}', array('AdminDeployDestinationsController', 'destroy'));
 
 $router->get('/admin/settings', array('AdminSettingsController', 'index'));
 $router->put('/admin/settings', array('AdminSettingsController', 'update'));
