@@ -16,7 +16,7 @@
             <p class="muted">Состояние парка одним взглядом. Список касс с фильтрами и профилями — на странице «Хосты».</p>
         </div>
         <div class="actions">
-            <button type="button" id="refreshBtn" title="Перечитать всё прямо сейчас">↻ Обновить</button>
+            <button type="button" id="refreshBtn" class="ghost" title="Перечитать всё прямо сейчас (и так обновляется само)">↻ Обновить</button>
             <a href="/admin/hosts"><button type="button" class="primary">Все хосты →</button></a>
         </div>
     </div>
@@ -24,18 +24,18 @@
     <div id="ntpWarning" class="note warn" hidden style="margin-bottom:10px"></div>
 
     <div class="stats">
-        <div class="stat"><div class="label">Всего ПК</div><div class="value" id="statTotal">—</div><div class="sub muted" id="statNever"></div></div>
-        <div class="stat ok"><div class="label">Онлайн</div><div class="value" id="statOnline">—</div><div class="sub muted" id="statOnlinePct"></div></div>
-        <div class="stat bad"><div class="label">Офлайн</div><div class="value" id="statOffline">—</div><div class="sub muted" id="statSilent"></div></div>
-        <div class="stat"><div class="label">Магазинов</div><div class="value" id="statStores">—</div><div class="sub muted" id="statGroups"></div></div>
+        <a class="stat" href="/admin/hosts" title="Все заведённые кассы и ПК. Нажмите — откроется список хостов"><div class="label">Всего ПК</div><div class="value" id="statTotal">—</div><div class="sub muted" id="statNever"></div></a>
+        <a class="stat ok" href="/admin/hosts?state=online" title="Агент выходил на связь в пределах окна «онлайн» (настраивается на странице «Хосты»). Нажмите — список"><div class="label">Онлайн</div><div class="value" id="statOnline">—</div><div class="sub muted" id="statOnlinePct"></div></a>
+        <a class="stat bad" href="/admin/hosts?state=offline" title="Давно не выходили на связь: выключены, нет сети или агент не запущен. Нажмите — список"><div class="label">Офлайн</div><div class="value" id="statOffline">—</div><div class="sub muted" id="statSilent"></div></a>
+        <a class="stat" href="/admin/stores" title="Магазины из справочника. Нажмите — «Справочники»"><div class="label">Магазинов</div><div class="value" id="statStores">—</div><div class="sub muted" id="statGroups"></div></a>
     </div>
 
     <div class="stats stats-small">
-        <div class="stat"><div class="label">Оповещений за сутки</div><div class="value" id="actNotif">—</div><div class="sub muted" id="actAcks"></div></div>
-        <div class="stat"><div class="label">Команд за сутки</div><div class="value" id="actCmd">—</div><div class="sub muted" id="actCmdRes"></div></div>
-        <div class="stat"><div class="label">В работе на кассах</div><div class="value" id="actInProgress">—</div><div class="sub muted">команд ещё выполняются</div></div>
-        <div class="stat"><div class="label">Файлы для раскатки</div><div class="value" id="actFiles">—</div><div class="sub muted" id="actFilesSize"></div></div>
-        <div class="stat" id="statOutdatedTile"><div class="label">Устаревшие агенты</div><div class="value" id="statOutdated">—</div><div class="sub muted" id="statOutdatedSub"></div></div>
+        <a class="stat" href="/admin/notifications" title="Показов оповещений за последние 24 часа и сколько из них подтвердили. Нажмите — «Оповещения»"><div class="label">Оповещений за сутки</div><div class="value" id="actNotif">—</div><div class="sub muted" id="actAcks"></div></a>
+        <a class="stat" href="/admin/commands" title="Команд отправлено за 24 часа и их результаты. Нажмите — «Команды»"><div class="label">Команд за сутки</div><div class="value" id="actCmd">—</div><div class="sub muted" id="actCmdRes"></div></a>
+        <a class="stat" href="/admin/commands" title="Кассы забрали команду и ещё не прислали результат (например, качают большой файл)"><div class="label">В работе на кассах</div><div class="value" id="actInProgress">—</div><div class="sub muted">команд ещё выполняются</div></a>
+        <a class="stat" href="/admin/files" title="Загруженные на сервер файлы. Нажмите — раздел «Файлы»"><div class="label">Файлы для раскатки</div><div class="value" id="actFiles">—</div><div class="sub muted" id="actFilesSize"></div></a>
+        <a class="stat" href="/admin/updates" id="statOutdatedTile" title="Кассы с версией агента ниже актуальной. Нажмите — «Обновления»"><div class="label">Устаревшие агенты</div><div class="value" id="statOutdated">—</div><div class="sub muted" id="statOutdatedSub"></div></a>
     </div>
 
     <div class="row-2">

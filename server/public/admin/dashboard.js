@@ -57,11 +57,12 @@
         const p = st.pcs, a = st.activity;
         const total = +p.total, online = +p.online;
         $('statTotal').textContent = total;
-        $('statNever').innerHTML = +p.never_seen ? '<a href="/admin/hosts?state=never">ни разу не выходили: ' + p.never_seen + '</a>' : 'все выходили на связь';
+        // Плитка сама — ссылка на список, вложенная <a> была бы недопустимой разметкой.
+        $('statNever').textContent = +p.never_seen ? 'ни разу не выходили: ' + p.never_seen : 'все выходили на связь';
         $('statOnline').textContent = online;
         $('statOnlinePct').textContent = total ? Math.round(online / total * 100) + '% парка' : '';
         $('statOffline').textContent = total - online;
-        $('statSilent').innerHTML = +p.silent_day ? '<a href="/admin/hosts?state=silent">молчат больше суток: ' + p.silent_day + '</a>' : '';
+        $('statSilent').textContent = +p.silent_day ? 'молчат больше суток: ' + p.silent_day : '';
         $('statStores').textContent = st.stores.length;
         $('statGroups').textContent = 'групп: ' + a.groups + ', администраторов: ' + a.admins;
 

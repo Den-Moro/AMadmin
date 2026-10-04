@@ -32,6 +32,7 @@ class PageRouter
         '/admin/settings' => 'settings/settings.html',
         '/admin/users' => 'users/users.html',
         '/admin/updates' => 'updates/updates.html',
+        '/admin/files' => 'files/files.html',
     );
 
     // Регистрирует в $router только 301-редиректы со старых .html-путей — они не
@@ -80,7 +81,16 @@ class PageRouter
     private static function render($viewFile)
     {
         header('Content-Type: text/html; charset=utf-8');
-        readfile(__DIR__ . '/../Views/admin/' . $viewFile);
+        // Сама страница не кэшируется — иначе после обновления сервера браузер мог бы
+        // показать старый HTML. А к её /admin/*.css и *.js дописываем
+        // ?v=<время изменения файла>: новая версия скрипта подхватывается сразу, без
+        // Ctrl+F5, а неизменённые файлы по-прежнему берутся из кэша браузера.
+        header('Cache-Control: no-cache');
+        $html = file_get_contents(__DIR__ . '/../Views/admin/' . $viewFile);
+        echo preg_replace_callback('#(src|href)="(/admin/[A-Za-z0-9_/.-]+\.(?:js|css))"#', function ($m) {
+            $file = __DIR__ . '/../public' . $m[2];
+            return is_file($file) ? $m[1] . '="' . $m[2] . '?v=' . filemtime($file) . '"' : $m[0];
+        }, $html);
     }
 
     private static function redirectToClean($cleanPath)
