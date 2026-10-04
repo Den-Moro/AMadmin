@@ -1,7 +1,8 @@
 // Профиль хоста (/admin/hosts/host?id=N). Порядок работы:
 //   1. id из адресной строки -> GET /admin/pcs/{id} (карточка + группы + история).
-//   2. Кнопки сверху: «Оповестить» и «Команда…» ведут на соответствующие страницы с
-//      уже выбранным этим ПК (?pc=N); «Изменить», ключ и удаление — здесь же.
+//   2. Кнопки сверху: «Быстрые действия» — команда на этот ПК с результатом прямо в
+//      окне; «Оповестить», файл и прочие команды — на свои страницы с уже выбранным этим
+//      ПК (?pc=N); «Изменить», ключ и удаление — здесь же.
 //   3. «Обновить» и таймер раз в 30 с перечитывают всё.
 (async function () {
     const me = await requireAdminAuth();
@@ -11,6 +12,10 @@
     const id = parseInt(new URLSearchParams(window.location.search).get('id'), 10);
     if (!id) { window.location.href = '/admin/hosts'; return; }
     if (canEdit) $('adminActions').hidden = false;
+    $('refreshBtn').innerHTML = Ui.icon('refresh') + 'Обновить';
+    $('quickBtn').innerHTML = Ui.icon('zap') + 'Быстрые действия';
+    $('notifyBtn').innerHTML = Ui.icon('bell') + 'Оповестить';
+    $('editBtn').innerHTML = Ui.icon('sliders') + 'Изменить';
 
     let data = null, stores = [], deviceTypes = [];
 
@@ -73,7 +78,7 @@
         rt.innerHTML = data.results.length ? data.results.map(function (r) {
             return '<tr><td class="muted" style="white-space:nowrap">' + esc(formatServerTime(r.executed_at || r.claimed_at)) + '</td>' +
                 '<td>' + esc(describeCommand(r)) + '</td><td>' + esc(r.author || '—') + '</td>' +
-                '<td><span class="badge badge-' + esc(r.status) + '">' + esc(r.status) + '</span></td>' +
+                '<td><span class="badge badge-' + esc(r.status) + '">' + esc(STATUS_LABELS[r.status] || r.status) + '</span></td>' +
                 '<td style="max-width:480px">' + (r.output ? '<pre class="output">' + esc(r.output) + '</pre>' : '<span class="muted">—</span>') + '</td></tr>';
         }).join('') : '<tr><td colspan="5" class="empty">Команд на этот хост ещё не было.</td></tr>';
 
@@ -110,7 +115,97 @@
 
     $('refreshBtn').addEventListener('click', async function () { await load(); Ui.toast('Обновлено', 'success'); });
     $('notifyBtn').addEventListener('click', function () { window.location.href = '/admin/notifications?pc=' + id; });
-    $('commandBtn').addEventListener('click', function () { window.location.href = '/admin/commands?pc=' + id; });
+    // ---- Быстрые действия: команда на этот ПК и её результат прямо здесь --------------
+
+    // Только просмотр (ничего не меняют на кассе) — отправляются без подтверждения.
+    // То, что меняет состояние (перезапуск службы), спрашивает. Всё остальное — на
+    // страницах «Команды» и «Файлы» с этим ПК уже выбранным.
+    const QUICK = {
+        disk: { label: 'Свободное место на дисках', type: 'script_run', payload: { engine: 'powershell',
+            script: "Get-WmiObject Win32_LogicalDisk -Filter 'DriveType=3' |\n    Select-Object DeviceID, @{n='Свободно, ГБ';e={[math]::Round($_.FreeSpace/1GB,1)}}, @{n='Всего, ГБ';e={[math]::Round($_.Size/1GB,1)}} |\n    Format-Table -AutoSize | Out-String" } },
+        procs: { label: 'Список процессов', type: 'process_action', payload: { action: 'list' } },
+        services: { label: 'Список служб', type: 'service_control', payload: { action: 'list', service_name: '' } },
+        net: { label: 'Сеть: ipconfig /all', type: 'script_run', payload: { engine: 'cmd', script: 'ipconfig /all' } },
+        users: { label: 'Кто вошёл в систему', type: 'script_run', payload: { engine: 'cmd', script: 'query user' } },
+    };
+
+    const STATUS_LABELS = { pending: 'ждёт', in_progress: 'в работе', success: 'ок', failed: 'ошибка', timeout: 'таймаут' };
+
+    $('quickBtn').addEventListener('click', async function () {
+        const act = await Ui.menu($('quickBtn'), [
+            { label: 'Свободное место на дисках', value: 'disk' },
+            { label: 'Список процессов', value: 'procs' },
+            { label: 'Список служб', value: 'services' },
+            { label: 'Сеть: ipconfig /all', value: 'net' },
+            { label: 'Кто вошёл в систему', value: 'users' },
+            { label: 'Перезапустить службу…', value: 'restart' },
+            { label: 'Положить файл на эту кассу…', value: 'file' },
+            { label: 'Другая команда или скрипт…', value: 'command' },
+        ]);
+        if (!act) return;
+        if (act === 'file') { window.location.href = '/admin/files?pc=' + id; return; }
+        if (act === 'command') { window.location.href = '/admin/commands?pc=' + id; return; }
+        if (act === 'restart') {
+            const name = await Ui.prompt('Имя службы', { title: 'Перезапустить службу', okLabel: 'Перезапустить', value: 'Spooler',
+                hint: 'Системное имя, как в services.msc (например, Spooler — диспетчер печати), не отображаемое.',
+                validate: function (v) { return v.trim() ? '' : 'укажите имя службы'; } });
+            if (name === null) return;
+            runQuick({ label: 'Перезапуск службы «' + name.trim() + '»', type: 'service_control', payload: { action: 'restart', service_name: name.trim() } });
+            return;
+        }
+        runQuick(QUICK[act]);
+    });
+
+    async function runQuick(q) {
+        const pc = data.pc;
+        if (!pc.online && !await Ui.confirm('Касса сейчас не на связи (' + (pc.last_seen ? 'последний опрос ' + ago(pc.last_seen) : 'ещё ни разу не выходила') +
+            '). Команда выполнится, когда она включится, — результат появится в истории ниже. Отправить?', { okLabel: 'Отправить' })) return;
+
+        let created;
+        try {
+            created = await Api.post('/admin/commands', { type: q.type, payload: q.payload, target: { type: 'pc', id: id } });
+        } catch (err) {
+            Ui.toast('Не удалось отправить: ' + Ui.reason(err, { protected_service: 'эта служба в защищённом списке', service_name_required: 'укажите имя службы' }), 'error');
+            return;
+        }
+
+        let open = true, timer = null;
+        const started = Date.now();
+        const done = Ui.modal({
+            title: q.label + ' — ' + (pc.display_name || pc.hostname), wide: true,
+            body: '<div id="quickBox"><div class="quick-wait"><span class="spinner"></span>' +
+                (pc.online ? 'Ждём кассу — она заберёт команду на ближайшем опросе (обычно до 30 секунд)…' : 'Ждём, когда касса выйдет на связь…') + '</div></div>',
+            buttons: [{ label: 'Закрыть', value: null }],
+        });
+        done.then(function () { open = false; clearTimeout(timer); load(); });
+
+        async function poll() {
+            if (!open) return;
+            let r = null;
+            try { r = (await Api.get('/admin/commands/' + created.id + '/results')).find(function (x) { return +x.pc_id === id; }); } catch (e) { /* следующая попытка */ }
+            const box = document.getElementById('quickBox');
+            if (!box) return;
+            if (r && (r.status === 'success' || r.status === 'failed' || r.status === 'timeout')) {
+                box.innerHTML = '<div class="quick-out"><p style="margin:0 0 8px"><span class="badge badge-' + esc(r.status) + '">' + esc(STATUS_LABELS[r.status]) + '</span> ' +
+                    '<span class="muted">' + esc(formatServerTime(r.executed_at)) + '</span> ' +
+                    '<button type="button" class="small ghost" id="quickCopy" title="Скопировать вывод в буфер обмена">' + Ui.icon('copy') + 'Скопировать</button></p>' +
+                    '<pre class="output">' + esc(r.output || '(пустой вывод)') + '</pre></div>';
+                document.getElementById('quickCopy').addEventListener('click', function () {
+                    navigator.clipboard.writeText(r.output || '').then(function () { Ui.toast('Скопировано', 'success'); });
+                });
+                return;
+            }
+            if (r && r.status === 'in_progress') {
+                box.innerHTML = '<div class="quick-wait"><span class="spinner"></span>Касса забрала команду и выполняет её…</div>';
+            }
+            if (Date.now() - started > 3 * 60 * 1000) {
+                box.innerHTML = '<p class="muted" style="margin:0">Касса пока не ответила. Окно можно закрыть — результат появится в истории команд этого хоста ниже.</p>';
+                return;
+            }
+            timer = setTimeout(poll, 2000);
+        }
+        poll();
+    }
 
     $('editBtn').addEventListener('click', async function () {
         if (!stores.length) { stores = await Api.get('/admin/stores'); deviceTypes = await Api.get('/admin/device-types'); }
