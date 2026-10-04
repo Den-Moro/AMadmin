@@ -60,12 +60,16 @@ class AdminStatsController
             $versions[] = array('version' => (string) $v, 'count' => $count);
         }
 
-        // current_agent_version не задана явно (свежая установка/ещё не заходили на
-        // «Обновления») — считаем актуальной самую новую из реально отчитавшихся версий,
-        // как раньше вычислялось на клиенте. Явно заданная версия админом всегда важнее.
+        // Актуальная версия: явно заданная на «Обновлениях» важнее всего; не задана —
+        // последняя стабильная из сохранённых версий агента; нет и их (свежая установка)
+        // — самая новая из реально отчитавшихся.
         $baseline = Settings::get('current_agent_version', '');
+        $baselineSource = 'manual';
         if ($baseline === '') {
-            $baseline = $newestSeen;
+            $stable = $db->query("SELECT version FROM agent_releases WHERE status = 'stable'")->fetchAll(PDO::FETCH_COLUMN);
+            usort($stable, function ($a, $b) { return VersionCompare::compare($b, $a); });
+            $baseline = $stable ? $stable[0] : $newestSeen;
+            $baselineSource = $stable ? 'stable' : 'newest_seen';
         }
         foreach ($versions as &$v) {
             $v['outdated'] = $baseline !== null && VersionCompare::isOutdated($v['version'], $baseline);
@@ -102,6 +106,7 @@ class AdminStatsController
             'stores'   => $stores,
             'versions' => $versions,
             'agent_version_baseline' => $baseline,
+            'agent_version_baseline_source' => $baselineSource,
             'activity' => $activity,
             'events'   => $events,
             'log_level' => Settings::get('log_level', 'debug'),

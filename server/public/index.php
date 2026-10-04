@@ -50,6 +50,7 @@ require __DIR__ . '/../Core/TargetMatcher.php';
 require __DIR__ . '/../Core/NtpClient.php';
 require __DIR__ . '/../Core/ServerMode.php';
 require __DIR__ . '/../Core/ServerMetrics.php';
+require __DIR__ . '/../Core/PeVersion.php';
 require __DIR__ . '/../Core/NetworkSiteMatcher.php';
 require __DIR__ . '/../Core/VersionCompare.php';
 require __DIR__ . '/../Core/Router.php';
@@ -74,6 +75,7 @@ require __DIR__ . '/../Modules/Commands/FileStorage.php';
 require __DIR__ . '/../Modules/Commands/FilesController.php';
 require __DIR__ . '/../Modules/Commands/AdminFilesController.php';
 require __DIR__ . '/../Modules/Commands/AdminDeployDestinationsController.php';
+require __DIR__ . '/../Modules/Updates/AdminReleasesController.php';
 require __DIR__ . '/../Modules/Settings/AdminSettingsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -173,6 +175,13 @@ $router->get('/admin/deploy-destinations', array('AdminDeployDestinationsControl
 $router->post('/admin/deploy-destinations', array('AdminDeployDestinationsController', 'store'));
 $router->put('/admin/deploy-destinations/{id}', array('AdminDeployDestinationsController', 'update'));
 $router->delete('/admin/deploy-destinations/{id}', array('AdminDeployDestinationsController', 'destroy'));
+$router->get('/admin/agent-releases', array('AdminReleasesController', 'index'));
+$router->post('/admin/agent-releases', array('AdminReleasesController', 'store'));
+$router->get('/admin/agent-releases/import', array('AdminReleasesController', 'importPreview'));
+$router->post('/admin/agent-releases/import', array('AdminReleasesController', 'import'));
+$router->put('/admin/agent-releases/{id}', array('AdminReleasesController', 'update'));
+$router->delete('/admin/agent-releases/{id}', array('AdminReleasesController', 'destroy'));
+$router->post('/admin/agent-releases/{id}/deploy', array('AdminReleasesController', 'deploy'));
 
 $router->get('/admin/settings', array('AdminSettingsController', 'index'));
 $router->put('/admin/settings', array('AdminSettingsController', 'update'));

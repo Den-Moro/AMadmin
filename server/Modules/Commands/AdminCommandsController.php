@@ -16,7 +16,8 @@ class AdminCommandsController
         $window = self::onlineWindow();
         $sql = "
             SELECT
-                c.id, c.type, c.payload, c.target_type, c.target_id, c.created_at, c.update_batch_id,
+                c.id, c.type, c.payload, c.target_type, c.target_id, c.created_at, c.update_batch_id, c.release_id,
+                (SELECT version FROM agent_releases WHERE id = c.release_id) AS release_version,
                 u.username AS created_by_username,
                 -- Имя цели, чтобы в списке было «Магазин Центральный», а не «Магазин #3».
                 CASE c.target_type
@@ -220,7 +221,7 @@ class AdminCommandsController
             return;
         }
 
-        $checkedItems = array();
+        $payloads = array();
         foreach ($items as $i => $item) {
             $itemType = isset($item['type']) ? $item['type'] : 'file_deploy';
             if ($itemType !== 'file_deploy') {
@@ -228,12 +229,27 @@ class AdminCommandsController
                 echo json_encode(array('error' => 'unsupported_type', 'index' => $i));
                 return;
             }
-            $payload = isset($item['payload']) && is_array($item['payload']) ? $item['payload'] : array();
+            $payloads[] = isset($item['payload']) && is_array($item['payload']) ? $item['payload'] : array();
+        }
+
+        $result = self::createFileBatch($payloads, $targetType, $targetId, null);
+        if (isset($result['error'])) {
+            http_response_code(400);
+        }
+        echo json_encode($result);
+    }
+
+    // Пачка file_deploy-команд с общим update_batch_id (и, для версии агента, release_id).
+    // Все элементы проверяются ДО первой вставки — одна плохая строка не должна создавать
+    // половину пачки. Возвращает array('status' => 'ok', 'update_batch_id', 'ids') или
+    // array('error' => код, 'index' => номер элемента). Цель проверяет вызывающий.
+    public static function createFileBatch(array $payloads, $targetType, $targetId, $releaseId)
+    {
+        $checkedItems = array();
+        foreach ($payloads as $i => $payload) {
             $checked = self::validateFileDeploy($payload);
             if (isset($checked['error'])) {
-                http_response_code(400);
-                echo json_encode(array('error' => $checked['error'], 'index' => $i));
-                return;
+                return array('error' => $checked['error'], 'index' => $i);
             }
             $checkedItems[] = $checked;
         }
@@ -241,8 +257,8 @@ class AdminCommandsController
         $batchId = bin2hex(random_bytes(8));
         $db = Db::get();
         $stmt = $db->prepare('
-            INSERT INTO commands (type, payload, target_type, target_id, created_by, update_batch_id)
-            VALUES (:type, :payload, :target_type, :target_id, :created_by, :batch_id)
+            INSERT INTO commands (type, payload, target_type, target_id, created_by, update_batch_id, release_id)
+            VALUES (:type, :payload, :target_type, :target_id, :created_by, :batch_id, :release_id)
         ');
 
         $ids = array();
@@ -256,6 +272,7 @@ class AdminCommandsController
                     'target_id'   => $targetType === 'all' ? null : $targetId,
                     'created_by'  => $_SESSION['admin_id'],
                     'batch_id'    => $batchId,
+                    'release_id'  => $releaseId,
                 ));
                 $ids[] = $db->lastInsertId();
             }
@@ -267,10 +284,11 @@ class AdminCommandsController
 
         Logger::info(
             'Пакетная команда создана: batch=' . $batchId . ' команд=' . count($ids) .
+            ($releaseId ? " версия_агента_id={$releaseId}" : '') .
             " таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " автор='{$_SESSION['admin_username']}'"
         );
 
-        echo json_encode(array('status' => 'ok', 'update_batch_id' => $batchId, 'ids' => $ids));
+        return array('status' => 'ok', 'update_batch_id' => $batchId, 'ids' => $ids);
     }
 
     // ---- Валидаторы по типам ------------------------------------------------------

@@ -121,6 +121,8 @@
     // Заполнить форму из существующей команды — «Повторить». Раскатку файла повторяет
     // мастер на странице «Файлы» (там папка, имя и цель подставятся сами).
     async function prefill(c) {
+        // Пачка версии агента повторяется на «Обновлениях» (раскатка версии целиком), отдельный файл — в «Файлах».
+        if (c.release_version) { window.location.href = '/admin/updates'; return; }
         if (c.type === 'file_deploy') { window.location.href = '/admin/files?repeat=' + c.id; return; }
         let p = {};
         try { p = JSON.parse(c.payload); } catch (e) { /* — */ }
@@ -282,12 +284,14 @@
                 '<td class="muted nowrap">' + esc(formatServerTime(c.created_at)) + '</td>' +
                 '<td><span class="kind">' + Ui.icon(typeIcons[c.type] || 'terminal') + (typeNames[c.type] || c.type) + '</span> ' +
                     '<span style="word-break:break-word">' + esc(describeCommand(c)) + '</span>' +
-                    (c.update_batch_id ? ' <span class="badge badge-info plain" title="Несколько файлов, отправленных одним действием (пакет ' + esc(c.update_batch_id) + ')">пакет</span>' : '') + '</td>' +
+                    (c.release_version
+                        ? ' <a href="/admin/updates" class="badge badge-info plain" style="text-decoration:none" title="Часть раскатки версии агента ' + esc(c.release_version) + ' (страница «Обновления»)">версия ' + esc(c.release_version) + '</a>'
+                        : (c.update_batch_id ? ' <span class="badge badge-info plain" title="Несколько файлов, отправленных одним действием (пакет ' + esc(c.update_batch_id) + ')">пакет</span>' : '')) + '</td>' +
                 '<td>' + esc(describeTarget(c)) + '</td>' +
                 '<td>' + esc(c.created_by_username || '—') + '</td>' +
                 '<td style="min-width:170px">' + resultsCell(c) + '</td>' +
                 '<td><div class="actions">' + (canEdit ? '<button type="button" class="small" data-act="repeat" title="' +
-                    (c.type === 'file_deploy' ? 'Открыть мастер раскатки с этим файлом, папкой и целью' : 'Заполнить форму этой командой — останется проверить и отправить') + '">Повторить</button>' : '') + '</div></td>';
+                    (c.release_version ? 'Раскатать версию агента ещё раз — на странице «Обновления»' : c.type === 'file_deploy' ? 'Открыть мастер раскатки с этим файлом, папкой и целью' : 'Заполнить форму этой командой — останется проверить и отправить') + '">Повторить</button>' : '') + '</div></td>';
             tbody.appendChild(tr);
             if (details[c.id]) Ui.toggleDetail(tr, resultsHtml(c, details[c.id]), 6);
         }

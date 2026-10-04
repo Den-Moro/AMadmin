@@ -5,6 +5,25 @@
 <title>Обновления — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
 <script src="/admin/shared/ui.js"></script>
+<style>
+    /* Страница «Обновления»: инструкция, что стоит на кассах, список версий агента,
+       мастера «Новая версия» и «Раскатать версию». */
+    .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 28px; }
+    .help-grid h3 { font-size: 13.5px; margin: 0 0 6px; color: var(--text); }
+    .help-grid ol, .help-grid ul { margin: 0; padding-left: 20px; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+    .help-grid li + li { margin-top: 4px; }
+    .ver { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+    .notes-short { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 380px; font-size: 13px; color: var(--text-2); white-space: pre-line; }
+    .notes-full { white-space: pre-wrap; font-size: 13.5px; color: var(--text); margin: 0 0 10px; }
+    #releasesTable td { vertical-align: top; }
+    .upload-ver { font-family: var(--mono); font-size: 12px; }
+    .deploy-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .file-lines { display: flex; flex-direction: column; gap: 4px; }
+    .sent-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
+    .sent-item .progress-seg { grid-column: 1 / -1; }
+    .stat .sub a { color: inherit; }
+    .stat button.small { margin-top: 6px; }
+</style>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
@@ -12,52 +31,201 @@
 <main>
     <div class="page-head">
         <div>
-            <h1>Обновления</h1>
-            <p class="muted">Загрузите новую версию агента (один или несколько файлов) и отправьте на выбранные
-            кассы за одно действие — под капотом это обычная раскатка файлов (со сравнением по хешу), просто
-            сгруппированная в истории команд.</p>
+            <h1>Обновления агента</h1>
+            <p class="muted">Версии агента касс: загрузить новую, проверить на пилоте, раскатать на все кассы — и
+            одним действием откатиться на стабильную, если что-то пошло не так.</p>
+        </div>
+        <div class="actions">
+            <button type="button" id="helpBtn" class="ghost" title="Показать или скрыть инструкцию и рекомендации"></button>
+            <span id="adminActions" hidden>
+                <button type="button" id="rollbackBtn" class="danger"></button>
+                <button type="button" id="newReleaseBtn" class="primary" title="Загрузить файлы новой сборки агента и сохранить их как версию"></button>
+            </span>
         </div>
     </div>
 
-    <div class="card compact" id="baselineCard" hidden>
-        <h2>Актуальная версия</h2>
-        <p class="muted" style="margin-top:0">Доступно только суперадмину. Показывается на дашборде и здесь как
-        «устаревшие агенты». Если не задать — считается версия, на которой отчиталось больше всего касс.</p>
-        <div class="row" style="align-items:center">
-            <label>Версия<input type="text" id="current_agent_version" placeholder="например, 1.2.3" style="max-width:160px"></label>
-            <button type="button" id="baselineSaveBtn">Сохранить</button>
+    <!-- Инструкция: открыта при первом заходе, дальше — по кнопке «Как это работает». -->
+    <div class="card" id="helpCard" hidden>
+        <div class="card-head">
+            <h2>Как проходит обновление</h2>
+            <button type="button" class="ghost icon-only" id="helpCloseBtn" title="Скрыть инструкцию (вернуть — кнопка «Как это работает»)"></button>
+        </div>
+        <div class="help-grid">
+            <div>
+                <h3>Как выпустить обновление</h3>
+                <ol>
+                    <li>Соберите клиент: <code>deploy\client\build-client.cmd</code> — файлы появятся в <code>dist\client</code>.</li>
+                    <li><b>«Новая версия»</b> → перетащите файлы из <code>dist\client</code>. Номер версии подставится сам
+                        из .exe. Опишите, что изменилось. Статус — «тестовая».</li>
+                    <li>Раскатайте на пилот: одну кассу, пилотный магазин или группу «Пилот». Проверьте на «Хостах»: у кассы
+                        новая версия, команды и оповещения работают.</li>
+                    <li>Пометьте версию <b>«стабильной»</b> и раскатайте на остальные кассы — частями (по магазинам или
+                        группам), если касс много.</li>
+                    <li>Что-то пошло не так — <b>«Откатиться на стабильную»</b>: та же раскатка, только старой версии.</li>
+                </ol>
+            </div>
+            <div>
+                <h3>Что происходит на кассе</h3>
+                <ul>
+                    <li>Служба управления забирает пачку файлов на ближайшем опросе (обычно до 30 секунд) и скачивает только
+                        изменившиеся (сравнение SHA-256). Прежний файл остаётся рядом как <code>.bak.&lt;дата&gt;</code>.</li>
+                    <li>Дождавшись последнего файла, служба сама перезапускается уже новой версией — касса пропадает со связи
+                        на несколько секунд, работе кассира это не мешает.</li>
+                    <li>Окно оповещений посреди смены не перезапускается: новая версия запустится при следующем входе
+                        пользователя. До этого у хоста видно «служба X, окно Y».</li>
+                    <li>Выключенные кассы получат обновление, когда включатся, — если в пределах срока жизни команды
+                        (по умолчанию 24 ч). Позже — просто отправьте ещё раз: касса с новой версией ничего не скачает.</li>
+                </ul>
+            </div>
+            <div>
+                <h3>Рекомендации</h3>
+                <ul>
+                    <li>Сначала пилот, потом все. Тестовую версию не раскатывайте сразу на весь парк.</li>
+                    <li>Держите в списке хотя бы одну стабильную версию — на неё откатываются. Не удаляйте её.</li>
+                    <li>Файлы версии уходят вместе, одной пачкой: новые .exe со старой <code>AMadmin.Core.dll</code> работать не обязаны.</li>
+                    <li>Обновляйте вне пиковых часов торговли. Узкий канал в магазинах — раскатывайте частями и задайте лимит
+                        скорости (<a href="/admin/files">«Файлы»</a> → «Настройки раскатки»).</li>
+                    <li>Нашли проблему в версии — пометьте её «отозванной»: раскатать её по ошибке будет нельзя.</li>
+                    <li>Если на части касс агент установлен не в <code>C:\AMadmin</code> (<code>-InstallDir</code>), раскатывайте на них
+                        отдельно, указав их папку.</li>
+                    <li>Кассы ставятся через GPO с общей папки? После обновления или отката положите ту же версию и на шару —
+                        иначе при следующей загрузке GPO вернёт кассу на версию с шары.</li>
+                </ul>
+            </div>
         </div>
     </div>
 
-    <div class="card compact">
-        <h2>Устаревшие хосты</h2>
-        <p class="muted" id="outdatedSummary" style="margin-top:0">—</p>
+    <!-- Что сейчас стоит на кассах. -->
+    <div class="stats" id="overview">
+        <div class="stat" title="С этой версией сравниваются все кассы: кто ниже — «устаревший»"><div class="label">Актуальная версия</div><div class="value ver" id="ovCurrent">—</div><div class="sub muted" id="ovCurrentSub"></div></div>
+        <div class="stat" title="Самая новая версия со статусом «стабильная» — на неё откатываются"><div class="label">Последняя стабильная</div><div class="value ver" id="ovStable">—</div><div class="sub muted" id="ovStableSub"></div></div>
+        <div class="stat ok" title="Кассы, у которых и служба, и окно оповещений — на актуальной версии"><div class="label">На актуальной</div><div class="value" id="ovOnCurrent">—</div><div class="sub muted" id="ovOnCurrentSub"></div></div>
+        <div class="stat bad" title="Версия ниже актуальной. Нажмите «Показать», чтобы увидеть список"><div class="label">Устаревшие</div><div class="value" id="ovOutdated">—</div><div class="sub muted" id="ovOutdatedSub"></div></div>
+    </div>
+
+    <div class="card compact" id="outdatedCard" hidden>
+        <div class="card-head"><h2>Устаревшие кассы</h2><span class="muted" id="outdatedSummary"></span></div>
         <table id="outdatedTable">
             <thead><tr><th>Хост</th><th>Магазин</th><th>Версия</th><th>На связи</th></tr></thead>
             <tbody></tbody>
         </table>
     </div>
 
-    <div class="card compact" id="filesAdminCard" hidden>
-        <h2>Файлы</h2>
-        <form id="uploadForm" class="row end">
-            <label>Файл
-                <span class="hint">Например, AMadmin.UiAgent.exe или AMadmin.ManagementAgent.exe. Уже загруженные — ниже.</span>
-                <input type="file" id="uploadFile" required>
-            </label>
-            <button type="submit">Загрузить</button>
-        </form>
-        <table id="filesTable">
-            <thead><tr><th></th><th>Имя</th><th>Размер</th><th>Загружен</th><th>Куда положить на кассе</th></tr></thead>
-            <tbody></tbody>
-        </table>
+    <div class="note" id="importNote" hidden></div>
 
-        <div id="targetBox" style="margin-top:14px"></div>
-        <div class="row">
-            <button type="button" id="sendUpdateBtn" class="primary">Отправить отмеченные файлы</button>
-            <span id="sendUpdateStatus" class="muted" hidden></span>
+    <!-- Мастер «Новая версия». -->
+    <form class="card" id="newCard" hidden novalidate>
+        <div class="card-head">
+            <h2>Новая версия агента</h2>
+            <button type="button" class="ghost icon-only" id="newCloseBtn" title="Закрыть"></button>
+        </div>
+        <div class="steps">
+            <div class="step" data-step="files">
+                <span class="step-num">1</span>
+                <div class="step-body">
+                    <div class="step-title">Файлы сборки</div>
+                    <label class="dropzone" id="dropzone">
+                        <input type="file" id="uploadInput" multiple>
+                        <span id="dropIcon"></span>
+                        <b>Перетащите файлы из dist\client сюда или нажмите, чтобы выбрать</b>
+                        <span>Обязательно: AMadmin.ManagementAgent.exe, AMadmin.UiAgent.exe, AMadmin.Core.dll. Остальные dll и
+                        .config — можно тоже: касса не скачает то, что не изменилось. config.json и установщики не нужны —
+                        будут пропущены.</span>
+                    </label>
+                    <div class="upload-list" id="uploadList" style="max-width:none"></div>
+                </div>
+            </div>
+            <div class="step" data-step="info">
+                <span class="step-num">2</span>
+                <div class="step-body">
+                    <div class="step-title">Номер, статус и что изменилось</div>
+                    <div class="row">
+                        <label>Номер версии
+                            <span class="hint">Подставляется сам из AMadmin.ManagementAgent.exe — так же версию сообщает о себе агент на кассе. Формат: 0.1.6.</span>
+                            <input type="text" id="relVersion" class="mono" placeholder="0.1.6" autocomplete="off">
+                        </label>
+                        <label>Статус
+                            <span class="hint">Тестовая — новая, проверяется на пилоте. Стабильная — проверена, можно на все кассы, на неё откатываются. Статус можно поменять позже.</span>
+                            <select id="relStatus">
+                                <option value="testing">Тестовая — сначала на пилот</option>
+                                <option value="stable">Стабильная — уже проверена</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label>Что изменилось
+                        <span class="hint">Коротко, для себя и коллег: что исправлено, что нового, на что обратить внимание. Видно в списке версий и при раскатке.</span>
+                        <textarea id="relNotes" rows="4" placeholder="Исправлено: окно оповещений не всплывало после сна&#10;Новое: лимит скорости скачивания на кассу"></textarea>
+                    </label>
+                    <p class="error" id="newError"></p>
+                    <div class="note warn" id="newWarn" hidden></div>
+                    <div class="form-actions">
+                        <button type="submit" id="newSaveBtn">Сохранить версию</button>
+                        <button type="button" id="newSaveDeployBtn" title="Сохранить и сразу открыть раскатку этой версии">Сохранить и раскатать…</button>
+                        <button type="button" class="ghost" id="newCancelBtn">Отмена</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Мастер «Раскатать версию». -->
+    <form class="card" id="deployCard" hidden novalidate>
+        <div class="card-head">
+            <div class="deploy-head"><h2 id="deployTitle">Раскатать версию</h2><span id="deployBadge"></span></div>
+            <button type="button" class="ghost icon-only" id="deployCloseBtn" title="Закрыть"></button>
+        </div>
+        <div class="note" id="deployBanner"></div>
+        <p class="notes-full muted" id="deployNotes" hidden></p>
+        <div id="targetBox"></div>
+        <label>Папка агента на кассах
+            <span class="hint">Куда установлен агент (install-client.ps1, параметр -InstallDir). По умолчанию C:\AMadmin. Если на части касс агент стоит в другой папке — раскатайте на них отдельно, указав её. Запоминается.</span>
+            <input type="text" id="installDir" class="mono" placeholder="C:\AMadmin" spellcheck="false">
+        </label>
+        <div>
+            <span class="muted">Файлы окажутся на кассах здесь:</span>
+            <div class="path-preview" id="deployPaths" style="margin-top:6px"></div>
+        </div>
+        <label>
+            <input type="checkbox" id="makeCurrent">
+            Сделать эту версию актуальной
+            <span class="hint">С актуальной версией сравниваются все кассы: кто ниже — «устаревший» (здесь и на дашборде). Включите при раскатке на все кассы и при откате.</span>
+        </label>
+        <p class="error" id="deployError"></p>
+        <div class="form-actions">
+            <button type="submit" id="deploySubmitBtn"></button>
+            <button type="button" class="ghost" id="deployCancelBtn">Отмена</button>
+        </div>
+    </form>
+
+    <div class="card" id="sentCard" hidden>
+        <div class="card-head">
+            <h2 id="sentTitle">Раскатка отправлена</h2>
+            <button type="button" class="ghost icon-only" id="sentCloseBtn" title="Скрыть"></button>
+        </div>
+        <div id="sentList" class="file-lines"></div>
+        <div class="form-actions">
+            <a id="sentWatchLink" href="/admin/commands"><button type="button" class="small">Результат по каждой кассе →</button></a>
+            <span class="muted" id="sentNote"></span>
         </div>
     </div>
+
+    <div class="section-head">
+        <h2>Версии агента</h2>
+        <span class="muted">Нажмите на строку — подробности, файлы и история раскаток.</span>
+    </div>
+    <table id="releasesTable">
+        <thead>
+            <tr>
+                <th>Версия</th>
+                <th title="Тестовая — проверяется на пилоте; стабильная — можно на все, на неё откатываются; отозвана — с проблемой, раскатать нельзя">Статус</th>
+                <th>Что изменилось</th>
+                <th title="Сколько касс сейчас работают на этой версии (младшая из службы и окна оповещений)">На кассах</th>
+                <th title="Сколько раз версию отправляли на кассы и когда в последний раз">Раскатки</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 </main>
 
 <script src="/admin/shared/api.js"></script>

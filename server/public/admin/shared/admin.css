@@ -669,6 +669,7 @@ pre.output {
 .dropzone .icon { width: 30px; height: 30px; color: var(--accent); stroke-width: 1.6; }
 .dropzone b { color: var(--text); font-size: 14.5px; }
 .dropzone input[type="file"] { display: none; }
+.card .dropzone { font-weight: 400; color: var(--muted); font-size: 13px; }
 .upload-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%; max-width: 520px; text-align: left; }
 .upload-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: 12.5px; color: var(--text-2); }
 .upload-item .track { grid-column: 1 / -1; height: 4px; background: var(--surface-3); border-radius: 2px; overflow: hidden; }

@@ -119,7 +119,8 @@
             const count = +f.deploy_count;
             return '<tr class="clickable" data-id="' + f.id + '">' +
                 '<td class="check"><input type="checkbox" data-check' + (checked.has(String(f.id)) ? ' checked' : '') + ' aria-label="Отметить ' + esc(f.original_name) + '"></td>' +
-                '<td><div class="file-name">' + Ui.icon('file') + '<div><b>' + esc(f.original_name) + '</b>' +
+                '<td><div class="file-name">' + Ui.icon(f.release_version ? 'package' : 'file') + '<div><b>' + esc(f.original_name) + '</b>' +
+                    (f.release_version ? ' <a href="/admin/updates" class="badge badge-info plain" style="text-decoration:none" title="Файл входит в версию агента ' + esc(f.release_version) + ' — раскатывается и удаляется на странице «Обновления»">агент ' + esc(f.release_version) + '</a>' : '') +
                     '<span class="sub">SHA-256 <code title="' + esc(f.sha256) + '\nНажмите, чтобы скопировать" data-copy="' + esc(f.sha256) + '">' + esc(f.sha256.slice(0, 12)) + '…</code></span></div></div></td>' +
                 '<td class="num nowrap">' + Ui.formatSize(+f.size) + '</td>' +
                 '<td class="nowrap">' + esc(formatServerTime(f.created_at)) + '<span class="muted" style="display:block;font-size:12px">' + esc(f.uploaded_by_username || '—') + '</span></td>' +
@@ -258,7 +259,11 @@
             checked.delete(String(f.id));
             removePicked(String(f.id));
             await loadFiles();
-        } catch (err) { Ui.toast('Не удалось удалить: ' + Ui.reason(err), 'error'); }
+        } catch (err) {
+            Ui.toast('Не удалось удалить: ' + (err.data && err.data.error === 'file_in_release'
+                ? 'файл входит в версию агента ' + err.data.version + ' — удалите версию на странице «Обновления»'
+                : Ui.reason(err)), 'error');
+        }
     }
 
     // ---- Загрузка (перетаскивание или выбор, сразу несколько) ----------------------------
@@ -270,12 +275,14 @@
     ['dragleave', 'drop'].forEach(function (ev) {
         dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('over'); });
     });
-    dz.addEventListener('drop', function (e) { if (e.dataTransfer.files.length) uploadAll(e.dataTransfer.files); });
+    dz.addEventListener('drop', function (e) { if (e.dataTransfer.files.length) uploadAll(Array.from(e.dataTransfer.files)); });
     $('uploadInput').addEventListener('change', function () {
-        if (this.files.length) uploadAll(this.files);
+        if (this.files.length) uploadAll(Array.from(this.files));
         this.value = '';
     });
 
+    // Список файлов копируется в массив сразу: FileList поля выбора живой — очистка поля
+    // (value = '') посреди загрузки обнуляла его, и из нескольких файлов уходил только первый.
     // По одному файлу за запрос (так устроен POST /admin/files), через XHR — ради полоски
     // хода загрузки: у fetch прогресса отправки нет.
     function uploadOne(file, item) {

@@ -14,7 +14,9 @@ class AdminFilesController
 
         $deploys = "FROM commands c WHERE c.type = 'file_deploy' AND json_extract(c.payload, '$.file_id') = f.id";
         $rows = Db::get()->query("
-            SELECT f.id, f.original_name, f.sha256, f.size, f.created_at, u.username AS uploaded_by_username,
+            SELECT f.id, f.original_name, f.sha256, f.size, f.created_at, f.pe_version, u.username AS uploaded_by_username,
+                   (SELECT r.version FROM agent_release_files rf JOIN agent_releases r ON r.id = rf.release_id
+                    WHERE rf.file_id = f.id ORDER BY r.id DESC LIMIT 1) AS release_version,
                    (SELECT COUNT(*) {$deploys}) AS deploy_count,
                    (SELECT MAX(c.created_at) {$deploys}) AS last_deployed_at,
                    (SELECT json_extract(c.payload, '$.target_path') {$deploys} ORDER BY c.id DESC LIMIT 1) AS last_target_path
@@ -93,12 +95,18 @@ class AdminFilesController
 
         // Тот же файл (имя и содержимое) уже загружен — не плодим дубль в списке, а
         // отдаём существующую запись: мастер раскатки просто выберет её.
+        // Версия из ресурса .exe/.dll — для страницы «Обновления» (номер версии агента
+        // подставится сам); у прочих файлов null.
+        $peVersion = PeVersion::read($upload['tmp_name']);
+
         $same = Db::get()->prepare('SELECT id FROM deploy_files WHERE sha256 = :sha256 AND original_name = :name');
         $same->execute(array('sha256' => $sha256, 'name' => $originalName));
         $existingId = $same->fetchColumn();
         if ($existingId) {
+            Db::get()->prepare('UPDATE deploy_files SET pe_version = :v WHERE id = :id AND pe_version IS NULL')
+                ->execute(array('v' => $peVersion, 'id' => $existingId));
             Logger::info("Загрузка файла: '{$originalName}' уже есть (id={$existingId}, тот же хеш) — дубль не создан, автор='{$_SESSION['admin_username']}'");
-            echo json_encode(array('status' => 'ok', 'id' => $existingId, 'sha256' => $sha256, 'size' => $size, 'duplicate' => true));
+            echo json_encode(array('status' => 'ok', 'id' => $existingId, 'sha256' => $sha256, 'size' => $size, 'version' => $peVersion, 'duplicate' => true));
             return;
         }
 
@@ -111,20 +119,21 @@ class AdminFilesController
         }
 
         $stmt = Db::get()->prepare('
-            INSERT INTO deploy_files (original_name, sha256, size, uploaded_by)
-            VALUES (:name, :sha256, :size, :uploaded_by)
+            INSERT INTO deploy_files (original_name, sha256, size, uploaded_by, pe_version)
+            VALUES (:name, :sha256, :size, :uploaded_by, :pe_version)
         ');
         $stmt->execute(array(
             'name'        => $originalName,
             'sha256'      => $sha256,
             'size'        => $size,
             'uploaded_by' => $_SESSION['admin_id'],
+            'pe_version'  => $peVersion,
         ));
         $id = Db::get()->lastInsertId();
 
         Logger::info("Файл загружен: id={$id} имя='{$originalName}' размер={$size} sha256={$sha256} автор='{$_SESSION['admin_username']}'");
 
-        echo json_encode(array('status' => 'ok', 'id' => $id, 'sha256' => $sha256, 'size' => $size));
+        echo json_encode(array('status' => 'ok', 'id' => $id, 'sha256' => $sha256, 'size' => $size, 'version' => $peVersion));
     }
 
     // DELETE /admin/files/{id}
@@ -145,19 +154,39 @@ class AdminFilesController
             return;
         }
 
-        Db::get()->prepare('DELETE FROM deploy_files WHERE id = :id')->execute(array('id' => $id));
-
-        $others = Db::get()->prepare('SELECT COUNT(*) FROM deploy_files WHERE sha256 = :sha256');
-        $others->execute(array('sha256' => $file['sha256']));
-        if ((int) $others->fetchColumn() === 0) {
-            $path = FileStorage::path($file['sha256']);
-            if (file_exists($path)) {
-                unlink($path);
-            }
+        // Файл входит в версию агента — удалять его отсюда нельзя: пропал бы откат на эту
+        // версию. Удаляется вместе с версией на странице «Обновления».
+        $rel = Db::get()->prepare('
+            SELECT r.version FROM agent_release_files rf JOIN agent_releases r ON r.id = rf.release_id
+            WHERE rf.file_id = :id LIMIT 1
+        ');
+        $rel->execute(array('id' => $id));
+        $version = $rel->fetchColumn();
+        if ($version !== false) {
+            http_response_code(409);
+            echo json_encode(array('error' => 'file_in_release', 'version' => $version));
+            return;
         }
+
+        self::deleteRow($id, $file['sha256']);
 
         Logger::info("Файл удалён: id={$id} имя='{$file['original_name']}' автор='{$_SESSION['admin_username']}'");
 
         echo json_encode(array('status' => 'ok'));
+    }
+
+    // Строка библиотеки + байты на диске, если на тот же хеш больше никто не ссылается.
+    public static function deleteRow($id, $sha256)
+    {
+        Db::get()->prepare('DELETE FROM deploy_files WHERE id = :id')->execute(array('id' => (int) $id));
+
+        $others = Db::get()->prepare('SELECT COUNT(*) FROM deploy_files WHERE sha256 = :sha256');
+        $others->execute(array('sha256' => $sha256));
+        if ((int) $others->fetchColumn() === 0) {
+            $path = FileStorage::path($sha256);
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
     }
 }

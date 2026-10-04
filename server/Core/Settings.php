@@ -62,4 +62,15 @@ class Settings
     {
         self::$cache = null;
     }
+
+    // Записать одну настройку из кода сервера (например, «актуальная версия агента» при
+    // раскатке версии). Права проверяет вызывающий контроллер.
+    public static function set($key, $value)
+    {
+        Db::get()->prepare('
+            INSERT INTO settings (key, value) VALUES (:key, :value)
+            ON CONFLICT (key) DO UPDATE SET value = excluded.value
+        ')->execute(array('key' => $key, 'value' => (string) $value));
+        self::forget();
+    }
 }
