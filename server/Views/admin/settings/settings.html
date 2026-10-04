@@ -22,9 +22,10 @@
         <button type="button" data-tab="client">Клиент</button>
         <button type="button" data-tab="server" id="serverTab" hidden>Сервер</button>
     </div>
-    <p class="muted">Защита команд и срок жизни команды — на странице <a href="/admin/commands">«Команды»</a>
-    (вкладка «Защита и лимиты»), раскатка файлов — в <a href="/admin/files">«Файлах»</a>, окно «онлайн» — на
-    странице <a href="/admin/hosts">«Хосты»</a>.</p>
+    <p class="muted">Настройки, которые нужны только на одной странице, живут там: защита команд и срок жизни
+    команды — <a href="/admin/commands">«Команды»</a> → «Защита и лимиты», раскатка файлов —
+    <a href="/admin/files">«Файлы»</a> → «Настройки раскатки», актуальная версия агента — <a href="/admin/updates">«Обновления»</a>,
+    пороги статуса узлов — <a href="/admin/hosts">«Хосты»</a> → «Узлы».</p>
 
 
     <form id="settingsForm">
@@ -209,6 +210,31 @@
             </label>
         </div>
 
+        <div class="card">
+            <h2>Связь с кассами</h2>
+            <label>Окно «онлайн», секунд
+                <span class="hint">Сколько секунд с последнего опроса касса считается онлайн (статусы на дашборде,
+                в «Хостах», счётчики «на связи»). Должно быть заметно больше интервала опроса агентов (обычно
+                30 с), иначе статусы будут мигать.</span>
+                <input type="number" id="online_window_seconds" min="30" max="86400" style="max-width:180px">
+            </label>
+        </div>
+        <div class="card">
+            <h2>Время сервера (NTP)</h2>
+            <p class="muted" style="margin-top:0">Периодическая сверка часов сервера с NTP-сервером. Сервер никогда не
+            меняет системное время сам — при расхождении больше порога на дашборде появится предупреждение.
+            Нужен исходящий UDP/123.</p>
+            <label>
+                <input type="checkbox" id="ntp_enabled">
+                Проверять часы сервера
+            </label>
+            <div class="row">
+                <label>NTP-сервер<input type="text" id="ntp_server_address" placeholder="pool.ntp.org"></label>
+                <label>Порог тревоги, секунд<input type="number" id="ntp_drift_threshold_seconds" min="1" max="3600"></label>
+                <label>Проверять не чаще, секунд<input type="number" id="ntp_check_interval_seconds" min="60" max="86400"></label>
+            </div>
+            <span class="muted" id="ntpStatusLine"></span>
+        </div>
         <div class="card">
             <h2>Вход в панель</h2>
             <label>Неудачных попыток входа до блокировки

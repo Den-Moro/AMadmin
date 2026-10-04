@@ -2,6 +2,15 @@
 
 class AdminNotificationsController
 {
+    // Касса p под цель t оповещения — то же, что TargetMatcher, но для всех касс сразу.
+    const TARGETS_PC = "
+        t.target_type = 'all'
+        OR (t.target_type = 'store' AND t.target_id = p.store_id)
+        OR (t.target_type = 'pc' AND t.target_id = p.id)
+        OR (t.target_type = 'device_type' AND t.target_id = p.device_type_id)
+        OR (t.target_type = 'group' AND EXISTS (SELECT 1 FROM host_group_members m WHERE m.group_id = t.target_id AND m.pc_id = p.id))
+    ";
+
     // GET /admin/notifications — последние оповещения со сводными счётчиками.
     // Таблица подтверждений по каждому конкретному ПК — уже полный функционал
     // (см. AGENTS.md, шаг 6), пока только агрегаты.
@@ -9,14 +18,30 @@ class AdminNotificationsController
     {
         AdminAuth::requireLogin();
 
+        // Кому ушло (имя цели) и сколько касс под цель подходит сейчас — чтобы история
+        // сразу отвечала на «все ли увидели»: «подтвердили 5 из 7», а не голое «5».
+        // Условие «касса под цель» — то же, что у агента (TargetMatcher), только для
+        // всех касс сразу.
         $sql = "
             SELECT
-                n.id, n.text, n.priority, n.size, n.recurrence, n.created_at,
+                n.id, n.text, n.priority, n.size, n.manual_url, n.recurrence, n.created_at,
+                t.target_type, t.target_id,
+                CASE t.target_type
+                    WHEN 'store' THEN (SELECT name FROM stores WHERE id = t.target_id)
+                    WHEN 'group' THEN (SELECT name FROM host_groups WHERE id = t.target_id)
+                    WHEN 'device_type' THEN (SELECT name FROM device_types WHERE id = t.target_id)
+                    WHEN 'pc' THEN (SELECT COALESCE(NULLIF(display_name, ''), hostname) FROM pcs WHERE id = t.target_id)
+                END AS target_name,
+                (SELECT COUNT(*) FROM pcs p WHERE " . self::TARGETS_PC . ") AS target_count,
+                (SELECT MIN(o.fire_at) FROM notification_occurrences o WHERE o.notification_id = n.id) AS fire_at,
+                (SELECT MIN(o.fire_at) FROM notification_occurrences o WHERE o.notification_id = n.id) > CURRENT_TIMESTAMP AS scheduled,
                 (SELECT COUNT(*) FROM notification_occurrences o WHERE o.notification_id = n.id) AS occurrences_count,
                 (SELECT COUNT(*) FROM notification_acks a
                     JOIN notification_occurrences o2 ON o2.id = a.occurrence_id
                     WHERE o2.notification_id = n.id) AS acks_count
             FROM notifications n
+            LEFT JOIN notification_targets t ON t.notification_id = n.id
+            GROUP BY n.id
             ORDER BY n.created_at DESC
             LIMIT 100
         ";
@@ -38,7 +63,21 @@ class AdminNotificationsController
         $priority = isset($body['priority']) ? $body['priority'] : 'normal';
         $size = isset($body['size']) ? $body['size'] : 'medium';
         $manualUrl = (!empty($body['manual_url'])) ? trim($body['manual_url']) : null;
-        $fireAt = !empty($body['fire_at']) ? $body['fire_at'] : date('Y-m-d H:i:s');
+        // fire_at — когда показать (UTC, «Y-m-d H:i:s» или ISO 8601). Нет или уже прошло —
+        // сразу. Строку целиком не доверяем: агент сравнивает fire_at с CURRENT_TIMESTAMP
+        // как текст, кривой формат дал бы оповещение, которое не покажется никогда.
+        $fireAt = date('Y-m-d H:i:s');
+        if (!empty($body['fire_at'])) {
+            $ts = strtotime((string) $body['fire_at']);
+            if ($ts === false) {
+                http_response_code(400);
+                echo json_encode(array('error' => 'invalid_fire_at'));
+                return;
+            }
+            if ($ts > time()) {
+                $fireAt = gmdate('Y-m-d H:i:s', $ts);
+            }
+        }
 
         $target = isset($body['target']) && is_array($body['target']) ? $body['target'] : array();
         $targetType = isset($target['type']) ? $target['type'] : '';
@@ -122,7 +161,7 @@ class AdminNotificationsController
 
         Logger::info(
             "Оповещение создано: id={$notificationId} автор='{$_SESSION['admin_username']}' " .
-            "таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " priority={$priority}"
+            "таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " priority={$priority} показ={$fireAt} UTC"
         );
 
         echo json_encode(array('status' => 'ok', 'notification_id' => $notificationId, 'occurrence_id' => $occurrenceId));

@@ -165,7 +165,7 @@
                 return '<tr><td class="nowrap muted">' + esc(formatServerTime(c.created_at)) + '</td>' +
                     '<td><code class="path">' + esc(p.target_path) + '</code></td>' +
                     '<td>' + esc(describeTarget(c)) + '</td>' +
-                    '<td style="min-width:180px">' + progressText(c) + Ui.progressBar(progressParts(c), +c.target_count) + '</td>' +
+                    '<td style="min-width:180px">' + Ui.commandProgressHtml(c, FILE_WORDS) + '</td>' +
                     '<td>' + esc(c.created_by_username || '—') + '</td></tr>';
             }).join('') + '</tbody></table>' +
             '<p class="muted" style="margin:8px 0 0">Результат с каждой кассы — на странице <a href="/admin/commands?watch=' +
@@ -178,24 +178,7 @@
         return (targetNames[c.target_type] || c.target_type) + ' «' + (c.target_name || '#' + c.target_id) + '»';
     }
 
-    function progressParts(c) {
-        return [
-            { n: +c.success_count, kind: 'ok', label: 'готово' },
-            { n: +c.failed_count, kind: 'bad', label: 'ошибка' },
-            { n: +c.in_progress_count, kind: 'run', label: 'качают' },
-            { n: +c.pending_count, kind: 'wait', label: 'ждут' },
-        ];
-    }
-
-    function progressText(c) {
-        const total = +c.target_count;
-        if (!total) return '<span class="muted">нет касс под цель</span>';
-        const bits = ['<b>' + c.success_count + '</b> из ' + total + ' готово'];
-        if (+c.failed_count) bits.push('<span style="color:var(--danger)">' + c.failed_count + ' с ошибкой</span>');
-        if (+c.in_progress_count) bits.push(c.in_progress_count + ' качают');
-        if (+c.pending_count) bits.push(+c.expired ? c.pending_count + ' не получат (срок истёк)' : c.pending_count + ' ждут');
-        return '<span style="font-size:12.5px">' + bits.join(' · ') + '</span>';
-    }
+    const FILE_WORDS = { run: 'качают', wait: 'ждут' };
 
     async function loadCommands() {
         try { commands = await Api.get('/admin/commands'); } catch (e) { commands = []; }
@@ -275,36 +258,13 @@
     ['dragleave', 'drop'].forEach(function (ev) {
         dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('over'); });
     });
+    // Список файлов копируется в массив сразу: FileList поля выбора живой — очистка поля
+    // (value = '') посреди загрузки обнуляла его, и из нескольких файлов уходил только первый.
     dz.addEventListener('drop', function (e) { if (e.dataTransfer.files.length) uploadAll(Array.from(e.dataTransfer.files)); });
     $('uploadInput').addEventListener('change', function () {
         if (this.files.length) uploadAll(Array.from(this.files));
         this.value = '';
     });
-
-    // Список файлов копируется в массив сразу: FileList поля выбора живой — очистка поля
-    // (value = '') посреди загрузки обнуляла его, и из нескольких файлов уходил только первый.
-    // По одному файлу за запрос (так устроен POST /admin/files), через XHR — ради полоски
-    // хода загрузки: у fetch прогресса отправки нет.
-    function uploadOne(file, item) {
-        return new Promise(function (resolve, reject) {
-            const form = new FormData();
-            form.append('file', file);
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/admin/files');
-            xhr.upload.addEventListener('progress', function (e) {
-                if (e.lengthComputable) item.querySelector('.fill').style.width = (e.loaded / e.total * 100).toFixed(1) + '%';
-            });
-            xhr.addEventListener('load', function () {
-                let data = {};
-                try { data = JSON.parse(xhr.responseText); } catch (e) { /* — */ }
-                if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
-                const code = data.error || ('http_' + xhr.status);
-                reject(new Error(code === 'file_required_or_too_large' ? 'больше лимита сервера (' + data.upload_max_filesize + ')' : (ERRORS[code] || code)));
-            });
-            xhr.addEventListener('error', function () { reject(new Error('сеть недоступна')); });
-            xhr.send(form);
-        });
-    }
 
     async function uploadAll(fileList) {
         const list = $('uploadList');
@@ -315,7 +275,7 @@
             item.innerHTML = '<span>' + esc(file.name) + '</span><span class="muted">' + Ui.formatSize(file.size) + '</span><div class="track"><div class="fill"></div></div>';
             list.appendChild(item);
             try {
-                const res = await uploadOne(file, item);
+                const res = await Ui.uploadFile(file, function (f) { item.querySelector('.fill').style.width = (f * 100).toFixed(1) + '%'; });
                 item.querySelector('.muted').textContent = res.duplicate ? 'уже был — взят готовый' : 'загружен';
                 uploaded.push(String(res.id));
             } catch (err) {
@@ -619,7 +579,7 @@
         $('sentList').innerHTML = mine.map(function (c) {
             const p = JSON.parse(c.payload);
             return '<div class="sent-item"><span><code class="path">' + esc(p.target_path) + '</code></span>' +
-                '<span>' + progressText(c) + '</span>' + Ui.progressBar(progressParts(c), +c.target_count) + '</div>';
+                Ui.commandProgressHtml(c, FILE_WORDS) + '</div>';
         }).join('') || '<span class="muted">Загрузка…</span>';
         const active = mine.some(function (c) { return +c.in_progress_count > 0 || (+c.pending_online_count > 0 && !+c.expired); });
         const waiting = mine.reduce(function (s, c) { return s + +c.pending_count - +c.pending_online_count; }, 0);
@@ -697,7 +657,8 @@
     await Promise.all([loadCommands(), loadRecent()]);
     await Promise.all([loadFiles(), loadDests()]);
 
-    // ?file=ID — «Раскатать» из другого места; ?pc=ID — из профиля хоста;
+    // ?file=ID — «Раскатать» из другого места; ?pc=ID / ?target=group:3 — из профиля
+    // хоста, «Групп» или «Справочников»;
     // ?repeat=ID — «Повторить» раскатку со страницы «Команды».
     const qs = new URLSearchParams(location.search);
     if (canEdit && qs.get('repeat')) {
@@ -710,7 +671,8 @@
             if (filesById(p.file_id)) openWizard([p.file_id], preset);
             else Ui.toast('Файл этой раскатки уже удалён с сервера — загрузите его заново', 'error');
         }
-    } else if (canEdit && (qs.get('file') || qs.get('pc'))) {
-        openWizard(qs.get('file') ? [qs.get('file')] : [], qs.get('pc') ? { targetType: 'pc', targetId: qs.get('pc') } : {});
+    } else if (canEdit && (qs.get('file') || Ui.targetFromQuery())) {
+        const t = Ui.targetFromQuery();
+        openWizard(qs.get('file') ? [qs.get('file')] : [], t ? { targetType: t.type, targetId: t.id } : {});
     }
 })();

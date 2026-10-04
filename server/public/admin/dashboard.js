@@ -9,28 +9,15 @@
     const me = await requireAdminAuth();
     const $ = Ui.$, esc = Ui.escapeHtml;
 
-    if (me.role === 'superadmin') {
-        $('ntpCard').hidden = false;
-        Ui.settingsFieldsPanel({
-            ntp_enabled: 'bool', ntp_server_address: 'text',
-            ntp_drift_threshold_seconds: 'text', ntp_check_interval_seconds: 'text',
-        }, 'ntpSaveBtn');
-    }
-
     function renderNtp(ntp) {
-        if (!ntp || !ntp.enabled) { $('ntpWarning').hidden = true; if ($('ntpStatusLine')) $('ntpStatusLine').textContent = ''; return; }
-        const line = $('ntpStatusLine');
-        if (line) {
-            line.textContent = !ntp.ok
-                ? 'Проверка не удалась (' + ntp.server + '): ' + ntp.error
-                : 'Расхождение с ' + ntp.server + ': ' + ntp.drift_seconds + ' с (проверено ' + formatServerTime(ntp.checked_at) + ')';
-        }
+        // Настройка проверки — в «Настройках» → «Сервер»; здесь только предупреждение.
+        if (!ntp || !ntp.enabled) { $('ntpWarning').hidden = true; return; }
         const bad = !ntp.ok || Math.abs(+ntp.drift_seconds) > +ntp.threshold_seconds;
         $('ntpWarning').hidden = !bad;
         if (bad) {
             $('ntpWarning').textContent = !ntp.ok
                 ? 'NTP: проверка времени сервера не удалась (' + ntp.server + '): ' + ntp.error
-                : 'NTP: часы сервера разошлись с ' + ntp.server + ' на ' + ntp.drift_seconds + ' с — больше порога ' + ntp.threshold_seconds + ' с.';
+                : 'NTP: часы сервера разошлись с ' + ntp.server + ' на ' + ntp.drift_seconds + ' с — больше порога ' + ntp.threshold_seconds + ' с. Часы сервера панель сама не переводит.';
         }
     }
 

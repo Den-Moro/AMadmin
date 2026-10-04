@@ -298,6 +298,8 @@
     const dz = $('dropzone');
     ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('over'); }); });
     ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('over'); }); });
+    // Список файлов копируется в массив сразу: FileList поля выбора живой — очистка поля
+    // (value = '') посреди загрузки обнуляла его, и из нескольких файлов уходил только первый.
     dz.addEventListener('drop', function (e) { if (e.dataTransfer.files.length) uploadAll(Array.from(e.dataTransfer.files)); });
     $('uploadInput').addEventListener('change', function () { if (this.files.length) uploadAll(Array.from(this.files)); this.value = ''; });
 
@@ -310,29 +312,6 @@
         return '';
     }
 
-    // Список файлов копируется в массив сразу: FileList поля выбора живой — очистка поля
-    // (value = '') посреди загрузки обнуляла его, и из нескольких файлов уходил только первый.
-    function uploadOne(file, item) {
-        return new Promise(function (resolve, reject) {
-            const form = new FormData();
-            form.append('file', file);
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/admin/files');
-            xhr.upload.addEventListener('progress', function (e) {
-                if (e.lengthComputable) item.querySelector('.fill').style.width = (e.loaded / e.total * 100).toFixed(1) + '%';
-            });
-            xhr.addEventListener('load', function () {
-                let data = {};
-                try { data = JSON.parse(xhr.responseText); } catch (e) { /* — */ }
-                if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
-                const code = data.error || ('http_' + xhr.status);
-                reject(new Error(code === 'file_required_or_too_large' ? 'больше лимита сервера (' + data.upload_max_filesize + ')' : (ERRORS[code] || code)));
-            });
-            xhr.addEventListener('error', function () { reject(new Error('сеть недоступна')); });
-            xhr.send(form);
-        });
-    }
-
     async function uploadAll(fileList) {
         for (const file of fileList) {
             const item = document.createElement('div');
@@ -343,7 +322,7 @@
             if (skip) { item.classList.add('bad'); item.querySelector('.muted').textContent = skip; continue; }
             item.querySelector('.muted').textContent = Ui.formatSize(file.size);
             try {
-                const res = await uploadOne(file, item);
+                const res = await Ui.uploadFile(file, function (f) { item.querySelector('.fill').style.width = (f * 100).toFixed(1) + '%'; });
                 uploaded = uploaded.filter(function (u) { return u.name.toLowerCase() !== file.name.toLowerCase(); });
                 uploaded.push({ id: String(res.id), name: file.name, size: file.size, version: res.version || null });
                 item.querySelector('.muted').innerHTML = res.version
@@ -533,14 +512,7 @@
         const mine = commands.filter(function (c) { return sentIds.indexOf(String(c.id)) >= 0; });
         $('sentList').innerHTML = mine.map(function (c) {
             const p = JSON.parse(c.payload);
-            const total = +c.target_count;
-            return '<div class="sent-item"><code class="path">' + esc(p.target_path) + '</code><span style="font-size:12.5px"><b>' + c.success_count + '</b> из ' + total + ' готово' +
-                (+c.failed_count ? ' · <span style="color:var(--danger)">' + c.failed_count + ' с ошибкой</span>' : '') +
-                (+c.in_progress_count ? ' · ' + c.in_progress_count + ' качают' : '') + (+c.pending_count ? ' · ' + c.pending_count + ' ждут' : '') + '</span>' +
-                Ui.progressBar([
-                    { n: +c.success_count, kind: 'ok', label: 'готово' }, { n: +c.failed_count, kind: 'bad', label: 'ошибка' },
-                    { n: +c.in_progress_count, kind: 'run', label: 'качают' }, { n: +c.pending_count, kind: 'wait', label: 'ждут' },
-                ], total) + '</div>';
+            return '<div class="sent-item"><code class="path">' + esc(p.target_path) + '</code>' + Ui.commandProgressHtml(c, { run: 'качают', wait: 'ждут' }) + '</div>';
         }).join('') || '<span class="muted">Загрузка…</span>';
         const active = mine.some(function (c) { return +c.in_progress_count > 0 || (+c.pending_online_count > 0 && !+c.expired); });
         const waiting = mine.length ? Math.max.apply(null, mine.map(function (c) { return +c.pending_count - +c.pending_online_count; })) : 0;

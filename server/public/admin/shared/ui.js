@@ -441,6 +441,90 @@ const Ui = (function () {
         };
     }
 
+    // Цель из адреса страницы: ?pc=5 (из профиля хоста) или ?target=group:3 (из «Групп»,
+    // «Справочников»). null — цели в адресе нет.
+    function targetFromQuery() {
+        const qs = new URLSearchParams(window.location.search);
+        if (qs.get('pc')) return { type: 'pc', id: qs.get('pc') };
+        const m = /^(store|group|device_type|pc|all):?(\d*)$/.exec(qs.get('target') || '');
+        return m ? { type: m[1], id: m[2] || null } : null;
+    }
+
+    // ---- Загрузка файла на сервер (POST /admin/files) с полоской хода ------------------
+
+    // По одному файлу за запрос, через XHR — у fetch нет прогресса отправки. Разрешается
+    // ответом сервера ({id, sha256, size, version, duplicate}), ошибки — текстом.
+    function uploadFile(file, onProgress) {
+        return new Promise(function (resolve, reject) {
+            const form = new FormData();
+            form.append('file', file);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/admin/files');
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+            });
+            xhr.addEventListener('load', function () {
+                let data = {};
+                try { data = JSON.parse(xhr.responseText); } catch (e) { /* — */ }
+                if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
+                const code = data.error || ('http_' + xhr.status);
+                reject(new Error(code === 'file_required_or_too_large' ? 'больше лимита сервера (' + data.upload_max_filesize + ')'
+                    : reason({ data: data, message: code }, { insufficient_role: 'загружать файлы может администратор' })));
+            });
+            xhr.addEventListener('error', function () { reject(new Error('сеть недоступна')); });
+            xhr.send(form);
+        });
+    }
+
+    // ---- Ход выполнения команды: «3 из 7 готово · 1 с ошибкой» + полоска ----------------
+
+    // c — строка из GET /admin/commands. words — подписи под задачу (файлы «качают»).
+    function commandProgressHtml(c, words) {
+        words = words || { run: 'в работе', wait: 'ждут' };
+        const total = +c.target_count;
+        if (!total) return '<span class="muted">нет касс под цель</span>';
+        const bits = ['<b>' + c.success_count + '</b> из ' + total + ' готово'];
+        if (+c.failed_count) bits.push('<span style="color:var(--danger)">' + c.failed_count + ' с ошибкой</span>');
+        if (+c.in_progress_count) bits.push(c.in_progress_count + ' ' + words.run);
+        if (+c.pending_count) bits.push(+c.expired ? c.pending_count + ' не получат (срок истёк)' : c.pending_count + ' ' + words.wait);
+        return '<span style="font-size:12.5px">' + bits.join(' · ') + '</span>' + progressBar([
+            { n: +c.success_count, kind: 'ok', label: 'готово' },
+            { n: +c.failed_count, kind: 'bad', label: 'ошибка' },
+            { n: +c.in_progress_count, kind: 'run', label: words.run },
+            { n: +c.pending_count, kind: 'wait', label: words.wait },
+        ], total);
+    }
+
+    // ---- Частые команды: одни и те же в форме «Команды» и в профиле хоста ---------------
+
+    // Только то, что безопасно на работающей кассе и работает на Windows 7 (PowerShell 2.0:
+    // поэтому Get-WmiObject, а не Get-CimInstance). Перезагрузки и прочее разрушительное
+    // сюда намеренно не входит — такое пишется руками, осознанно. readonly — ничего не
+    // меняет на кассе (профиль хоста отправляет такие без подтверждения).
+    const COMMON_COMMANDS = [
+        { key: 'disk', label: 'Свободное место на дисках', readonly: true, tip: 'PowerShell: свободно и всего по каждому локальному диску, в ГБ',
+          type: 'script_run', payload: { engine: 'powershell',
+            script: "Get-WmiObject Win32_LogicalDisk -Filter 'DriveType=3' |\n    Select-Object DeviceID, @{n='Свободно, ГБ';e={[math]::Round($_.FreeSpace/1GB,1)}}, @{n='Всего, ГБ';e={[math]::Round($_.Size/1GB,1)}} |\n    Format-Table -AutoSize | Out-String" } },
+        { key: 'net', label: 'Сеть: ipconfig /all', readonly: true, tip: 'IP-адреса, шлюз, DNS и MAC каждой сетевой карты',
+          type: 'script_run', payload: { engine: 'cmd', script: 'ipconfig /all' } },
+        { key: 'users', label: 'Кто вошёл в систему', readonly: true, tip: 'Пользователи, вошедшие на кассу, и время входа (query user)',
+          type: 'script_run', payload: { engine: 'cmd', script: 'query user' } },
+        { key: 'os', label: 'Версия Windows и время работы', readonly: true, tip: 'Выпуск Windows, номер сборки и когда касса последний раз загружалась',
+          type: 'script_run', payload: { engine: 'powershell',
+            script: "$os = Get-WmiObject Win32_OperatingSystem\n'{0} (сборка {1})' -f $os.Caption, $os.BuildNumber\n'Загружена: ' + $os.ConvertToDateTime($os.LastBootUpTime)" } },
+        { key: 'time', label: 'Часы и синхронизация', readonly: true, tip: 'Источник времени и когда часы последний раз сверялись (w32tm /query /status)',
+          type: 'script_run', payload: { engine: 'cmd', script: 'w32tm /query /status' } },
+        { key: 'procs', label: 'Список процессов', readonly: true, tip: 'Все процессы с PID и памятью — посмотреть перед завершением',
+          type: 'process_action', payload: { action: 'list' } },
+        { key: 'services', label: 'Список служб', readonly: true, tip: 'Все службы Windows с состоянием',
+          type: 'service_control', payload: { action: 'list', service_name: '' } },
+        { key: 'spooler', label: 'Перезапустить печать', tip: 'Перезапустить службу диспетчера печати (Spooler) — помогает, когда «завис» принтер чеков или документов',
+          type: 'service_control', payload: { action: 'restart', service_name: 'Spooler' } },
+        { key: 'queue', label: 'Очистить очередь печати', tip: 'Остановить Spooler, удалить застрявшие задания печати и запустить снова',
+          type: 'script_run', payload: { engine: 'powershell',
+            script: "Stop-Service Spooler -Force\nRemove-Item \"$env:SystemRoot\\System32\\spool\\PRINTERS\\*\" -Force -ErrorAction SilentlyContinue\nStart-Service Spooler\n'Очередь печати очищена, Spooler: ' + (Get-Service Spooler).Status" } },
+    ];
+
     // ---- Часть глобальных настроек вне страницы «Настройки» -----------------------------
 
     // Часть ключей из общей таблицы settings удобнее редактировать там, где они реально
@@ -768,5 +852,6 @@ const Ui = (function () {
         settingsFieldsPanel: settingsFieldsPanel, makeDraggable: makeDraggable, makeDropTarget: makeDropTarget,
         icon: icon, emptyState: emptyState, progressBar: progressBar, enhanceHints: enhanceHints, tip: Tip,
         plural: plural, targetPicker: targetPicker,
+        targetFromQuery: targetFromQuery, uploadFile: uploadFile, commandProgressHtml: commandProgressHtml, COMMON_COMMANDS: COMMON_COMMANDS,
     };
 })();

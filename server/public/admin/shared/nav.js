@@ -11,7 +11,7 @@ const Nav = (function () {
             { href: '/admin/groups', label: 'Группы', icon: 'layers', tip: 'Свои наборы хостов («Кассы 1 этажа», «Проблемные») — цель для оповещений и команд' },
         ] },
         { title: 'Оповещения', items: [
-            { href: '/admin/notifications', label: 'Оповещения', icon: 'bell', tip: 'Сообщения кассирам о работах: создать, отправить, кто увидел' },
+            { href: '/admin/notifications', label: 'Оповещения', icon: 'bell', tip: 'Сообщения кассирам о работах: шаблоны, отправка сейчас или по расписанию, кто увидел' },
             { href: '/admin/manuals', label: 'Мануалы', icon: 'book', tip: 'Инструкции, которые прикладываются к оповещениям' },
         ] },
         { title: 'Управление', items: [
@@ -20,7 +20,7 @@ const Nav = (function () {
             { href: '/admin/updates', label: 'Обновления', icon: 'download', roles: ['administrator', 'superadmin'], tip: 'Новая версия агента на выбранные кассы' },
         ] },
         { title: 'Система', items: [
-            { href: '/admin/stores', label: 'Справочники', icon: 'store', tip: 'Магазины, типы устройств, шаблоны сообщений' },
+            { href: '/admin/stores', label: 'Справочники', icon: 'store', tip: 'Магазины (и пилотные) и типы устройств — к чему привязан каждый ПК' },
             { href: '/admin/settings', label: 'Настройки', icon: 'sliders', tip: 'Поведение окна оповещений, пароль клиента, брендинг' },
             { href: '/admin/logs', label: 'Логи', icon: 'scroll', roles: ['administrator', 'superadmin'], tip: 'Журнал сервера: запросы, ошибки, кто что отправил' },
             { href: '/admin/users', label: 'Пользователи', icon: 'users', roles: ['superadmin'], tip: 'Учётки панели и их роли' },

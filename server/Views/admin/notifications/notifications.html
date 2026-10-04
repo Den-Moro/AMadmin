@@ -5,6 +5,14 @@
 <title>Оповещения — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
 <script src="/admin/shared/ui.js"></script>
+<style>
+    /* Оповещения: шаблоны над формой, «когда показать», история с «подтвердили N из M». */
+    .text-short { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 460px; white-space: pre-line; }
+    .when-line { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .when-line select { min-width: 200px; }
+    .acks-cell { min-width: 150px; }
+    .tpl-text { white-space: pre-line; color: var(--text-2); font-size: 13px; max-width: 520px; }
+</style>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
@@ -13,27 +21,36 @@
     <div class="page-head">
         <div>
             <h1>Оповещения</h1>
-            <p class="muted">Сообщение кассирам поверх кассовой программы. Как окно ведёт себя на кассе — в Настройках.</p>
+            <p class="muted">Сообщение кассирам поверх кассовой программы: о плановых и срочных работах, о том, что
+            всё починено. Как окно ведёт себя на кассе — в <a href="/admin/settings">Настройках</a>.</p>
         </div>
         <div class="actions">
-            <button type="button" id="newBtn" class="primary">＋ Новое оповещение</button>
+            <button type="button" id="newBtn" class="primary" title="Открыть форму нового оповещения"></button>
         </div>
     </div>
 
-    <form id="createForm" class="card" hidden>
+    <form id="createForm" class="card" hidden novalidate>
+        <div class="card-head">
+            <h2>Новое оповещение</h2>
+            <button type="button" class="ghost icon-only" id="closeNewBtn" title="Закрыть форму"></button>
+        </div>
+        <div>
+            <span class="muted">Шаблоны — заполнят форму одним кликом:</span>
+            <div class="chips" id="templateChips" style="margin-top:8px"></div>
+        </div>
         <label>Текст
             <span class="hint">То, что увидит кассир. Пишите просто и по делу: что происходит,
-            как это его касается и что делать. Человек читает это между покупателями.</span>
+            как это его касается и что делать. Человек читает это между покупателями. Места в
+            [квадратных скобках] из шаблона заполните — с ними панель не отправит.</span>
             <textarea id="text" rows="3" required></textarea>
         </label>
-
         <div class="row">
             <label>Важность
                 <span class="hint">Важное — окно поверх всех программ, закрыть можно только
-                прочитав. Неважное — ведёт себя по настройке из раздела «Настройки»
-                (обычно мягко, в углу).</span>
+                прочитав, тихие часы на него не действуют. Обычное — ведёт себя по настройке из
+                раздела «Настройки» (обычно мягко, в углу).</span>
                 <select id="priority">
-                    <option value="normal">Неважное</option>
+                    <option value="normal">Обычное</option>
                     <option value="important">Важное</option>
                 </select>
             </label>
@@ -46,63 +63,81 @@
                 </select>
             </label>
         </div>
-
+        <label>Когда показать
+            <span class="hint">Сейчас — кассы покажут на ближайшем опросе (обычно до 30 секунд). По расписанию —
+            оповещение придёт в указанное время по часам вашего компьютера; до этого его можно отозвать.
+            Выключенные кассы покажут его, когда включатся.</span>
+            <span class="when-line">
+                <select id="whenMode">
+                    <option value="now">Сейчас</option>
+                    <option value="at">По расписанию…</option>
+                </select>
+                <input type="datetime-local" id="fireAt" hidden>
+                <span class="muted" id="fireAtHint"></span>
+            </span>
+        </label>
+        <div id="targetBox"></div>
         <div class="row">
-            <label>Кому
-                <span class="hint">Всем — на все ПК сразу. Магазину — только этой точке.
-                Группе — своему набору касс (создаётся в разделе «Группы»). Типу устройства —
-                например, только кассам или только ПК менеджеров.</span>
-                <select id="targetType">
-                    <option value="all">Всем</option>
-                    <option value="store">Магазину</option>
-                    <option value="group">Группе хостов</option>
-                    <option value="device_type">Типу устройства</option>
-                    <option value="pc">Конкретному ПК</option>
+            <label>Мануал из библиотеки (необязательно)
+                <span class="hint">Готовая инструкция из раздела «Мануалы». Её текст подставится
+                в поле справа — потом его можно поправить под этот конкретный случай.</span>
+                <select id="manualPicker">
+                    <option value="">— не выбирать —</option>
                 </select>
             </label>
-            <label id="targetIdWrap" style="display:none">Кто именно
-                <span class="hint">Конкретный получатель для выбранного типа.</span>
-                <select id="targetId"></select>
-                <div id="targetPcPicker" style="display:none"></div>
+            <label>Ссылка или текст инструкции (необязательно)
+                <span class="hint">Если заполнено, в окне появится кнопка «Открыть инструкцию», и
+                закрыть окно можно будет только после того, как кассир её откроет. Можно вписать
+                текст шагов или ссылку — ссылка откроется в браузере.</span>
+                <textarea id="manualUrl" rows="2"></textarea>
             </label>
         </div>
-
-        <label>Мануал из библиотеки (необязательно)
-            <span class="hint">Готовая инструкция из раздела «Мануалы». Её текст подставится
-            в поле ниже — потом его можно поправить под этот конкретный случай.</span>
-            <select id="manualPicker">
-                <option value="">— не выбирать —</option>
-            </select>
-        </label>
-        <label>Ссылка/текст мануала (необязательно)
-            <span class="hint">Если заполнено, в окне появится кнопка «Открыть инструкцию», и
-            закрыть окно можно будет только после того, как кассир её откроет. Можно вписать
-            текст шагов или ссылку — ссылка откроется в браузере.</span>
-            <textarea id="manualUrl" rows="2"></textarea>
-        </label>
-
-        <div class="row">
-            <button type="submit">Отправить</button>
+        <p class="error" id="formError"></p>
+        <div class="form-actions">
+            <button type="submit" id="sendBtn"></button>
+            <button type="button" id="saveTplBtn" title="Сохранить текст, важность, размер и мануал как шаблон — чтобы в следующий раз отправить в один клик">☆ Сохранить как шаблон</button>
             <button type="button" class="ghost" id="cancelNewBtn">Отмена</button>
         </div>
     </form>
 
-    <div class="toolbar">
-        <input type="search" id="search" placeholder="Поиск по тексту…">
+    <div class="tabs">
+        <button type="button" class="active" data-tab="history">История</button>
+        <button type="button" data-tab="templates">Шаблоны <span class="count" id="tplCount">0</span></button>
     </div>
-    <table id="notificationsTable">
-        <thead>
-            <tr>
-                <th>Когда</th>
-                <th>Текст</th>
-                <th>Важность</th>
-                <th>Подтвердили</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-    <p class="muted">Нажмите на строку — увидите, какие кассы уже подтвердили. «Отозвать» — кассы, которые ещё не показали окно, его не получат.</p>
+
+    <section class="tab-panel" data-panel="history">
+        <div class="toolbar">
+            <div class="search-wrap"><span id="searchIcon"></span><input type="search" id="search" placeholder="Поиск по тексту или получателю…"></div>
+        </div>
+        <table id="notificationsTable">
+            <thead>
+                <tr>
+                    <th>Когда</th>
+                    <th>Текст</th>
+                    <th>Кому</th>
+                    <th>Важность</th>
+                    <th title="Сколько касс из адресованных уже закрыли окно (подтвердили)">Подтвердили</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <p class="muted">Нажмите на строку — увидите, какие кассы уже подтвердили. «Отозвать» — кассы, которые ещё
+        не показали окно, его не получат.</p>
+    </section>
+
+    <section class="tab-panel" data-panel="templates" hidden>
+        <div class="section-head" style="margin-top:0">
+            <p class="muted" style="margin:0;max-width:760px">Типовые сообщения — «плановые работы», «работы завершены» и т.п.
+            Выберите шаблон над формой нового оповещения, поправьте время — и отправляйте. Правка шаблона уже
+            отправленные оповещения не меняет.</p>
+            <button type="button" id="addTplBtn" class="primary"></button>
+        </div>
+        <table id="templatesTable">
+            <thead><tr><th>Название</th><th>Текст</th><th>Важность</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </section>
 </main>
 
 <script src="/admin/shared/api.js"></script>

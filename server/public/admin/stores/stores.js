@@ -54,12 +54,12 @@
             const tr = document.createElement('tr');
             tr.dataset.id = s.id;
             tr.innerHTML =
-                '<td><b>' + esc(s.name) + '</b></td>' +
-                '<td>' + (s.is_pilot ? '<span class="badge badge-accent">пилот</span>' : '<span class="muted">—</span>') + '</td>' +
+                '<td><a class="host-link" href="/admin/hosts?store_id=' + s.id + '" title="Хосты этого магазина"><b>' + esc(s.name) + '</b></a></td>' +
+                '<td>' + (s.is_pilot ? '<span class="badge badge-accent" title="Магазин для обкатки: новое сначала сюда">пилот</span>' : '<span class="muted">—</span>') + '</td>' +
                 '<td class="num">' + s.pc_count + '</td>' +
-                '<td><div class="actions">' + (canEdit ?
-                    '<button type="button" data-act="edit">Изменить</button>' +
-                    '<button type="button" data-act="delete" class="danger"' + (s.pc_count > 0 ? ' disabled title="Сначала переведите ПК в другой магазин"' : '') + '>Удалить</button>' : '') +
+                '<td><div class="actions" style="flex-wrap:nowrap">' +
+                    '<button type="button" class="small" data-act="notify" title="Новое оповещение для этого магазина">' + Ui.icon('bell') + 'Оповестить</button>' +
+                    '<button type="button" class="small ghost icon-only" data-act="more" title="Хосты, команда, файл' + (canEdit ? ', изменить, удалить' : '') + '">⋯</button>' +
                 '</div></td>';
             tbody.appendChild(tr);
         });
@@ -69,8 +69,22 @@
         const btn = e.target.closest('button[data-act]');
         if (!btn) return;
         const s = stores.find(function (x) { return String(x.id) === btn.closest('tr').dataset.id; });
-        if (btn.dataset.act === 'edit') storeForm(s);
-        if (btn.dataset.act === 'delete') {
+        let act = btn.dataset.act;
+        if (act === 'more') {
+            act = await Ui.menu(btn, [{ label: 'Показать хосты магазина', value: 'hosts' }].concat(canEdit ? [
+                { label: 'Команда магазину…', value: 'command' },
+                { label: 'Положить файл магазину…', value: 'file' },
+                { label: 'Изменить', value: 'edit' },
+                s.pc_count > 0 ? { label: 'Удалить (сначала переведите ПК)', value: 'cant' } : { label: 'Удалить магазин', value: 'delete', danger: true },
+            ] : []));
+        }
+        if (act === 'notify') window.location.href = '/admin/notifications?target=store:' + s.id;
+        if (act === 'hosts') window.location.href = '/admin/hosts?store_id=' + s.id;
+        if (act === 'command') window.location.href = '/admin/commands?target=store:' + s.id;
+        if (act === 'file') window.location.href = '/admin/files?target=store:' + s.id;
+        if (act === 'cant') Ui.toast('В магазине ' + s.pc_count + ' ПК — сначала переведите их в другой магазин', 'error');
+        if (act === 'edit') storeForm(s);
+        if (act === 'delete') {
             if (!await Ui.confirm('Удалить магазин «' + s.name + '»?', { danger: true, okLabel: 'Удалить' })) return;
             try { await Api.request('DELETE', '/admin/stores/' + s.id); Ui.toast('Магазин удалён', 'success'); loadStores(); }
             catch (err) { Ui.toast('Не удалось: ' + Ui.reason(err), 'error'); }

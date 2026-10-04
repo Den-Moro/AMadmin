@@ -30,6 +30,18 @@
         <a class="stat" href="/admin/stores" title="Магазины из справочника. Нажмите — «Справочники»"><div class="label">Магазинов</div><div class="value" id="statStores">—</div><div class="sub muted" id="statGroups"></div></a>
     </div>
 
+    <div class="card compact" id="attentionCard" style="margin-bottom:18px">
+        <div class="row" style="justify-content:space-between;align-items:center">
+            <h2>Требуют внимания</h2>
+            <a href="/admin/hosts?state=offline" class="muted">все офлайн →</a>
+        </div>
+        <p class="muted" style="margin:0">Кассы, которые молчат дольше суток или ни разу не выходили на связь.</p>
+        <input type="search" id="attentionSearch" placeholder="Поиск: хост, магазин, IP…" style="width:100%;margin:10px 0">
+        <table id="attentionTable">
+            <thead><tr><th>Хост</th><th>Магазин</th><th>IP</th><th>Агент</th><th>Последний опрос</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
     <div class="stats stats-small">
         <a class="stat" href="/admin/notifications" title="Показов оповещений за последние 24 часа и сколько из них подтвердили. Нажмите — «Оповещения»"><div class="label">Оповещений за сутки</div><div class="value" id="actNotif">—</div><div class="sub muted" id="actAcks"></div></a>
         <a class="stat" href="/admin/commands" title="Команд отправлено за 24 часа и их результаты. Нажмите — «Команды»"><div class="label">Команд за сутки</div><div class="value" id="actCmd">—</div><div class="sub muted" id="actCmdRes"></div></a>
@@ -69,34 +81,6 @@
         </p>
     </div>
 
-    <div class="card compact" id="ntpCard" hidden>
-        <h2>Время сервера (NTP)</h2>
-        <p class="muted" style="margin-top:0">Периодическая проверка расхождения часов сервера с NTP-сервером. Сервер
-        никогда не меняет системное время сам — только показывает предупреждение выше, если разошлось больше порога.</p>
-        <label><input type="checkbox" id="ntp_enabled"> Включить проверку</label>
-        <div class="row">
-            <label>NTP-сервер<input type="text" id="ntp_server_address" placeholder="pool.ntp.org"></label>
-            <label>Порог тревоги, сек<input type="number" id="ntp_drift_threshold_seconds" min="1" max="3600"></label>
-            <label>Проверять не чаще, сек<input type="number" id="ntp_check_interval_seconds" min="60" max="86400"></label>
-        </div>
-        <div class="row" style="align-items:center">
-            <button type="button" id="ntpSaveBtn">Сохранить</button>
-            <span class="muted" id="ntpStatusLine"></span>
-        </div>
-    </div>
-
-    <div class="card compact" id="attentionCard">
-        <div class="row" style="justify-content:space-between;align-items:center">
-            <h2>Требуют внимания</h2>
-            <a href="/admin/hosts?state=offline" class="muted">все офлайн →</a>
-        </div>
-        <p class="muted" style="margin:0">Кассы, которые молчат дольше суток или ни разу не выходили на связь.</p>
-        <input type="search" id="attentionSearch" placeholder="Поиск: хост, магазин, IP…" style="width:100%;margin:10px 0">
-        <table id="attentionTable">
-            <thead><tr><th>Хост</th><th>Магазин</th><th>IP</th><th>Агент</th><th>Последний опрос</th></tr></thead>
-            <tbody></tbody>
-        </table>
-    </div>
 </main>
 
 <script src="/admin/shared/api.js"></script>

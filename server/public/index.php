@@ -59,6 +59,7 @@ require __DIR__ . '/../Modules/Agent/AgentConfigController.php';
 require __DIR__ . '/../Modules/Notifications/OccurrencesController.php';
 require __DIR__ . '/../Modules/Notifications/AckController.php';
 require __DIR__ . '/../Modules/Notifications/AdminNotificationsController.php';
+require __DIR__ . '/../Modules/Notifications/AdminTemplatesController.php';
 require __DIR__ . '/../Modules/Auth/AdminAuthController.php';
 require __DIR__ . '/../Modules/Auth/AdminUsersController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminPcsController.php';
@@ -138,6 +139,10 @@ $router->post('/admin/device-types', array('AdminMetaController', 'storeDeviceTy
 $router->put('/admin/device-types/{id}', array('AdminMetaController', 'updateDeviceType'));
 $router->delete('/admin/device-types/{id}', array('AdminMetaController', 'destroyDeviceType'));
 $router->get('/admin/notifications', array('AdminNotificationsController', 'index'));
+$router->get('/admin/message-templates', array('AdminTemplatesController', 'index'));
+$router->post('/admin/message-templates', array('AdminTemplatesController', 'store'));
+$router->put('/admin/message-templates/{id}', array('AdminTemplatesController', 'update'));
+$router->delete('/admin/message-templates/{id}', array('AdminTemplatesController', 'destroy'));
 $router->post('/admin/notifications', array('AdminNotificationsController', 'store'));
 $router->get('/admin/notifications/{id}/acks', array('AdminNotificationsController', 'acks'));
 $router->delete('/admin/notifications/{id}', array('AdminNotificationsController', 'destroy'));

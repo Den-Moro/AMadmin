@@ -1,5 +1,6 @@
 (async function () {
-    await requireAdminAuth();
+    const me = await requireAdminAuth();
+    const canEdit = me.role === 'administrator' || me.role === 'superadmin';
     const $ = Ui.$, esc = Ui.escapeHtml;
 
     let groups = [];
@@ -10,7 +11,8 @@
         const tbody = document.querySelector('#groupsTable tbody');
         tbody.innerHTML = '';
         if (!groups.length) {
-            tbody.innerHTML = '<tr><td colspan="3" class="empty">Групп пока нет — создайте первую.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3">' + Ui.emptyState({ icon: 'layers', title: 'Групп пока нет',
+                text: 'Группа — свой набор касс поверх магазинов: «Кассы 1 этажа», «Пилот». Ей можно слать оповещения, команды и файлы.' }) + '</td></tr>';
             return;
         }
         groups.forEach(function (g) {
@@ -20,9 +22,9 @@
             tr.innerHTML =
                 '<td><b>' + esc(g.name) + '</b></td>' +
                 '<td class="num">' + g.member_count + '</td>' +
-                '<td><div class="actions">' +
-                '<button type="button" data-act="rename">Переименовать</button>' +
-                '<button type="button" data-act="delete" class="danger">Удалить</button>' +
+                '<td><div class="actions" style="flex-wrap:nowrap">' +
+                '<button type="button" class="small" data-act="notify" title="Новое оповещение для этой группы">' + Ui.icon('bell') + 'Оповестить</button>' +
+                '<button type="button" class="small ghost icon-only" data-act="more" title="Хосты группы, команда, файл, переименовать, удалить">⋯</button>' +
                 '</div></td>';
             tbody.appendChild(tr);
         });
@@ -148,8 +150,23 @@
         const g = groups.find(function (x) { return String(x.id) === tr.dataset.id; });
         const btn = e.target.closest('button[data-act]');
         if (btn) {
-            if (btn.dataset.act === 'rename') groupNameForm(g);
-            if (btn.dataset.act === 'delete') {
+            const target = 'target=group:' + g.id;
+            let act = btn.dataset.act;
+            if (act === 'more') {
+                act = await Ui.menu(btn, [{ label: 'Показать хосты группы', value: 'hosts' }].concat(canEdit ? [
+                    { label: 'Команда группе…', value: 'command' },
+                    { label: 'Положить файл группе…', value: 'file' },
+                ] : []).concat([
+                    { label: 'Переименовать', value: 'rename' },
+                    { label: 'Удалить группу', value: 'delete', danger: true },
+                ]));
+            }
+            if (act === 'notify') window.location.href = '/admin/notifications?' + target;
+            if (act === 'hosts') window.location.href = '/admin/hosts?group_id=' + g.id;
+            if (act === 'command') window.location.href = '/admin/commands?' + target;
+            if (act === 'file') window.location.href = '/admin/files?' + target;
+            if (act === 'rename') groupNameForm(g);
+            if (act === 'delete') {
                 if (!await Ui.confirm('Удалить группу «' + g.name + '»? Оповещения и команды, нацеленные на неё, перестанут кому-либо попадать.', { danger: true, okLabel: 'Удалить' })) return;
                 try { await Api.request('DELETE', '/admin/host-groups/' + g.id); Ui.toast('Группа удалена', 'success'); loadGroups(); }
                 catch (err) { Ui.toast('Не удалось: ' + Ui.reason(err), 'error'); }

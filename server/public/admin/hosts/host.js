@@ -120,28 +120,18 @@
     // Только просмотр (ничего не меняют на кассе) — отправляются без подтверждения.
     // То, что меняет состояние (перезапуск службы), спрашивает. Всё остальное — на
     // страницах «Команды» и «Файлы» с этим ПК уже выбранным.
-    const QUICK = {
-        disk: { label: 'Свободное место на дисках', type: 'script_run', payload: { engine: 'powershell',
-            script: "Get-WmiObject Win32_LogicalDisk -Filter 'DriveType=3' |\n    Select-Object DeviceID, @{n='Свободно, ГБ';e={[math]::Round($_.FreeSpace/1GB,1)}}, @{n='Всего, ГБ';e={[math]::Round($_.Size/1GB,1)}} |\n    Format-Table -AutoSize | Out-String" } },
-        procs: { label: 'Список процессов', type: 'process_action', payload: { action: 'list' } },
-        services: { label: 'Список служб', type: 'service_control', payload: { action: 'list', service_name: '' } },
-        net: { label: 'Сеть: ipconfig /all', type: 'script_run', payload: { engine: 'cmd', script: 'ipconfig /all' } },
-        users: { label: 'Кто вошёл в систему', type: 'script_run', payload: { engine: 'cmd', script: 'query user' } },
-    };
+    // Тот же набор, что «Частые команды» на странице «Команды» (Ui.COMMON_COMMANDS);
+    // здесь — только то, что ничего не меняет на кассе.
+    const QUICK = Ui.COMMON_COMMANDS.filter(function (c) { return c.readonly; });
 
     const STATUS_LABELS = { pending: 'ждёт', in_progress: 'в работе', success: 'ок', failed: 'ошибка', timeout: 'таймаут' };
 
     $('quickBtn').addEventListener('click', async function () {
-        const act = await Ui.menu($('quickBtn'), [
-            { label: 'Свободное место на дисках', value: 'disk' },
-            { label: 'Список процессов', value: 'procs' },
-            { label: 'Список служб', value: 'services' },
-            { label: 'Сеть: ipconfig /all', value: 'net' },
-            { label: 'Кто вошёл в систему', value: 'users' },
+        const act = await Ui.menu($('quickBtn'), QUICK.map(function (c) { return { label: c.label, value: c.key }; }).concat([
             { label: 'Перезапустить службу…', value: 'restart' },
             { label: 'Положить файл на эту кассу…', value: 'file' },
             { label: 'Другая команда или скрипт…', value: 'command' },
-        ]);
+        ]));
         if (!act) return;
         if (act === 'file') { window.location.href = '/admin/files?pc=' + id; return; }
         if (act === 'command') { window.location.href = '/admin/commands?pc=' + id; return; }
@@ -153,7 +143,7 @@
             runQuick({ label: 'Перезапуск службы «' + name.trim() + '»', type: 'service_control', payload: { action: 'restart', service_name: name.trim() } });
             return;
         }
-        runQuick(QUICK[act]);
+        runQuick(QUICK.find(function (c) { return c.key === act; }));
     });
 
     async function runQuick(q) {

@@ -10,6 +10,8 @@
         quiet_hours_enabled: 'bool', quiet_hours_from: 'text', quiet_hours_to: 'text', sound_on_important: 'bool',
         brand_name: 'text', brand_contact: 'text', client_lock_enabled: 'bool',
         log_level: 'text', login_max_attempts: 'text', login_lockout_minutes: 'text', session_lifetime_hours: 'text',
+        online_window_seconds: 'text', ntp_enabled: 'bool', ntp_server_address: 'text',
+        ntp_drift_threshold_seconds: 'text', ntp_check_interval_seconds: 'text',
     };
 
     const canEdit = me.role === 'administrator' || me.role === 'superadmin';
@@ -26,8 +28,19 @@
             document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('active', x === b); });
             document.querySelectorAll('.tab-panel').forEach(function (p) { p.hidden = p.dataset.panel !== activeTab; });
             if (activeTab === 'client') loadClientRollout();
+            if (activeTab === 'server') loadNtpStatus();
         });
     });
+
+    // Последняя сверка часов сервера (её результат считает GET /admin/stats).
+    async function loadNtpStatus() {
+        let st;
+        try { st = await Api.get('/admin/stats'); } catch (e) { return; }
+        const ntp = st.ntp;
+        $('ntpStatusLine').textContent = !ntp || !ntp.enabled ? ''
+            : !ntp.ok ? 'Последняя проверка не удалась (' + ntp.server + '): ' + ntp.error
+            : 'Расхождение с ' + ntp.server + ': ' + ntp.drift_seconds + ' с (проверено ' + formatServerTime(ntp.checked_at) + ')';
+    }
 
     let passwordSet = false;
 

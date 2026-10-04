@@ -29,7 +29,8 @@
         });
     });
 
-    const presetPc = new URLSearchParams(window.location.search).get('pc');
+    // Пришли из профиля хоста (?pc=ID) или из «Групп»/«Справочников» (?target=group:3).
+    const presetTarget = Ui.targetFromQuery();
     const typeEl = $('type');
     function showTypeFields() {
         document.querySelectorAll('.type-fields').forEach(function (block) {
@@ -53,54 +54,35 @@
     $('cancelNewBtn').addEventListener('click', function () { $('createForm').hidden = true; });
     $('closeNewBtn').addEventListener('click', function () { $('createForm').hidden = true; });
     $('goFilesBtn').addEventListener('click', function () {
-        window.location.href = '/admin/files' + (presetPc ? '?pc=' + encodeURIComponent(presetPc) : '');
+        window.location.href = '/admin/files' + window.location.search;
     });
 
     // «Кому» — общий компонент со строкой «Попадёт на N касс»: масштаб команды виден ещё
     // до окна подтверждения.
     const target = Ui.targetPicker($('targetBox'));
 
-    // Пришли из профиля хоста (?pc=ID): сразу открываем форму с этим ПК в качестве цели.
-    if (presetPc && canEdit) {
+    // Цель из адреса — сразу открываем форму с ней.
+    if (presetTarget && canEdit) {
         openForm();
-        await target.set('pc', presetPc);
+        await target.set(presetTarget.type, presetTarget.id);
     }
 
     // ---- Частые команды: заполняют форму одним кликом ----------------------------------
 
-    // Только то, что безопасно на работающей кассе и работает на Windows 7 (PowerShell 2.0:
-    // поэтому Get-WmiObject, а не Get-CimInstance). Перезагрузки и прочее разрушительное
-    // сюда намеренно не входит — такое пишется руками, осознанно.
-    const PRESETS = [
-        { label: 'Свободное место на дисках', tip: 'PowerShell: свободно и всего по каждому локальному диску, в ГБ',
-          type: 'script_run', engine: 'powershell',
-          script: "Get-WmiObject Win32_LogicalDisk -Filter 'DriveType=3' |\n    Select-Object DeviceID, @{n='Свободно, ГБ';e={[math]::Round($_.FreeSpace/1GB,1)}}, @{n='Всего, ГБ';e={[math]::Round($_.Size/1GB,1)}} |\n    Format-Table -AutoSize | Out-String" },
-        { label: 'Сеть: ipconfig /all', tip: 'IP-адреса, шлюз, DNS и MAC каждой сетевой карты', type: 'script_run', engine: 'cmd', script: 'ipconfig /all' },
-        { label: 'Кто вошёл в систему', tip: 'Пользователи, вошедшие на кассу, и время входа (query user)', type: 'script_run', engine: 'cmd', script: 'query user' },
-        { label: 'Версия Windows и время работы', tip: 'Выпуск Windows, номер сборки и когда касса последний раз загружалась',
-          type: 'script_run', engine: 'powershell',
-          script: "$os = Get-WmiObject Win32_OperatingSystem\n'{0} (сборка {1})' -f $os.Caption, $os.BuildNumber\n'Загружена: ' + $os.ConvertToDateTime($os.LastBootUpTime)" },
-        { label: 'Часы и синхронизация', tip: 'Источник времени и когда часы последний раз сверялись (w32tm /query /status)', type: 'script_run', engine: 'cmd', script: 'w32tm /query /status' },
-        { label: 'Перезапустить печать', tip: 'Перезапустить службу диспетчера печати (Spooler) — помогает, когда «завис» принтер чеков или документов',
-          type: 'service_control', action: 'restart', service: 'Spooler' },
-        { label: 'Очистить очередь печати', tip: 'Остановить Spooler, удалить застрявшие задания печати и запустить снова',
-          type: 'script_run', engine: 'powershell',
-          script: "Stop-Service Spooler -Force\nRemove-Item \"$env:SystemRoot\\System32\\spool\\PRINTERS\\*\" -Force -ErrorAction SilentlyContinue\nStart-Service Spooler\n'Очередь печати очищена, Spooler: ' + (Get-Service Spooler).Status" },
-        { label: 'Список процессов', tip: 'Все процессы с PID и памятью — посмотреть перед завершением', type: 'process_action', action: 'list' },
-        { label: 'Список служб', tip: 'Все службы Windows с состоянием', type: 'service_control', action: 'list', service: '' },
-    ];
+    // Тот же набор, что «Быстрые действия» в профиле хоста (Ui.COMMON_COMMANDS).
+    const PRESETS = Ui.COMMON_COMMANDS;
     $('presets').innerHTML = PRESETS.map(function (p, i) {
         return '<button type="button" class="chip link" style="font-family:inherit" data-preset="' + i + '" title="' + esc(p.tip) + '">' + esc(p.label) + '</button>';
     }).join('');
     $('presets').addEventListener('click', function (e) {
         const b = e.target.closest('[data-preset]');
         if (!b) return;
-        const p = PRESETS[+b.dataset.preset];
+        const p = PRESETS[+b.dataset.preset], d = p.payload;
         $('createForm').querySelectorAll('.type-fields input, .type-fields textarea').forEach(function (el) { el.value = ''; });
         typeEl.value = p.type;
-        if (p.type === 'script_run') { $('scriptEngine').value = p.engine; $('scriptText').value = p.script; }
-        if (p.type === 'service_control') { $('serviceAction').value = p.action; $('serviceName').value = p.service || ''; }
-        if (p.type === 'process_action') { $('processAction').value = p.action; }
+        if (p.type === 'script_run') { $('scriptEngine').value = d.engine; $('scriptText').value = d.script; }
+        if (p.type === 'service_control') { $('serviceAction').value = d.action; $('serviceName').value = d.service_name || ''; }
+        if (p.type === 'process_action') { $('processAction').value = d.action; }
         showTypeFields();
         Ui.toast('Форма заполнена: «' + p.label + '». Выберите, кому, и отправьте.', 'info');
     });
