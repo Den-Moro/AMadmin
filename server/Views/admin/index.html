@@ -27,7 +27,7 @@
         <a class="stat" href="/admin/hosts" title="Все заведённые кассы и ПК. Нажмите — откроется список хостов"><div class="label">Всего ПК</div><div class="value" id="statTotal">—</div><div class="sub muted" id="statNever"></div></a>
         <a class="stat ok" href="/admin/hosts?state=online" title="Агент выходил на связь в пределах окна «онлайн» (настраивается на странице «Хосты»). Нажмите — список"><div class="label">Онлайн</div><div class="value" id="statOnline">—</div><div class="sub muted" id="statOnlinePct"></div></a>
         <a class="stat bad" href="/admin/hosts?state=offline" title="Давно не выходили на связь: выключены, нет сети или агент не запущен. Нажмите — список"><div class="label">Офлайн</div><div class="value" id="statOffline">—</div><div class="sub muted" id="statSilent"></div></a>
-        <a class="stat" href="/admin/stores" title="Магазины из справочника. Нажмите — «Справочники»"><div class="label">Магазинов</div><div class="value" id="statStores">—</div><div class="sub muted" id="statGroups"></div></a>
+        <a class="stat" href="/admin/stores" title="Магазины — карточки с состоянием, переход в каждый магазин"><div class="label">Магазинов</div><div class="value" id="statStores">—</div><div class="sub muted" id="statGroups"></div></a>
     </div>
 
     <div class="card compact" id="attentionCard" style="margin-bottom:18px">
@@ -52,7 +52,7 @@
 
     <div class="row-2">
         <div class="card compact">
-            <h2>По магазинам</h2>
+            <div class="card-head"><h2>По магазинам</h2><a href="/admin/stores" class="muted" style="font-size:12.5px">все магазины →</a></div>
             <div id="storeBars" class="bars"></div>
         </div>
         <div class="card compact">

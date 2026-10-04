@@ -45,6 +45,8 @@
         const name = pc.display_name || pc.hostname;
         document.title = name + ' — AMadmin';
         $('crumbName').textContent = name;
+        $('crumbStore').textContent = pc.store_name;
+        $('crumbStore').href = '/admin/stores/store?id=' + pc.store_id;
         $('title').textContent = name;
         $('statusBadge').className = 'badge ' + (pc.online ? 'badge-online' : 'badge-offline');
         $('statusBadge').textContent = pc.online ? 'онлайн' : 'офлайн';
@@ -55,7 +57,7 @@
             fact('Понятное имя', esc(pc.display_name || '—')) +
             fact('Пользователь Windows', esc(pc.username || '—')) +
             fact('IP', pc.last_ip ? '<span class="ip-copy" data-ip="' + esc(pc.last_ip) + '" title="Скопировать IP">' + esc(pc.last_ip) + '</span>' : '—') +
-            fact('Магазин', '<a href="/admin/hosts?store_id=' + pc.store_id + '">' + esc(pc.store_name) + '</a>') +
+            fact('Магазин', '<a href="/admin/stores/store?id=' + pc.store_id + '" title="Открыть магазин">' + esc(pc.store_name) + '</a>') +
             fact('Тип устройства', esc(pc.device_type_name)) +
             fact('Версия агента', Ui.agentVersionHtml(pc, 'не отчитался')) +
             fact('Заведён', esc(formatServerTime(pc.created_at))) +

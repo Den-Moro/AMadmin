@@ -440,6 +440,17 @@ code.path { word-break: break-all; }
 .badge-info { background: var(--info-soft); color: var(--info); }
 .badge[data-tip] { cursor: help; }
 
+/* Ссылка на хост/магазин в таблицах — как текст, акцент при наведении. */
+.host-link { color: var(--text); text-decoration: none; font-weight: 600; }
+.host-link:hover { color: var(--accent); }
+
+/* Цвет состояния магазина: доля касс на связи (пороги — Настройки → Сервер). */
+.status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.status-dot.green { background: var(--success); }
+.status-dot.yellow { background: var(--warning); }
+.status-dot.red { background: var(--danger); }
+.status-dot.empty { background: none; border: 2px solid var(--border-strong); }
+
 /* Тип команды: значок + подпись. */
 .kind { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-2);
     background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 2px 8px 2px 6px; white-space: nowrap; }

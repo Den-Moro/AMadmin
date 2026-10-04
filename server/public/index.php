@@ -64,7 +64,6 @@ require __DIR__ . '/../Modules/Auth/AdminAuthController.php';
 require __DIR__ . '/../Modules/Auth/AdminUsersController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminPcsController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminServerMetricsController.php';
-require __DIR__ . '/../Modules/Dashboard/AdminNetworkSitesController.php';
 require __DIR__ . '/../Modules/Dashboard/AdminStatsController.php';
 require __DIR__ . '/../Modules/Logs/AdminLogsController.php';
 require __DIR__ . '/../Modules/Meta/AdminMetaController.php';
@@ -77,6 +76,7 @@ require __DIR__ . '/../Modules/Commands/FilesController.php';
 require __DIR__ . '/../Modules/Commands/AdminFilesController.php';
 require __DIR__ . '/../Modules/Commands/AdminDeployDestinationsController.php';
 require __DIR__ . '/../Modules/Updates/AdminReleasesController.php';
+require __DIR__ . '/../Modules/Stores/AdminStoresController.php';
 require __DIR__ . '/../Modules/Settings/AdminSettingsController.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -123,6 +123,7 @@ $router->get('/admin/logs/download', array('AdminLogsController', 'download'));
 $router->get('/admin/pcs', array('AdminPcsController', 'index'));
 $router->post('/admin/pcs', array('AdminPcsController', 'store'));
 $router->post('/admin/pcs/bulk', array('AdminPcsController', 'bulkStore'));
+$router->post('/admin/pcs/move', array('AdminStoresController', 'movePcs'));
 $router->post('/admin/pcs/import', array('AdminPcsController', 'import'));
 $router->get('/admin/pcs/import/template', array('AdminPcsController', 'importTemplate'));
 $router->get('/admin/pcs/configs.zip', array('AdminPcsController', 'exportConfigs'));
@@ -130,7 +131,11 @@ $router->get('/admin/pcs/{id}', array('AdminPcsController', 'show'));
 $router->put('/admin/pcs/{id}', array('AdminPcsController', 'update'));
 $router->delete('/admin/pcs/{id}', array('AdminPcsController', 'destroy'));
 $router->post('/admin/pcs/{id}/token', array('AdminPcsController', 'regenerateToken'));
-$router->get('/admin/stores', array('AdminMetaController', 'stores'));
+$router->get('/admin/stores', array('AdminStoresController', 'index'));
+$router->get('/admin/stores/auto-assign', array('AdminStoresController', 'autoAssignPreview'));
+$router->post('/admin/stores/auto-assign', array('AdminStoresController', 'autoAssign'));
+$router->get('/admin/stores/{id}', array('AdminStoresController', 'show'));
+$router->get('/admin/stores/{id}/suggestions', array('AdminStoresController', 'suggestions'));
 $router->post('/admin/stores', array('AdminMetaController', 'storeStore'));
 $router->put('/admin/stores/{id}', array('AdminMetaController', 'updateStore'));
 $router->delete('/admin/stores/{id}', array('AdminMetaController', 'destroyStore'));
@@ -155,13 +160,6 @@ $router->get('/admin/host-groups/{id}/members', array('AdminHostGroupsController
 $router->post('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'addMember'));
 $router->delete('/admin/host-groups/{id}/members/{pcId}', array('AdminHostGroupsController', 'removeMember'));
 
-$router->get('/admin/network-sites', array('AdminNetworkSitesController', 'index'));
-$router->post('/admin/network-sites', array('AdminNetworkSitesController', 'store'));
-$router->post('/admin/network-sites/recompute', array('AdminNetworkSitesController', 'recompute'));
-$router->put('/admin/network-sites/{id}', array('AdminNetworkSitesController', 'update'));
-$router->delete('/admin/network-sites/{id}', array('AdminNetworkSitesController', 'destroy'));
-$router->post('/admin/network-sites/{id}/members', array('AdminNetworkSitesController', 'addMember'));
-$router->delete('/admin/network-sites/{id}/members/{pcId}', array('AdminNetworkSitesController', 'removeMember'));
 
 $router->get('/admin/manuals', array('AdminManualsController', 'index'));
 $router->post('/admin/manuals', array('AdminManualsController', 'store'));
@@ -193,7 +191,7 @@ $router->put('/admin/settings', array('AdminSettingsController', 'update'));
 
 try {
     // У части страниц чистый путь совпадает с путём JSON-эндпоинта того же раздела
-    // (например, GET /admin/stores — и страница «Справочники», и список магазинов,
+    // (например, GET /admin/stores — и страница «Магазины», и список магазинов,
     // который эта страница сама же запрашивает через fetch). PageRouter отличает
     // навигацию браузера от fetch/агента по Accept и отдаёт страницу первым; для
     // остального (в т.ч. для того же пути без text/html в Accept) — обычный роутер.

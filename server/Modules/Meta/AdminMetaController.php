@@ -1,19 +1,11 @@
 <?php
 
 // Справочники: магазины и типы устройств. Чтение — всем ролям (нужно для дропдаунов
-// таргетинга), изменение — administrator+. Удалить можно только пустой справочник:
+// таргетинга), изменение — administrator+. Список магазинов со сводкой по кассам и
+// страница магазина — AdminStoresController. Удалить можно только пустой справочник:
 // у ПК жёсткая ссылка на магазин и тип, «повисших» касс быть не должно.
 class AdminMetaController
 {
-    public static function stores()
-    {
-        AdminAuth::requireLogin();
-        echo json_encode(Db::get()->query('
-            SELECT s.id, s.name, s.is_pilot, s.brand_name, s.brand_contact, (SELECT COUNT(*) FROM pcs p WHERE p.store_id = s.id) AS pc_count
-            FROM stores s ORDER BY s.name
-        ')->fetchAll());
-    }
-
     public static function deviceTypes()
     {
         AdminAuth::requireLogin();
@@ -34,18 +26,25 @@ class AdminMetaController
             echo json_encode(array('error' => 'name_required'));
             return;
         }
-        $stmt = Db::get()->prepare('INSERT INTO stores (name, is_pilot, brand_name, brand_contact) VALUES (:name, :pilot, :brand_name, :brand_contact)');
+        $subnets = AdminStoresController::parseSubnets(isset($body['subnets']) ? $body['subnets'] : '');
+        if ($subnets === null) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'subnets_invalid'));
+            return;
+        }
+        $stmt = Db::get()->prepare('INSERT INTO stores (name, is_pilot, brand_name, brand_contact, subnets) VALUES (:name, :pilot, :brand_name, :brand_contact, :subnets)');
         $stmt->execute(array(
             'name' => $name, 'pilot' => !empty($body['is_pilot']) ? 1 : 0,
             'brand_name' => isset($body['brand_name']) ? trim($body['brand_name']) : null,
             'brand_contact' => isset($body['brand_contact']) ? trim($body['brand_contact']) : null,
+            'subnets' => $subnets ? implode(', ', $subnets) : null,
         ));
         $id = Db::get()->lastInsertId();
         Logger::info("Магазин создан: id={$id} '{$name}' автор='{$_SESSION['admin_username']}'");
         echo json_encode(array('status' => 'ok', 'id' => $id));
     }
 
-    // PUT /admin/stores/{id}   body: { name?, is_pilot? }
+    // PUT /admin/stores/{id}   body: { name?, is_pilot?, brand_name?, brand_contact?, subnets? }
     public static function updateStore($id)
     {
         AdminAuth::requireRole(array('administrator', 'superadmin'));
@@ -67,6 +66,18 @@ class AdminMetaController
         if (array_key_exists('brand_contact', $body)) {
             $fields[] = 'brand_contact = :brand_contact';
             $params['brand_contact'] = trim($body['brand_contact']) !== '' ? trim($body['brand_contact']) : null;
+        }
+        // Подсети магазина (CIDR через запятую) — по ним панель подсказывает, какие кассы
+        // стоят в этом магазине (см. AdminStoresController).
+        if (array_key_exists('subnets', $body)) {
+            $subnets = AdminStoresController::parseSubnets($body['subnets']);
+            if ($subnets === null) {
+                http_response_code(400);
+                echo json_encode(array('error' => 'subnets_invalid'));
+                return;
+            }
+            $fields[] = 'subnets = :subnets';
+            $params['subnets'] = $subnets ? implode(', ', $subnets) : null;
         }
         if (!$fields) {
             http_response_code(400);

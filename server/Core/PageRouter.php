@@ -28,6 +28,7 @@ class PageRouter
         '/admin/manuals' => 'manuals/manuals.html',
         '/admin/commands' => 'commands/commands.html',
         '/admin/stores' => 'stores/stores.html',
+        '/admin/stores/store' => 'stores/store.html',
         '/admin/logs' => 'logs/logs.html',
         '/admin/settings' => 'settings/settings.html',
         '/admin/users' => 'users/users.html',

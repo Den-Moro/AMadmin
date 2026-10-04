@@ -12,6 +12,7 @@
         log_level: 'text', login_max_attempts: 'text', login_lockout_minutes: 'text', session_lifetime_hours: 'text',
         online_window_seconds: 'text', ntp_enabled: 'bool', ntp_server_address: 'text',
         ntp_drift_threshold_seconds: 'text', ntp_check_interval_seconds: 'text',
+        network_site_status_green_min_percent: 'text', network_site_status_red_max_percent: 'text',
     };
 
     const canEdit = me.role === 'administrator' || me.role === 'superadmin';

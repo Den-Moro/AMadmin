@@ -24,8 +24,7 @@
     </div>
     <p class="muted">Настройки, которые нужны только на одной странице, живут там: защита команд и срок жизни
     команды — <a href="/admin/commands">«Команды»</a> → «Защита и лимиты», раскатка файлов —
-    <a href="/admin/files">«Файлы»</a> → «Настройки раскатки», актуальная версия агента — <a href="/admin/updates">«Обновления»</a>,
-    пороги статуса узлов — <a href="/admin/hosts">«Хосты»</a> → «Узлы».</p>
+    <a href="/admin/files">«Файлы»</a> → «Настройки раскатки», актуальная версия агента — <a href="/admin/updates">«Обновления»</a>.</p>
 
 
     <form id="settingsForm">
@@ -218,6 +217,20 @@
                 30 с), иначе статусы будут мигать.</span>
                 <input type="number" id="online_window_seconds" min="30" max="86400" style="max-width:180px">
             </label>
+        </div>
+        <div class="card">
+            <h2>Цвет магазина</h2>
+            <p class="muted" style="margin-top:0">Цвет карточки магазина в разделе «Магазины» — по доле его касс на связи.</p>
+            <div class="row">
+                <label>Зелёный — на связи не меньше, %
+                    <span class="hint">100 — зелёный, только когда на связи все кассы магазина. Поставьте, например, 80, если одна выключенная касса из пяти — норма.</span>
+                    <input type="number" id="network_site_status_green_min_percent" min="0" max="100">
+                </label>
+                <label>Красный — на связи не больше, %
+                    <span class="hint">0 — красный, только когда не на связи ни одна касса. Всё между порогами — жёлтый.</span>
+                    <input type="number" id="network_site_status_red_max_percent" min="0" max="100">
+                </label>
+            </div>
         </div>
         <div class="card">
             <h2>Время сервера (NTP)</h2>

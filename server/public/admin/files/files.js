@@ -658,7 +658,7 @@
     await Promise.all([loadFiles(), loadDests()]);
 
     // ?file=ID — «Раскатать» из другого места; ?pc=ID / ?target=group:3 — из профиля
-    // хоста, «Групп» или «Справочников»;
+    // хоста, «Групп» или «Магазинов»;
     // ?repeat=ID — «Повторить» раскатку со страницы «Команды».
     const qs = new URLSearchParams(location.search);
     if (canEdit && qs.get('repeat')) {

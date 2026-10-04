@@ -7,6 +7,7 @@ const Nav = (function () {
     const sections = [
         { title: 'Парк', items: [
             { href: '/admin', label: 'Дашборд', icon: 'grid', tip: 'Сводка: сколько касс на связи, что требует внимания' },
+            { href: '/admin/stores', label: 'Магазины', icon: 'store', match: '/admin/stores', tip: 'Кассы по магазинам: состояние каждого магазина, переход внутрь, перевод касс между магазинами' },
             { href: '/admin/hosts', label: 'Хосты', icon: 'monitor', match: '/admin/hosts', tip: 'Все кассы и ПК: поиск, фильтры, профиль каждого хоста' },
             { href: '/admin/groups', label: 'Группы', icon: 'layers', tip: 'Свои наборы хостов («Кассы 1 этажа», «Проблемные») — цель для оповещений и команд' },
         ] },
@@ -20,7 +21,6 @@ const Nav = (function () {
             { href: '/admin/updates', label: 'Обновления', icon: 'download', roles: ['administrator', 'superadmin'], tip: 'Новая версия агента на выбранные кассы' },
         ] },
         { title: 'Система', items: [
-            { href: '/admin/stores', label: 'Справочники', icon: 'store', tip: 'Магазины (и пилотные) и типы устройств — к чему привязан каждый ПК' },
             { href: '/admin/settings', label: 'Настройки', icon: 'sliders', tip: 'Поведение окна оповещений, пароль клиента, брендинг' },
             { href: '/admin/logs', label: 'Логи', icon: 'scroll', roles: ['administrator', 'superadmin'], tip: 'Журнал сервера: запросы, ошибки, кто что отправил' },
             { href: '/admin/users', label: 'Пользователи', icon: 'users', roles: ['superadmin'], tip: 'Учётки панели и их роли' },

@@ -29,7 +29,7 @@
         });
     });
 
-    // Пришли из профиля хоста (?pc=ID) или из «Групп»/«Справочников» (?target=group:3).
+    // Пришли из профиля хоста (?pc=ID) или из «Групп»/«Магазинов» (?target=group:3).
     const presetTarget = Ui.targetFromQuery();
     const typeEl = $('type');
     function showTypeFields() {

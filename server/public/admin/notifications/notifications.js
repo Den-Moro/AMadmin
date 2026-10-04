@@ -351,7 +351,7 @@
     await Promise.all([loadNotifications(), loadTemplates(), loadManualPicker()]);
     renderSendBtn();
 
-    // Пришли из профиля хоста (?pc=ID) или из «Групп»/«Справочников» (?target=group:3).
+    // Пришли из профиля хоста (?pc=ID) или из «Групп»/«Магазинов» (?target=group:3).
     const preset = Ui.targetFromQuery();
     if (preset) {
         openForm();

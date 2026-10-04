@@ -62,8 +62,8 @@
         $('actFilesSize').textContent = Ui.formatSize(a.files_bytes);
 
         $('storeBars').innerHTML = st.stores.length
-            ? st.stores.map(function (s) { return bar(s.name + (s.is_pilot ? ' (пилот)' : ''), +s.online, +s.total, s.total > 0 && +s.online === 0, '/admin/hosts?store_id=' + s.id); }).join('')
-            : '<div class="muted">Магазинов пока нет — добавьте в Справочниках.</div>';
+            ? st.stores.map(function (s) { return bar(s.name + (s.is_pilot ? ' (пилот)' : ''), +s.online, +s.total, s.total > 0 && +s.online === 0, '/admin/stores/store?id=' + s.id); }).join('')
+            : '<div class="muted">Магазинов пока нет — заведите на странице «Магазины».</div>';
         $('versionBars').innerHTML = st.versions.length
             ? st.versions.map(function (v) { return bar(v.version === '—' ? 'агент ещё не отчитался' : 'v' + v.version, +v.count, total, v.version === '—'); }).join('')
             : '<div class="muted">—</div>';

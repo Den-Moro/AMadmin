@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Магазин — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+<style>
+    /* Страница магазина: сводка, подсказки по подсети, кассы с массовыми действиями. */
+    .crumbs { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .crumbs a { color: var(--muted); text-decoration: none; }
+    .crumbs a:hover { color: var(--accent); }
+    .status-line { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+    .bulk-bar { display: none; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 10px;
+                background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--radius-sm); }
+    .bulk-bar.show { display: flex; flex-wrap: wrap; }
+    td.check, th.check { width: 34px; padding-right: 0; }
+    .host-sub { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+    a.stat.active-filter { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+    .info-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; font-size: 13.5px; }
+    .info-grid dt { color: var(--muted); }
+    .info-grid dd { margin: 0; }
+</style>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="crumbs"><a href="/admin/stores">Магазины</a> / <span id="crumbName">…</span></div>
+    <div class="page-head">
+        <div>
+            <h1 id="title">…</h1>
+            <div class="status-line"><i class="status-dot" id="statusDot"></i><span id="statusText" class="muted"></span></div>
+        </div>
+        <div class="actions">
+            <button type="button" id="notifyBtn" class="primary" title="Новое оповещение для касс этого магазина"></button>
+            <span id="adminActions" hidden style="display:inline-flex;gap:8px;flex-wrap:wrap">
+                <button type="button" id="commandBtn" title="Команда на все кассы магазина (служба, процесс, скрипт)"></button>
+                <button type="button" id="fileBtn" title="Разложить файл по кассам магазина"></button>
+                <button type="button" id="editBtn" title="Название, пилот, подсети, бренд в оповещениях"></button>
+                <button type="button" id="moreBtn" class="icon-only" title="Ещё: удалить магазин">⋯</button>
+            </span>
+        </div>
+    </div>
+
+    <div class="stats" id="tiles">
+        <a class="stat" href="#" data-state="" title="Все кассы магазина"><div class="label">Касс</div><div class="value" id="tTotal">—</div><div class="sub muted">показать все</div></a>
+        <a class="stat ok" href="#" data-state="online" title="Выходили на связь в пределах окна «онлайн»"><div class="label">На связи</div><div class="value" id="tOnline">—</div><div class="sub muted" id="tOnlinePct"></div></a>
+        <a class="stat bad" href="#" data-state="offline" title="Давно не выходили на связь: выключены, нет сети или агент не запущен"><div class="label">Не на связи</div><div class="value" id="tOffline">—</div><div class="sub muted">показать</div></a>
+        <a class="stat" href="#" data-state="never" title="Заведены в панели, но агент ни разу не выходил на связь — скорее всего, не установлен"><div class="label">Ни разу не выходили</div><div class="value" id="tNever">—</div><div class="sub muted">показать</div></a>
+    </div>
+
+    <div class="card compact" id="suggestCard" hidden style="margin-bottom:18px">
+        <div class="card-head"><h2>Похоже, эти кассы из этого магазина</h2></div>
+        <p class="muted" style="margin:0" id="suggestText"></p>
+        <table id="suggestTable">
+            <thead><tr><th class="check"><input type="checkbox" id="sgAll" checked aria-label="Отметить все"></th><th>Касса</th><th>IP</th><th>Сейчас числится в</th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <div class="form-actions" id="suggestActions" hidden><button type="button" class="primary small" id="suggestMoveBtn">Перевести отмеченные сюда</button></div>
+    </div>
+
+    <div class="section-head">
+        <h2>Кассы магазина</h2>
+        <span id="addPcsWrap" hidden><button type="button" id="addPcsBtn" class="small" title="Перевести сюда кассы, которые сейчас числятся в других магазинах"></button></span>
+    </div>
+    <div class="toolbar">
+        <div class="search-wrap"><span id="searchIcon"></span><input type="search" id="search" placeholder="Поиск: имя, hostname, пользователь, IP…"></div>
+        <select id="stateFilter" title="Фильтр по состоянию">
+            <option value="">Любое состояние</option>
+            <option value="online">На связи</option>
+            <option value="offline">Не на связи</option>
+            <option value="never">Ни разу не выходили</option>
+        </select>
+    </div>
+    <div class="bulk-bar" id="bulkBar">
+        <span>Отмечено: <b id="bulkCount">0</b></span>
+        <button type="button" class="small" data-bulk="move" title="Перевести отмеченные кассы в другой магазин">В другой магазин…</button>
+        <button type="button" class="small" data-bulk="group" title="Добавить отмеченные кассы в группу — например, «Кассы 1 этажа»; группе потом можно слать оповещения и команды">В группу…</button>
+        <button type="button" class="small ghost" data-bulk="clear">Снять отметки</button>
+    </div>
+    <table id="pcsTable">
+        <thead>
+            <tr>
+                <th class="check"><input type="checkbox" id="checkAll" title="Отметить все"></th>
+                <th>Статус</th>
+                <th>Касса</th>
+                <th>IP</th>
+                <th>Тип</th>
+                <th>Группы</th>
+                <th>Агент</th>
+                <th>На связи</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="card compact" id="infoCard">
+        <div class="card-head"><h2>О магазине</h2><button type="button" class="small ghost" id="editBtn2" hidden>Изменить</button></div>
+        <dl class="info-grid" id="info"></dl>
+    </div>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="/admin/stores/store-form.js"></script>
+<script src="/admin/stores/store.js"></script>
+</body>
+</html>

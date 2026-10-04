@@ -2,9 +2,29 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Справочники — AMadmin</title>
+<title>Магазины — AMadmin</title>
 <link rel="stylesheet" href="/admin/shared/admin.css">
 <script src="/admin/shared/ui.js"></script>
+<style>
+    /* Карточки магазинов: цвет — доля касс на связи; клик — страница магазина. */
+    .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+    .store-card {
+        display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border-radius: var(--radius);
+        background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow);
+        color: inherit; text-decoration: none; transition: border-color .15s, transform .15s;
+    }
+    .store-card:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+    .store-card:focus-visible { outline: none; box-shadow: var(--ring); }
+    .store-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .store-head b { font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .store-num { font-size: 22px; font-weight: 700; letter-spacing: -.4px; font-variant-numeric: tabular-nums; }
+    .store-num span { font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+    .store-meta { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+    .store-meta .mono { font-family: var(--mono); font-size: 11.5px; }
+    .store-card .progress-seg { margin-top: 0; }
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+</style>
 </head>
 <body class="app">
 <aside id="sidebar" class="sidebar"></aside>
@@ -12,43 +32,62 @@
 <main>
     <div class="page-head">
         <div>
-            <h1>Справочники</h1>
-            <p class="muted">Магазины и типы устройств — то, к чему привязан каждый ПК и на что можно нацелить оповещение или команду.</p>
+            <h1>Магазины</h1>
+            <p class="muted">Кассы сгруппированы по магазинам. Нажмите на магазин — откроются его кассы, их состояние и
+            действия: оповестить, отправить команду или файл, перевести кассы в другой магазин.</p>
+        </div>
+        <div class="actions" data-admin hidden>
+            <button type="button" id="autoAssignBtn" hidden title="Перевести кассы в магазин, к подсети которого относится их IP — со списком и подтверждением"></button>
+            <button type="button" id="addStoreBtn" class="primary" title="Завести новый магазин"></button>
         </div>
     </div>
 
     <div class="tabs">
-        <button type="button" class="active" data-tab="stores">Магазины</button>
+        <button type="button" class="active" data-tab="stores">Магазины <span class="count" id="storesCount">0</span></button>
         <button type="button" data-tab="types">Типы устройств</button>
     </div>
 
     <section class="tab-panel" data-panel="stores">
+        <div class="note" id="suggestNote" hidden style="margin-bottom:12px"></div>
         <div class="toolbar">
-            <input type="search" id="storeSearch" placeholder="Поиск по названию…">
-            <button type="button" id="addStoreBtn" class="primary" data-admin hidden>＋ Магазин</button>
+            <div class="search-wrap"><span id="searchIcon"></span><input type="search" id="storeSearch" placeholder="Поиск магазина…"></div>
+            <select id="storeFilter" title="Какие магазины показать">
+                <option value="">Все магазины</option>
+                <option value="problem">Не все кассы на связи</option>
+                <option value="pilot">Пилотные</option>
+                <option value="empty">Без касс</option>
+            </select>
+            <select id="storeSort" title="Порядок карточек">
+                <option value="name">По названию</option>
+                <option value="problem">Сначала проблемные</option>
+                <option value="size">Сначала крупные</option>
+            </select>
         </div>
-        <table id="storesTable">
-            <thead><tr><th>Название</th><th>Пилот</th><th>ПК</th><th></th></tr></thead>
-            <tbody></tbody>
-        </table>
-        <p class="muted">«Пилот» — магазин для обкатки: удобно сначала отправлять новое только ему, а потом всем.</p>
+        <div class="legend" style="margin-bottom:12px">
+            <span><i class="status-dot green"></i>все на связи</span>
+            <span><i class="status-dot yellow"></i>часть</span>
+            <span><i class="status-dot red"></i>никого</span>
+            <span><i class="status-dot empty"></i>касс нет</span>
+            <span class="muted" id="legendNote" title="Границы цвета задаются в Настройках → Сервер"></span>
+        </div>
+        <div class="store-grid" id="storeGrid"></div>
     </section>
 
     <section class="tab-panel" data-panel="types" hidden>
         <div class="toolbar">
-            <span class="grow"></span>
+            <span class="muted grow">Например: касса, ПК менеджера, ПК администратора. По типу удобно слать оповещения и команды только кассам.</span>
             <button type="button" id="addTypeBtn" class="primary" data-admin hidden>＋ Тип устройства</button>
         </div>
         <table id="typesTable">
             <thead><tr><th>Название</th><th>ПК</th><th></th></tr></thead>
             <tbody></tbody>
         </table>
-        <p class="muted">Например: касса, ПК менеджера, ПК администратора. По типу удобно слать оповещения только кассам.</p>
     </section>
 </main>
 
 <script src="/admin/shared/api.js"></script>
 <script src="/admin/shared/nav.js"></script>
+<script src="/admin/stores/store-form.js"></script>
 <script src="/admin/stores/stores.js"></script>
 </body>
 </html>
