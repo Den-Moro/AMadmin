@@ -179,8 +179,14 @@ Get-Process AMadmin.UiAgent, AMadmin.ManagementAgent -ErrorAction SilentlyContin
 Start-Sleep 1
 
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Get-ChildItem $Source | Where-Object { -not $_.PSIsContainer -and (@('.exe', '.dll', '.config', '.ps1', '.json') -contains $_.Extension) -and $_.Name -ne 'config.json' } |
-    Copy-Item -Destination $InstallDir -Force
+# Комплект скопировали прямо в папку установки и запустили оттуда — файлы уже на месте
+# (копирование файла в самого себя PowerShell считает ошибкой).
+if ((Convert-Path $Source).TrimEnd('\') -eq (Convert-Path $InstallDir).TrimEnd('\')) {
+    Log "Файлы уже лежат в $InstallDir — копировать не нужно."
+} else {
+    Get-ChildItem $Source | Where-Object { -not $_.PSIsContainer -and (@('.exe', '.dll', '.config', '.ps1', '.json') -contains $_.Extension) -and $_.Name -ne 'config.json' } |
+        Copy-Item -Destination $InstallDir -Force
+}
 
 # ---- config.json --------------------------------------------------------------------
 Step 'Конфиг'
