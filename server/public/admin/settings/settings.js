@@ -6,7 +6,7 @@
     const FIELDS = {
         force_mode_default: 'text', soft_corner: 'text', window_size_default: 'text', max_windows_per_poll: 'text',
         close_delay_seconds: 'text', close_delay_seconds_important: 'text', confirm_close_required: 'bool',
-        accidental_tap_guard_ms: 'text', catchup_missed_default: 'bool', timezone: 'text',
+        accidental_tap_guard_ms: 'text', timezone: 'text',
         quiet_hours_enabled: 'bool', quiet_hours_from: 'text', quiet_hours_to: 'text', sound_on_important: 'bool',
         brand_name: 'text', brand_contact: 'text', client_lock_enabled: 'bool',
         log_level: 'text', login_max_attempts: 'text', login_lockout_minutes: 'text', session_lifetime_hours: 'text',

@@ -38,7 +38,7 @@ server/
 │   ├── .htaccess    DirectorySlash Off + rewrite всего несуществующего в index.php
 │   └── admin/       панель: shared/{admin.css,ui.js,nav.js,api.js} + JS/CSS на раздел
 │                    (сами .html теперь в server/Views/admin/, не здесь)
-├── migrations/      001…026, хронологические, накатываются bin/migrate.php
+├── migrations/      001…027, хронологические, накатываются bin/migrate.php
 ├── bin/             migrate.php, create-admin.php, count-admins.php, seed.php
 ├── docker/          nginx.conf (Docker-образ: nginx + PHP-FPM, см. Dockerfile)
 └── data/, logs/     БД amadmin.sqlite, files/ (раскатка), sessions/; app.log
@@ -161,16 +161,17 @@ Docker-образ сервера — nginx + PHP-FPM (был Apache): `server/do
 3. Подпись `.exe` сертификатом — обязательна перед продом (SmartScreen/антивирусы).
 4. CSRF-токены на POST панели, 2FA.
 5. Повторяющиеся оповещения (`recurrence` всегда `once`).
-6. Флажок «Догонять пропущенные» (`catchup_missed_default`) ни на что не влияет: сервер
-   всегда отдаёт кассе все неподтверждённые оповещения без ограничения давности. Либо
-   подключить (окно в N часов), либо убрать флажок из Настроек.
-7. Нагрузочная проверка SQLite на 3000 касс (WAL включён, но не измерено).
-8. HTTPS: агент проверяет сертификат по-настоящему — самоподписанный не пройдёт,
+6. Нагрузочная проверка SQLite на 3000 касс (WAL включён, но не измерено).
+7. HTTPS: агент проверяет сертификат по-настоящему — самоподписанный не пройдёт,
    нужен корпоративный CA на кассах.
-9. Экспорт статистики (CSV/Excel).
-10. `install-server.ps1` написан под PowerShell 5.1 (`Register-ScheduledTask` и т.п.) — на
-    Windows Server 2008/2008 R2 с PowerShell 2.0 не запустится. Клиентские скрипты
-    переведены на 2.0, серверный — нет.
+8. Экспорт статистики (CSV/Excel).
+9. `install-server.ps1` написан под PowerShell 5.1 (`Register-ScheduledTask` и т.п.) — на
+   Windows Server 2008/2008 R2 с PowerShell 2.0 не запустится. Клиентские скрипты
+   переведены на 2.0, серверный — нет.
+
+Догон пропущенных работает всегда: сервер отдаёт кассе все неподтверждённые оповещения
+без ограничения давности. Флажок «Догонять пропущенные» (`catchup_missed_default`) сервер
+никогда не читал — убран из Настроек миграцией 027.
 
 ## 5. Как поднять и проверить
 
