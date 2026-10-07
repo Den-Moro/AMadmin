@@ -95,8 +95,9 @@ namespace AMadmin.UiAgent
 
                 foreach (var occurrence in occurrences)
                 {
-                    Logger.Info("Показ оповещения occurrence_id=" + occurrence.OccurrenceId);
-                    var window = new NotificationWindow(occurrence);
+                    Logger.Info("Показ оповещения occurrence_id=" + occurrence.OccurrenceId + " уровень=" + occurrence.EffectiveLevel +
+                                (occurrence.Images.Count > 0 ? " картинок=" + occurrence.Images.Count : ""));
+                    var window = new NotificationWindow(occurrence, await DownloadImagesAsync(occurrence));
                     window.ShowDialog();
                     AgentState.ShownTotal++;
 
@@ -115,6 +116,19 @@ namespace AMadmin.UiAgent
             {
                 _polling = false;
             }
+        }
+
+        // Картинки оповещения скачиваем до показа окна: окно модальное, а показать текст без
+        // картинки лучше, чем держать кассира перед пустой рамкой. Не скачалась — пропускаем.
+        private async System.Threading.Tasks.Task<System.Collections.Generic.List<byte[]>> DownloadImagesAsync(Occurrence occurrence)
+        {
+            var list = new System.Collections.Generic.List<byte[]>();
+            foreach (var img in occurrence.Images)
+            {
+                try { list.Add(await _api.GetMediaAsync(img.Id)); }
+                catch (Exception ex) { Logger.Warning("Картинку " + img.Id + " для occurrence_id=" + occurrence.OccurrenceId + " не удалось скачать: " + ex.Message); }
+            }
+            return list;
         }
 
         // Настройки агента (пароль защиты клиента, актуальная версия): сервер в ответе на
@@ -153,6 +167,7 @@ namespace AMadmin.UiAgent
             };
 
             var menu = new WinForms.ContextMenuStrip();
+            menu.Items.Add("История оповещений", null, (s, a) => ShowHistory());
             menu.Items.Add("Статус агента", null, (s, a) => ShowStatus());
             menu.Items.Add("Настройки", null, (s, a) => ShowSettings());
             menu.Items.Add("Последние команды", null, (s, a) => ShowRecentCommands());
@@ -191,6 +206,12 @@ namespace AMadmin.UiAgent
                 if (prompt.ShowDialog() != true || !prompt.Unlocked) return;
             }
             new SettingsWindow(_config, _configPath, ApplyConfig).Show();
+        }
+
+        // История — без пароля: перечитать оповещение — нормальное действие кассира.
+        private void ShowHistory()
+        {
+            new HistoryWindow(() => _api).Show();
         }
 
         private void ShowRecentCommands()

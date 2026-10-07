@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using AMadmin.Core;
 
@@ -34,7 +39,7 @@ namespace AMadmin.UiAgent
         // разблокировки нажатия не засчитываем — за это время случайный тап уже пройдёт,
         // а осознанное нажатие человек сделает позже.
         private readonly TimeSpan _settleTime;
-        private readonly bool _confirmRequired;
+        private bool _confirmRequired;
         private DateTime? _enabledAt;
 
         private bool _confirming;
@@ -45,20 +50,30 @@ namespace AMadmin.UiAgent
         // необязательную фичу из AGENTS.md.
         public bool Reacted { get; private set; }
 
-        public NotificationWindow(Occurrence occurrence)
+        // Пока открыт просмотр картинки крупно — принудительное окно не должно выдёргивать
+        // себя наверх (иначе просмотр тут же уходит под него).
+        private bool _viewerOpen;
+        private readonly List<BitmapSource> _images = new List<BitmapSource>();
+        private int _imageIndex;
+
+        // review — открыто из «Истории оповещений»: перечитать, без таймера и без ack.
+        public NotificationWindow(Occurrence occurrence, IList<byte[]> images = null, bool review = false)
         {
             InitializeComponent();
             _occurrence = occurrence;
+            SetImages(images);
 
             MessageText.Text = occurrence.Text;
             _remaining = occurrence.CloseDelaySeconds > 0 ? occurrence.CloseDelaySeconds : 30;
             _settleTime = TimeSpan.FromMilliseconds(Math.Max(0, occurrence.AccidentalTapGuardMs));
             _confirmRequired = occurrence.ConfirmCloseRequired;
 
-            var important = occurrence.Priority == "important";
-            // Важное — всегда принудительно. Неважное — по настройке ForceMode из панели
-            // (strict = тоже принудительно, soft = мягко в углу).
-            _forced = important || occurrence.ForceMode == "strict";
+            var level = occurrence.EffectiveLevel;
+            var important = level == "important" || level == "critical";
+            // Важно/Критично — всегда принудительно. Остальное — по ForceMode, который
+            // присылает сервер (strict = тоже принудительно, soft = мягко в углу).
+            // Из истории — всегда обычное окно: человек сам решил перечитать.
+            _forced = !review && (important || occurrence.ForceMode == "strict");
 
             if (!string.IsNullOrWhiteSpace(occurrence.BrandName) || !string.IsNullOrWhiteSpace(occurrence.BrandContact))
             {
@@ -66,13 +81,7 @@ namespace AMadmin.UiAgent
                     .Where(x => !string.IsNullOrWhiteSpace(x)));
             }
 
-            if (!important)
-            {
-                PriorityBadge.Background = System.Windows.Media.Brushes.White;
-                PriorityBadge.BorderBrush = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#D8DBE0");
-                PriorityText.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#6B7280");
-                PriorityText.Text = "Информация";
-            }
+            ApplyLevelStyle(level);
 
             if (_forced)
             {
@@ -89,7 +98,13 @@ namespace AMadmin.UiAgent
                 Topmost = true;
                 ShowInTaskbar = true;
                 Loaded += (s, e) => ForceToFront();
-                Deactivated += (s, e) => { if (!_allowClose) Dispatcher.BeginInvoke(new Action(ForceToFront)); };
+                Deactivated += (s, e) => { if (!_allowClose && !_viewerOpen) Dispatcher.BeginInvoke(new Action(ForceToFront)); };
+            }
+            else if (review)
+            {
+                // Перечитать из истории — обычное окно по центру над списком истории.
+                Topmost = false;
+                WindowStartupLocation = WindowStartupLocation.CenterOwner;
             }
             else
             {
@@ -103,10 +118,15 @@ namespace AMadmin.UiAgent
             // Размер окна из настроек/оповещения: крупное заметнее, маленькое меньше мешает.
             switch (occurrence.Size)
             {
-                case "small": Width = 380; break;
-                case "large": Width = 680; break;
-                default: Width = 520; break;
+                case "small": Width = 380; MainImage.MaxHeight = 200; break;
+                case "large": Width = 680; MainImage.MaxHeight = 400; break;
+                default: Width = 520; MainImage.MaxHeight = 280; break;
             }
+            // Мониторы касс бывают маленькими (1024×768): окно не выше экрана — середина с
+            // текстом и картинками прокручивается, кнопка «Понятно» внизу видна всегда.
+            var area = SystemParameters.WorkArea;
+            MaxHeight = area.Height - 8;
+            MainImage.MaxHeight = Math.Min(MainImage.MaxHeight, Math.Max(140, area.Height * 0.36));
 
             if (occurrence.PlaySound)
             {
@@ -117,21 +137,37 @@ namespace AMadmin.UiAgent
                 };
             }
 
+            if (review)
+            {
+                // Перечитать — без таймера и обязательного открытия инструкции, ack не нужен.
+                Title = "Оповещение из истории";
+                _remaining = 0;
+                _timer.Stop();
+            }
+
             if (!string.IsNullOrWhiteSpace(occurrence.ManualUrl))
             {
                 _manualIsUrl = occurrence.ManualUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
                             || occurrence.ManualUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
                 ManualButton.Visibility = Visibility.Visible;
                 HintText.Text = "Есть инструкция — окно можно будет закрыть только после того, как вы её откроете.";
+                if (review) _manualOpened = true;
             }
             else
             {
                 _manualOpened = true;
             }
+            if (review)
+            {
+                var when = ParseUtc(occurrence.FireAt);
+                HintText.Text = "Из истории: показано " + (when.HasValue ? when.Value.ToString("dd.MM.yyyy HH:mm") : occurrence.FireAt) +
+                                (string.IsNullOrEmpty(occurrence.AckedAt) ? " · ещё не было подтверждено" : "");
+                _confirmRequired = false;
+            }
 
             Closing += OnClosing;
             _timer.Tick += OnTick;
-            _timer.Start();
+            if (!review) _timer.Start();
 
             _confirmResetTimer.Tick += (s, e) =>
             {
@@ -141,6 +177,121 @@ namespace AMadmin.UiAgent
             };
 
             UpdateCloseButton();
+        }
+
+        // Цвет и подпись значка по уровню важности. Критично — ещё и красная рамка окна.
+        private void ApplyLevelStyle(string level)
+        {
+            string text, bg, border, fg;
+            switch (level)
+            {
+                case "info": text = "Информация"; bg = "#EFF6FF"; border = "#BFDBFE"; fg = "#1D4ED8"; break;
+                case "important": text = "Важно"; bg = "#FFF7ED"; border = "#FED7AA"; fg = "#C2410C"; break;
+                case "critical": text = "Критично"; bg = "#DC2626"; border = "#DC2626"; fg = "#FFFFFF"; break;
+                default: text = "Внимание"; bg = "#FFFBEB"; border = "#FDE68A"; fg = "#B45309"; break;
+            }
+            var conv = new BrushConverter();
+            PriorityText.Text = text;
+            PriorityBadge.Background = (Brush)conv.ConvertFromString(bg);
+            PriorityBadge.BorderBrush = (Brush)conv.ConvertFromString(border);
+            PriorityText.Foreground = (Brush)conv.ConvertFromString(fg);
+            if (level == "critical")
+            {
+                Card.BorderBrush = (Brush)conv.ConvertFromString("#DC2626");
+                Card.BorderThickness = new Thickness(3);
+            }
+        }
+
+        // Картинки приходят уже скачанными (App качает их до показа окна). Битую или
+        // неподдерживаемую пропускаем — текст оповещения важнее картинки.
+        private void SetImages(IList<byte[]> images)
+        {
+            if (images == null) return;
+            foreach (var bytes in images)
+            {
+                try
+                {
+                    var bmp = new BitmapImage();
+                    using (var ms = new System.IO.MemoryStream(bytes))
+                    {
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.StreamSource = ms;
+                        bmp.EndInit();
+                    }
+                    bmp.Freeze();
+                    _images.Add(bmp);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("Картинку оповещения не удалось показать: " + ex.Message);
+                }
+            }
+            if (_images.Count == 0) return;
+            ImagesPanel.Visibility = Visibility.Visible;
+            ShowImage(0);
+            if (_images.Count > 1)
+            {
+                for (var i = 0; i < _images.Count; i++)
+                {
+                    var index = i;
+                    var thumb = new Border
+                    {
+                        Width = 72, Height = 52, Margin = new Thickness(0, 0, 6, 6), CornerRadius = new CornerRadius(6),
+                        BorderThickness = new Thickness(2), Cursor = Cursors.Hand,
+                        Child = new Image { Source = _images[i], Stretch = Stretch.UniformToFill },
+                        ToolTip = "Картинка " + (i + 1) + " из " + _images.Count,
+                    };
+                    thumb.MouseLeftButtonUp += (s, e) => ShowImage(index);
+                    Thumbs.Items.Add(thumb);
+                }
+                UpdateThumbs();
+            }
+        }
+
+        private void ShowImage(int index)
+        {
+            _imageIndex = index;
+            MainImage.Source = _images[index];
+            ImageHint.Text = _images.Count > 1
+                ? "Картинка " + (index + 1) + " из " + _images.Count + " · нажмите, чтобы увеличить"
+                : "Нажмите на картинку, чтобы увеличить";
+            UpdateThumbs();
+        }
+
+        private void UpdateThumbs()
+        {
+            var conv = new BrushConverter();
+            for (var i = 0; i < Thumbs.Items.Count; i++)
+            {
+                ((Border)Thumbs.Items[i]).BorderBrush = (Brush)conv.ConvertFromString(i == _imageIndex ? "#2563EB" : "#D8DBE0");
+            }
+        }
+
+        private void MainImage_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_images.Count == 0) return;
+            _viewerOpen = true;
+            try
+            {
+                new ImageViewerWindow(_images, _imageIndex) { Owner = this, Topmost = Topmost }.ShowDialog();
+            }
+            finally
+            {
+                _viewerOpen = false;
+                if (_forced && !_allowClose) ForceToFront();
+            }
+        }
+
+        private static DateTime? ParseUtc(string value)
+        {
+            DateTime dt;
+            if (!string.IsNullOrEmpty(value) && DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out dt))
+            {
+                return dt.ToLocalTime();
+            }
+            return null;
         }
 
         private void PlaceInCorner(string corner)
@@ -296,6 +447,9 @@ namespace AMadmin.UiAgent
             Close();
         }
 
+        // PreviewKeyDown, а не KeyDown: кнопка сама обрабатывает Enter (и вызывает Click) в
+        // своём OnKeyDown, до обычного KeyDown — флаг выставлялся уже после Click, и закрыть
+        // окно с клавиатуры было нельзя вовсе (поймано на стенде, 0.1.8).
         private void CloseButton_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
             if (e.Key == System.Windows.Input.Key.Enter || e.Key == System.Windows.Input.Key.Space)

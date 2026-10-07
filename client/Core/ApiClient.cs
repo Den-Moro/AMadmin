@@ -16,6 +16,12 @@ namespace AMadmin.Core
         [JsonPropertyName("occurrence_id")] public int OccurrenceId { get; set; }
         [JsonPropertyName("text")] public string Text { get; set; }
         [JsonPropertyName("priority")] public string Priority { get; set; }
+        // Уровень важности: info | warning | important | critical. Старый сервер его не
+        // присылает — тогда выводим из priority (см. EffectiveLevel).
+        [JsonPropertyName("level")] public string Level { get; set; }
+        [JsonPropertyName("images")] public List<OccurrenceImage> Images { get; set; } = new List<OccurrenceImage>();
+        // Только в истории (/occurrences/history): когда эта касса закрыла окно; null — ещё нет.
+        [JsonPropertyName("acked_at")] public string AckedAt { get; set; }
         [JsonPropertyName("manual_url")] public string ManualUrl { get; set; }
         [JsonPropertyName("size")] public string Size { get; set; }
         [JsonPropertyName("fire_at")] public string FireAt { get; set; }
@@ -29,6 +35,22 @@ namespace AMadmin.Core
         [JsonPropertyName("soft_corner")] public string SoftCorner { get; set; } = "bottom-right";
         [JsonPropertyName("brand_name")] public string BrandName { get; set; }
         [JsonPropertyName("brand_contact")] public string BrandContact { get; set; }
+
+        public string EffectiveLevel
+        {
+            get
+            {
+                if (Level == "info" || Level == "warning" || Level == "important" || Level == "critical") return Level;
+                return Priority == "important" ? "important" : "warning";
+            }
+        }
+    }
+
+    public class OccurrenceImage
+    {
+        [JsonPropertyName("id")] public int Id { get; set; }
+        [JsonPropertyName("width")] public int Width { get; set; }
+        [JsonPropertyName("height")] public int Height { get; set; }
     }
 
     public class Command
@@ -106,6 +128,44 @@ namespace AMadmin.Core
         {
             var json = await GetStringAsync("/occurrences");
             return JsonSerializer.Deserialize<List<Occurrence>>(json) ?? new List<Occurrence>();
+        }
+
+        // История показов этой кассе за 30 дней — для окна «История оповещений» в трее.
+        public async Task<List<Occurrence>> GetHistoryAsync()
+        {
+            var json = await GetStringAsync("/occurrences/history");
+            return JsonSerializer.Deserialize<List<Occurrence>>(json) ?? new List<Occurrence>();
+        }
+
+        // Картинка оповещения. Кэш на диске (во временной папке пользователя): у картинки
+        // по id содержимое не меняется, а в истории одно и то же оповещение открывают
+        // повторно — незачем каждый раз качать заново.
+        public async Task<byte[]> GetMediaAsync(int mediaId)
+        {
+            var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AMadmin-media");
+            var cached = System.IO.Path.Combine(dir, mediaId + ".img");
+            if (System.IO.File.Exists(cached))
+            {
+                return System.IO.File.ReadAllBytes(cached);
+            }
+            using (var response = await _http.GetAsync(_baseUrl + "/media/" + mediaId))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException("GET /media/" + mediaId + " -> " + (int)response.StatusCode);
+                }
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                try
+                {
+                    System.IO.Directory.CreateDirectory(dir);
+                    System.IO.File.WriteAllBytes(cached, bytes);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Debug("Картинку " + mediaId + " не удалось сохранить в кэш: " + ex.Message);
+                }
+                return bytes;
+            }
         }
 
         public Task SendAckAsync(int occurrenceId, bool reacted)

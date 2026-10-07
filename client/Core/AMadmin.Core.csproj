@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- net48, а не net481 и не современный .NET: только .NET Framework 4.8 поддерживает
-       Windows 7 (жёсткое требование из AGENTS.md). 4.8.1 и .NET 6/7/8 требуют Windows 10+. -->
+  <!-- net48, Р° РЅРµ net481 Рё РЅРµ СЃРѕРІСЂРµРјРµРЅРЅС‹Р№ .NET: С‚РѕР»СЊРєРѕ .NET Framework 4.8 РїРѕРґРґРµСЂР¶РёРІР°РµС‚
+       Windows 7 (Р¶С‘СЃС‚РєРѕРµ С‚СЂРµР±РѕРІР°РЅРёРµ РёР· AGENTS.md). 4.8.1 Рё .NET 6/7/8 С‚СЂРµР±СѓСЋС‚ Windows 10+. -->
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>7.3</LangVersion>
     <RootNamespace>AMadmin.Core</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.1.9</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- В .NET Framework HttpClient живёт в отдельной сборке — без этой строки не соберётся. -->
+    <!-- Р’ .NET Framework HttpClient Р¶РёРІС‘С‚ РІ РѕС‚РґРµР»СЊРЅРѕР№ СЃР±РѕСЂРєРµ вЂ” Р±РµР· СЌС‚РѕР№ СЃС‚СЂРѕРєРё РЅРµ СЃРѕР±РµСЂС‘С‚СЃСЏ. -->
     <Reference Include="System.Net.Http" />
-    <!-- JSON: умеет пропускать // комментарии в конфиге (JsonCommentHandling.Skip). -->
+    <!-- JSON: СѓРјРµРµС‚ РїСЂРѕРїСѓСЃРєР°С‚СЊ // РєРѕРјРјРµРЅС‚Р°СЂРёРё РІ РєРѕРЅС„РёРіРµ (JsonCommentHandling.Skip). -->
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 

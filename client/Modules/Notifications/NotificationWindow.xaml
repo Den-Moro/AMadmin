@@ -6,9 +6,17 @@
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Background="#F4F5F7">
-    <Border Margin="20" Background="White" CornerRadius="10" BorderBrush="#D8DBE0" BorderThickness="1" Padding="24">
-        <StackPanel>
-            <DockPanel Margin="0,0,0,12">
+    <!-- Шапка, середина (прокручивается, если текст с картинками выше экрана кассы) и
+         закреплённый низ: кнопка «Понятно» видна всегда, даже на маленьком мониторе. -->
+    <Border x:Name="Card" Margin="20" Background="White" CornerRadius="10" BorderBrush="#D8DBE0" BorderThickness="1" Padding="24">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" Margin="0,0,0,12">
                 <Border x:Name="PriorityBadge" DockPanel.Dock="Left" CornerRadius="999" Padding="10,3"
                         Background="#FEF2F2" BorderBrush="#FECACA" BorderThickness="1" VerticalAlignment="Center">
                     <TextBlock x:Name="PriorityText" Text="Важное" FontSize="12" FontWeight="SemiBold" Foreground="#B91C1C"/>
@@ -17,28 +25,51 @@
                            VerticalAlignment="Center" HorizontalAlignment="Right"/>
             </DockPanel>
 
-            <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="18" Foreground="#1F2430" LineHeight="26"/>
-
-            <Border x:Name="ManualPanel" Visibility="Collapsed" Margin="0,16,0,0" Background="#EFF6FF"
-                    BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="8" Padding="12">
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
                 <StackPanel>
-                    <TextBlock Text="Инструкция" FontWeight="SemiBold" Foreground="#1E40AF" Margin="0,0,0,6"/>
-                    <TextBlock x:Name="ManualText" TextWrapping="Wrap" FontSize="14" Foreground="#1F2430"/>
+                    <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="18" Foreground="#1F2430" LineHeight="26"/>
+
+                    <!-- Картинки оповещения: крупно первая, под ней миниатюры остальных; клик — во весь экран. -->
+                    <StackPanel x:Name="ImagesPanel" Visibility="Collapsed" Margin="0,14,0,0">
+                        <Border CornerRadius="8" BorderBrush="#D8DBE0" BorderThickness="1" Background="#F9FAFB" Cursor="Hand"
+                                MouseLeftButtonUp="MainImage_Click" ToolTip="Нажмите, чтобы увеличить">
+                            <Image x:Name="MainImage" Stretch="Uniform" MaxHeight="280" Margin="4"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Border>
+                        <TextBlock x:Name="ImageHint" Text="Нажмите на картинку, чтобы увеличить" FontSize="11" Foreground="#6B7280" Margin="0,4,0,0"/>
+                        <!-- Миниатюры — только для мыши/касания: не держат фокус клавиатуры, иначе
+                             Tab застревал на них и не доходил до кнопки «Понятно» (поймано на стенде). -->
+                        <ItemsControl x:Name="Thumbs" Margin="0,6,0,0" Focusable="False" KeyboardNavigation.TabNavigation="None">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <Border x:Name="ManualPanel" Visibility="Collapsed" Margin="0,16,0,0" Background="#EFF6FF"
+                            BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="Инструкция" FontWeight="SemiBold" Foreground="#1E40AF" Margin="0,0,0,6"/>
+                            <TextBlock x:Name="ManualText" TextWrapping="Wrap" FontSize="14" Foreground="#1F2430"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-            </Border>
+            </ScrollViewer>
 
-            <Button x:Name="ManualButton" Visibility="Collapsed" Content="Открыть инструкцию" Height="38"
-                    Margin="0,16,0,0" Background="#EFF6FF" BorderBrush="#BFDBFE" Foreground="#1E40AF"
-                    Click="ManualButton_Click"/>
+            <StackPanel Grid.Row="2">
+                <Button x:Name="ManualButton" Visibility="Collapsed" Content="Открыть инструкцию" Height="38"
+                        Margin="0,16,0,0" Background="#EFF6FF" BorderBrush="#BFDBFE" Foreground="#1E40AF"
+                        Click="ManualButton_Click"/>
 
-            <TextBlock x:Name="HintText" Margin="0,16,0,0" FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"
-                       Text="Окно закроется по кнопке ниже — она станет активной через несколько секунд, чтобы сообщение точно прочитали."/>
+                <TextBlock x:Name="HintText" Margin="0,16,0,0" FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"
+                           Text="Окно закроется по кнопке ниже — она станет активной через несколько секунд, чтобы сообщение точно прочитали."/>
 
-            <Button x:Name="CloseButton" Content="Понятно" Height="42" Margin="0,12,0,0"
-                    Background="#2563EB" Foreground="White" BorderThickness="0" FontSize="15"
-                    IsEnabled="False" Click="CloseButton_Click"
-                    PreviewMouseLeftButtonDown="CloseButton_PreviewMouseLeftButtonDown"
-                    KeyDown="CloseButton_KeyDown"/>
-        </StackPanel>
+                <Button x:Name="CloseButton" Content="Понятно" Height="42" Margin="0,12,0,0"
+                        Background="#2563EB" Foreground="White" BorderThickness="0" FontSize="15"
+                        IsEnabled="False" Click="CloseButton_Click"
+                        PreviewMouseLeftButtonDown="CloseButton_PreviewMouseLeftButtonDown"
+                        PreviewKeyDown="CloseButton_KeyDown"/>
+            </StackPanel>
+        </Grid>
     </Border>
 </Window>

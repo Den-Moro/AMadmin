@@ -1,15 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Агент управления: служба Windows от SYSTEM (Session 0), без окон. Выполняет команды
-       из панели: службы, процессы, скрипты, файлы. Окна показывает другой процесс —
-       UiAgent в сессии пользователя (см. AGENTS.md, "два агента, не один"). -->
+  <!-- РђРіРµРЅС‚ СѓРїСЂР°РІР»РµРЅРёСЏ: СЃР»СѓР¶Р±Р° Windows РѕС‚ SYSTEM (Session 0), Р±РµР· РѕРєРѕРЅ. Р’С‹РїРѕР»РЅСЏРµС‚ РєРѕРјР°РЅРґС‹
+       РёР· РїР°РЅРµР»Рё: СЃР»СѓР¶Р±С‹, РїСЂРѕС†РµСЃСЃС‹, СЃРєСЂРёРїС‚С‹, С„Р°Р№Р»С‹. РћРєРЅР° РїРѕРєР°Р·С‹РІР°РµС‚ РґСЂСѓРіРѕР№ РїСЂРѕС†РµСЃСЃ вЂ”
+       UiAgent РІ СЃРµСЃСЃРёРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (СЃРј. AGENTS.md, "РґРІР° Р°РіРµРЅС‚Р°, РЅРµ РѕРґРёРЅ"). -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>7.3</LangVersion>
     <RootNamespace>AMadmin.ManagementAgent</RootNamespace>
     <AssemblyName>AMadmin.ManagementAgent</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.1.9</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- ServiceBase / ServiceController — управление службами и запуск самого агента службой. -->
+    <!-- ServiceBase / ServiceController вЂ” СѓРїСЂР°РІР»РµРЅРёРµ СЃР»СѓР¶Р±Р°РјРё Рё Р·Р°РїСѓСЃРє СЃР°РјРѕРіРѕ Р°РіРµРЅС‚Р° СЃР»СѓР¶Р±РѕР№. -->
     <Reference Include="System.ServiceProcess" />
   </ItemGroup>
 
