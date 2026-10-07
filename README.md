@@ -37,7 +37,8 @@ SQLite) с веб-панелью; на каждой кассе два мален
   повторного выполнения команды после сбоя и защищёнными списками служб/процессов
 - [x] Развёртывание в один запуск: `deploy/server/install-server.ps1` (Docker: nginx +
   PHP-FPM, или без Docker), `deploy/client/build-client.ps1` → `install-client.ps1` /
-  `deploy-clients.ps1` (массово по SMB + WinRM/schtasks)
+  `deploy-clients.ps1` (массово по SMB + WinRM/schtasks, повторный запуск = обновление) /
+  GPO; клиентские скрипты работают и на PowerShell 2.0 (Windows 7)
 - [x] Магазины и типы устройств, редактирование/удаление ПК и перевыпуск
   ключа, отзыв оповещений и подтверждения по кассам, настройки сервера из панели
 - [x] Шаблоны типовых сообщений, оповещения по расписанию, «подтвердили N из M» в
@@ -56,7 +57,10 @@ SQLite) с веб-панелью; на каждой кассе два мален
   раскладкой касс по подсетям; хосты: импорт из txt/json/xml, исключение из статистики,
   профиль хоста
 - [x] Пароль на настройки агента на кассе — задаётся в панели сразу на весь парк
-- [ ] Повторяющиеся оповещения и догон пропущенных
+- [x] Догон пропущенных: касса, выключенная во время рассылки, получает всё
+  неподтверждённое, когда снова выйдет на связь (флажок «Догонять пропущенные» в
+  Настройках пока ни на что не влияет — догон включён всегда)
+- [ ] Повторяющиеся оповещения (ежедневно/еженедельно)
 - [ ] Нагрузочная проверка SQLite на 3000+ опрашивающих касс
 - [ ] Экспорт статистики, 2FA, CSRF
 
@@ -70,20 +74,27 @@ PHP-FPM), либо PHP 8.x с расширениями `pdo_sqlite` и `zip` + �
 встроенный `php -S` — только для разработки. Отдельная СУБД не нужна (SQLite — файл).
 Для раскатки файлов поднять `upload_max_filesize`/`post_max_size` в `php.ini`.
 
-**Клиент:** Windows 7 или новее, .NET Framework 4.8 (на Windows 10/11 уже есть; на
+**Клиент:** Windows 7 SP1 или новее, .NET Framework 4.8 (на Windows 10/11 уже есть; на
 Windows 7 ставится через Windows Update или отдельным установщиком Microsoft), сетевой
 доступ до сервера по HTTP/HTTPS (через прокси — поддерживается). UI-агент — в сессии
 пользователя; агент управления — служба от SYSTEM.
 
+**ПК администратора:** раскатка — любой Windows от 7 (хватает PowerShell 2.0); сборка
+комплекта агентов — Windows 10/11 с .NET SDK 8.
+
 ## Быстрый старт
 
-Один запуск на всё — см. [docs/INSTALL.md](docs/INSTALL.md). Коротко:
+Один запуск на всё — см. [docs/INSTALL.md](docs/INSTALL.md). Коротко (рядом с каждым
+`.ps1` лежит `.cmd` — он обходит политику выполнения скриптов; на Windows 7 запускайте
+только через него):
 
-```powershell
-.\deploy\server\install-server.ps1          # сервер (Docker: nginx + PHP-FPM 8.3), спросит пароль admin
-.\deploy\client\build-client.ps1            # комплект агентов в dist\client
-.\deploy\client\deploy-clients.ps1 -ConfigsDir <архив конфигов из панели>   # на все кассы
 ```
+deploy\server\install-server.cmd     # сервер (Docker: nginx + PHP-FPM 8.3), спросит пароль admin
+deploy\client\build-client.cmd       # комплект агентов в dist\client
+deploy\client\deploy-clients.cmd -ConfigsDir <архив конфигов из панели>   # на все кассы
+```
+
+Дальше агенты обновляются из панели — страница «Обновления».
 
 Вручную то же самое: `docker compose up -d --build`, затем
 `docker compose exec server php bin/create-admin.php admin <пароль> superadmin`
@@ -121,26 +132,33 @@ dotnet build Modules/Management/AMadmin.ManagementAgent.csproj -c Release
 
 ```
 server/
-├── Core/              (Db, Auth, AdminAuth, Logger, Router, TargetMatcher)
+├── Core/              (Db, Settings, Auth, AdminAuth, Logger, Router, PageRouter — чистые URL
+│                       панели, TargetMatcher, NetworkSiteMatcher, PeVersion, NtpClient, ServerMetrics)
 ├── Modules/
-│   ├── Notifications/  (оповещения: agent-facing occurrences/ack + admin CRUD)
-│   ├── Commands/       (команды, файлы для раскатки: agent-facing + admin)
+│   ├── Notifications/  (оповещения: occurrences/ack/история для агента, панель, шаблоны)
+│   ├── Commands/       (команды, файлы для раскатки, папки назначения: для агента + панель)
 │   ├── Updates/        (версии агента: статусы, раскатка и откат версии)
-│   ├── Dashboard/      (ПК: список, создание, массовое создание, выгрузка конфигов)
-│   ├── Settings/, Groups/, Manuals/, Auth/, Meta/
-├── public/admin/       (веб-панель: html/js по одной папке на модуль)
+│   ├── Stores/         (магазины: состояние, страница магазина, перевод касс, подсети)
+│   ├── Dashboard/      (ПК, сводка, доска объявлений, ресурсы сервера)
+│   ├── Wiki/, Media/   (мини-Wiki; картинки для оповещений и статей)
+│   └── Settings/, Groups/, Auth/, Meta/, Logs/, Agent/
+├── Views/admin/        (HTML-страницы панели — вне public/)
+├── public/admin/       (JS/CSS панели: shared/ + папка на раздел)
 └── migrations/, bin/, data/ (БД + files/), logs/
 
 client/
-├── Core/               (AgentConfig, ApiClient, Logger — общее для обоих агентов)
+├── Core/               (AgentConfig, ApiClient, Logger, ClientLock, RecentCommands — общее)
 ├── Modules/
-│   ├── Notifications/   (AMadmin.UiAgent: WPF-окно оповещения, трей, статус)
+│   ├── Notifications/   (AMadmin.UiAgent: окно оповещения, просмотр картинок, история, трей)
 │   └── Management/      (AMadmin.ManagementAgent: служба Windows + Executors/ по типу команды)
 └── config.example.json  (с комментариями к каждому полю)
 
 deploy/
 ├── server/   (install-server.ps1 / .sh — сервер одним запуском)
-└── client/   (build-client.ps1, install-client.ps1, deploy-clients.ps1, uninstall-client.ps1)
+└── client/   (build-client, install-client, deploy-clients, uninstall-client — у каждого .cmd;
+               gpo/AMadmin-Startup.cmd)
+
+docs/         (INSTALL, ADMIN, INSTRUCTIONS — .md и .html; md2html.py пересобирает .html)
 ```
 
 `server/migrations/` намеренно НЕ разложены по модулям — история схемы БД единая

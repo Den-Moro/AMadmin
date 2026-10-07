@@ -117,8 +117,9 @@
 <h1>Установка AMadmin</h1>
 <p>Развёртывание в один запуск: сервер — один скрипт, кассы — один скрипт на кассе или
 один скрипт на все кассы сразу с ПК администратора. Что здесь описано, проверено на
-Windows 11 (сервер в Docker) и на тестовой кассе. Эксплуатация после установки —
-в <a href="ADMIN.html">ADMIN.md</a>.</p>
+Windows 11 (сервер в Docker), на стенде Windows 10 (сервер без Docker и касса), а
+клиентские скрипты — ещё и на PowerShell 2.0, как в Windows 7. Эксплуатация после
+установки — в <a href="ADMIN.html">ADMIN.md</a>.</p>
 <h2>Что нужно заранее</h2>
 <table>
 <thead>
@@ -136,7 +137,7 @@ Windows 11 (сервер в Docker) и на тестовой кассе. Экс�
 </tr>
 <tr>
 <td>Сервер без Docker</td>
-<td>Windows + PowerShell; PHP поставится сам через winget</td>
+<td>Windows 10/11 + PowerShell 5.1; PHP поставится сам через winget</td>
 <td>пилот и до ~100 касс</td>
 </tr>
 <tr>
@@ -164,7 +165,7 @@ Windows 11 (сервер в Docker) и на тестовой кассе. Экс�
 <h2>0. Как запускать скрипты (важно)</h2>
 <p>Рядом с каждым <code>.ps1</code> лежит <code>.cmd</code> с тем же именем — <strong>запускайте его</strong> (двойным
 кликом или из консоли: <code>install-server.cmd -Mode Native</code>). Он сам обходит политику
-выполнения и переключает консоль в UTF-8.</p>
+выполнения, а на Windows 10/11 ещё и переключает консоль в UTF-8.</p>
 <p>Почему: архив с GitHub несёт на каждом файле пометку «скачано из интернета», и
 PowerShell отказывает даже после <code>Set-ExecutionPolicy RemoteSigned</code> с ошибкой
 <em>«is not digitally signed»</em>. Если всё же нужен прямой запуск <code>.ps1</code>:</p>
@@ -222,16 +223,18 @@ PHP под IIS (FastCGI) / Apache — папка <code>server/public</code> — 
 в ту же папку репозитория на ПК с Windows 7 (или укажите её параметром <code>-Source</code>).</p>
 <h2>3. Ключи касс — из панели</h2>
 <ul>
-<li>Одна касса: <strong>Дашборд → ＋ Добавить ПК</strong> → панель покажет <code>config.json</code>
+<li>Одна касса: <strong>Хосты → ＋ Добавить ПК</strong> → панель покажет <code>config.json</code>
   (кнопки «Скопировать» / «Скачать»).</li>
-<li>Весь магазин: <strong>Дашборд → ＋ Добавить ПК → Списком</strong> → вставить hostname'ы →
-  <strong>Выгрузить конфиги</strong> → архив с папкой на каждую кассу и <code>config.json</code> внутри.</li>
+<li>Весь магазин: <strong>Хосты → ＋ Добавить ПК → Списком на весь магазин</strong> → вставить
+  hostname'ы (или вкладка «Импорт из файла» — список из <code>.txt</code>/<code>.json</code>/<code>.xml</code>) →
+  <strong>Выгрузить конфиги</strong> на той же странице (с фильтром по магазину — только его кассы) →
+  архив с папкой на каждую кассу и <code>config.json</code> внутри.</li>
 </ul>
 <p>Внутри — ключи доступа. Храните архив как пароли.</p>
 <h2>4. Установка на кассу</h2>
 <h3>Одна касса, руками</h3>
-<p>Скопировать <code>dist\client</code> на кассу (например, в <code>C:\AMadmin</code>), положить рядом её
-<code>config.json</code> и запустить от администратора:</p>
+<p>Скопировать <code>dist\client</code> на кассу (в любую папку, можно сразу в <code>C:\AMadmin</code>), положить
+рядом её <code>config.json</code> и запустить от администратора:</p>
 <pre><code>install-client.cmd
 </code></pre>
 <p>или без файла конфига:</p>
@@ -307,8 +310,11 @@ Framework 4.8»). Запускать повторно на те же кассы 
 <ul>
 <li><strong>Сервер</strong>: <code>git pull</code> (или новая копия папки) → <code>install-server.cmd</code> снова.
   Миграции накатываются сами, данные на месте.</li>
-<li><strong>Кассы</strong>: <code>build-client.cmd</code> → через GPO — заменить <code>client\</code> на шаре; без GPO —
-  <code>deploy-clients.cmd -ConfigsDir ...</code> с тем же архивом конфигов (ключи не меняются).</li>
+<li><strong>Кассы</strong>: проще всего — страница «Обновления» в панели: загрузить новую версию из
+  <code>dist\client</code> (после <code>build-client.cmd</code>) и раскатать — сначала на пилот, потом на всех
+  (см. <a href="ADMIN.html#45б-обновления-агентов">ADMIN.md</a>). Скриптами: через GPO — заменить
+  <code>client\</code> на шаре; без GPO — <code>deploy-clients.cmd -ConfigsDir ...</code> с тем же архивом
+  конфигов (ключи не меняются).</li>
 </ul>
     </div>
 </main>
