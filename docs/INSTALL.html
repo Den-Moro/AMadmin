@@ -141,12 +141,12 @@ Windows 11 (сервер в Docker) и на тестовой кассе. Экс�
 </tr>
 <tr>
 <td>ПК администратора</td>
-<td>PowerShell 5.1 (есть в Windows); для сборки клиента — .NET SDK 8</td>
+<td>для раскатки — любой Windows от 7 (хватает PowerShell 2.0); для сборки клиента — Windows 10/11 и .NET SDK 8</td>
 <td>сборка и раскатка</td>
 </tr>
 <tr>
 <td>Кассы</td>
-<td>Windows 7+, <strong>.NET Framework 4.8</strong>, доступ до сервера по сети (можно через прокси)</td>
+<td>Windows 7 SP1+ (хватает PowerShell 2.0), <strong>.NET Framework 4.8</strong>, доступ до сервера по сети (можно через прокси)</td>
 <td>агенты</td>
 </tr>
 <tr>
@@ -172,6 +172,11 @@ PowerShell отказывает даже после <code>Set-ExecutionPolicy Re
 powershell -ExecutionPolicy Bypass -File .\install-server.ps1 -Mode Native
 </code></pre>
 <p>(<code>-File</code> принимает только путь к файлу — параметры скрипта идут после него, не внутри кавычек.)</p>
+<p><strong>Windows 7.</strong> Там из коробки PowerShell 2.0 — клиентские скрипты (<code>install-client</code>,
+<code>deploy-clients</code>, <code>uninstall-client</code>) на нём работают. <code>Unblock-File</code> в 2.0 нет, поэтому
+на Windows 7 запускайте только через <code>.cmd</code>. Если видите ошибку <em>«Отсутствует оператор "="
+после именованного аргумента»</em> — у вас старая копия скриптов, возьмите свежую папку
+<code>deploy</code> из репозитория.</p>
 <h2>1. Сервер — один запуск</h2>
 <h3>Вариант A: Docker (рекомендуется, годится для 3000 касс)</h3>
 <p>Windows (из папки репозитория, двойной клик или консоль):</p>
@@ -212,6 +217,9 @@ PHP под IIS (FastCGI) / Apache — папка <code>server/public</code> — 
 <p>Получится <code>dist\client\</code> (оба агента + установщики) и <code>dist\AMadmin-client-&lt;версия&gt;.zip</code>,
 а рядом <code>dist\AMadmin-Startup.cmd</code> для GPO.
 Этот комплект одинаковый для всех касс — отличается только <code>config.json</code>.</p>
+<p>Собирать нужно на Windows 10/11: .NET SDK 8 на Windows 7 не ставится. Если раскатываете с
+ПК на Windows 7 — соберите комплект на другом компьютере и скопируйте папку <code>dist\client</code>
+в ту же папку репозитория на ПК с Windows 7 (или укажите её параметром <code>-Source</code>).</p>
 <h2>3. Ключи касс — из панели</h2>
 <ul>
 <li>Одна касса: <strong>Дашборд → ＋ Добавить ПК</strong> → панель покажет <code>config.json</code>
@@ -265,10 +273,26 @@ PHP под IIS (FastCGI) / Apache — папка <code>server/public</code> — 
 <pre><code>deploy\client\deploy-clients.cmd -ConfigsDir C:\Temp\amadmin-configs
 </code></pre>
 <p>Для каждой папки-hostname скрипт: проверит доступность, скопирует комплект и её
-<code>config.json</code> в <code>\\HOST\C$\AMadmin</code>, запустит там <code>install-client.ps1</code> через WinRM
-(если включён) или разовой задачей планировщика от SYSTEM, и проверит, что служба
-появилась. В конце — таблица «касса → OK/ошибка». Параметры: <code>-Hosts</code> (подмножество),
-<code>-Credential</code> (если нужны отдельные админ-учётки), <code>-Parallel</code> (по умолчанию 8).</p>
+<code>config.json</code> во временную папку <code>\\HOST\C$\AMadmin\setup</code>, запустит оттуда
+<code>install-client.ps1</code> через WinRM (если включён) или разовой задачей планировщика от
+SYSTEM (на Windows 7 WinRM обычно выключен — это нормально). Установщик остановит
+работающих агентов, разложит файлы в <code>C:\AMadmin</code> и запустит их снова — окно оповещений
+вернётся к кассиру сразу, без перезахода. Скрипт дождётся итога в <code>install.log</code> кассы (до
+3 минут), удалит <code>setup</code> и проверит службу. В конце — таблица «касса → OK/ошибка» с
+причиной: для ошибки установки это строка из <code>install.log</code> (например, «не установлен .NET
+Framework 4.8»). Запускать повторно на те же кассы можно — это обновление.</p>
+<p>Параметры: <code>-Hosts</code> (подмножество), <code>-Credential</code> (если нужны отдельные админ-учётки),
+<code>-Method WinRM|Schtasks</code> (по умолчанию Auto), <code>-Source</code> (папка комплекта, если не
+<code>dist\client</code>), <code>-Parallel</code> (по умолчанию 8).</p>
+<p>Права: нужна учётка администратора кассы, у которой есть доступ к <code>\\касса\C$</code>. В домене —
+доменная учётка из группы администраторов касс. В рабочей группе по сети полные права
+получает только встроенная учётная запись «Администратор» кассы
+(<code>-Credential (Get-Credential КАССА-01\Администратор)</code>; на Windows 7 она по умолчанию
+выключена). Другим локальным администраторам Windows при входе по сети урезает права (UAC),
+и копирование упадёт с «Отказано в доступе». Варианты: включить встроенного
+«Администратора», разрешить сетевой вход локальным админам параметром реестра
+<code>LocalAccountTokenFilterPolicy</code> (Microsoft KB951016 — это ослабляет защиту, решать вам) или
+ставить такие кассы по одной через <code>install-client.cmd</code>.</p>
 <h2>5. Проверка</h2>
 <ul>
 <li>Дашборд: касса <strong>онлайн</strong>, версия агента заполнена.</li>

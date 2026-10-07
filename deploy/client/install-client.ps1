@@ -36,18 +36,28 @@ param(
     [switch]$Quiet
 )
 # ---- Что происходит в самом начале любого нашего скрипта ---------------------------
-# 1) Консоль переводим в UTF-8: иначе русские сообщения в старом Windows PowerShell
-#    превращаются в «Џа®ўҐаЄ » (cp866 против cp1251).
-# 2) Снимаем со всех наших .ps1 пометку «скачано из интернета» (Zone.Identifier):
+# Скрипт обязан работать и в PowerShell 2.0 — он стоит в Windows 7 из коробки. Поэтому
+# здесь нет конструкций 3.0+: [Parameter(Mandatory)] без "= $true", $PSScriptRoot,
+# Get-Content -Raw, Get-ChildItem -File/-Directory, -in, [ordered], [pscustomobject].
+# 1) Папка скрипта: $PSScriptRoot в PowerShell 2.0 бывает только в модулях.
+# 2) Консоль переводим в UTF-8: иначе русские сообщения в Windows PowerShell 5.1
+#    превращаются в «Џа®ўҐаЄ » (cp866 против cp1251). Только на Windows 10/11: консоль
+#    Windows 7 в UTF-8 работает плохо, а русский текст там и так виден нормально.
+# 3) Снимаем со всех наших .ps1 пометку «скачано из интернета» (Zone.Identifier):
 #    архив с GitHub несёт её на каждом файле, и политика RemoteSigned блокирует запуск с
 #    ошибкой «is not digitally signed». Запускать через .cmd-обёртку рядом (она передаёт
-#    -ExecutionPolicy Bypass) — самый простой путь; этот блок чинит и прямой запуск.
-try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $OutputEncoding = [Text.Encoding]::UTF8 } catch { }
-try { Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue } catch { }
+#    -ExecutionPolicy Bypass) — самый простой путь; этот блок чинит и прямой запуск
+#    (Unblock-File есть с PowerShell 3.0; в 2.0 — только через .cmd).
+$ScriptPath = $MyInvocation.MyCommand.Path
+$ScriptDir = Split-Path -Parent $ScriptPath
+if ([Environment]::OSVersion.Version.Major -ge 10) {
+    try { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $OutputEncoding = [Text.Encoding]::UTF8 } catch { }
+}
+if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
+    try { Get-ChildItem (Join-Path $ScriptDir '..') -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue } catch { }
+}
 
-# Windows PowerShell 5.1 со [CmdletBinding()] оставляет $PSScriptRoot пустым в значениях
-# по умолчанию param() — поэтому подставляем здесь, в теле скрипта.
-if (-not $Source) { $Source = $PSScriptRoot }
+if (-not $Source) { $Source = $ScriptDir }
 
 $ErrorActionPreference = 'Stop'
 
@@ -72,6 +82,10 @@ function Log($text) {
     if (-not $Quiet) { Write-Host $text }
 }
 
+# Текст файла целиком. Get-Content -Raw есть только с PowerShell 3.0, да и UTF-8 без BOM
+# он читает как ANSI; ReadAllText понимает UTF-8 и с BOM, и без.
+function ReadText($path) { [IO.File]::ReadAllText((Convert-Path $path)) }
+
 # ---- Повышение прав ----------------------------------------------------------------
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin -and -not [Environment]::UserInteractive) {
@@ -80,7 +94,7 @@ if (-not $isAdmin -and -not [Environment]::UserInteractive) {
 }
 if (-not $isAdmin) {
     Write-Host 'Нужны права администратора — запрашиваю повышение...' -ForegroundColor Yellow
-    $args = @('-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+    $args = @('-ExecutionPolicy', 'Bypass', '-File', "`"$ScriptPath`"")
     foreach ($kv in $PSBoundParameters.GetEnumerator()) {
         if ($kv.Value -is [switch]) { if ($kv.Value) { $args += "-$($kv.Key)" } }
         else { $args += "-$($kv.Key)"; $args += "`"$($kv.Value)`"" }
@@ -102,7 +116,7 @@ if (-not $release -or $release -lt 528040) {
 # ---- Какой конфиг ставим (решаем заранее — от этого зависит, есть ли что менять) ------
 $existingConfig = Join-Path $InstallDir 'config.json'
 $keepConfig = $null
-if (Test-Path $existingConfig) { $keepConfig = Get-Content $existingConfig -Raw }
+if (Test-Path $existingConfig) { $keepConfig = ReadText $existingConfig }
 
 $configText = $null
 if ($ServerUrl -and $Token) {
@@ -125,14 +139,14 @@ if ($ServerUrl -and $Token) {
 }
 "@
 } elseif ($ConfigPath) {
-    $configText = Get-Content $ConfigPath -Raw
+    $configText = ReadText $ConfigPath
 } elseif ($ConfigsDir) {
     $mine = Join-Path $ConfigsDir "$env:COMPUTERNAME\config.json"
-    if (Test-Path $mine) { $configText = Get-Content $mine -Raw }
+    if (Test-Path $mine) { $configText = ReadText $mine }
     elseif ($keepConfig) { $configText = $keepConfig; Log "В $ConfigsDir нет папки $env:COMPUTERNAME — оставляю существующий конфиг." }
     else { Log "В $ConfigsDir нет конфига для $env:COMPUTERNAME — этот ПК ещё не заведён в панели. Ничего не делаю."; exit 6 }
 } elseif (Test-Path (Join-Path $Source 'config.json')) {
-    $configText = Get-Content (Join-Path $Source 'config.json') -Raw
+    $configText = ReadText (Join-Path $Source 'config.json')
 } elseif ($keepConfig) {
     $configText = $keepConfig
     Log 'Оставляю существующий config.json.'
@@ -165,7 +179,7 @@ Get-Process AMadmin.UiAgent, AMadmin.ManagementAgent -ErrorAction SilentlyContin
 Start-Sleep 1
 
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Get-ChildItem $Source -File | Where-Object { $_.Extension -in '.exe', '.dll', '.config', '.ps1', '.json' -and $_.Name -ne 'config.json' } |
+Get-ChildItem $Source | Where-Object { -not $_.PSIsContainer -and (@('.exe', '.dll', '.config', '.ps1', '.json') -contains $_.Extension) -and $_.Name -ne 'config.json' } |
     Copy-Item -Destination $InstallDir -Force
 
 # ---- config.json --------------------------------------------------------------------
@@ -180,12 +194,14 @@ if ($LASTEXITCODE -ne 0) { Log 'ОШИБКА: установка службы н
 # ---- Автозапуск окна оповещений ----------------------------------------------------------
 # Задача планировщика «при входе любого пользователя», от имени вошедшего (группа Users),
 # без повышения — иначе окно не будет видно в сессии кассира. XML, а не /tr: только так
-# задаётся принципал «группа Users» и интерактивный токен.
+# задаётся принципал «группа Users» и интерактивный токен. Схема задачи 1.2 (Vista/7):
+# планировщик Windows 7 не знает версию 1.4 и не принял бы задачу, а ничего из 1.3/1.4
+# здесь не нужно.
 Step 'Автозапуск AMadmin.UiAgent (окно оповещений, при входе любого пользователя)'
 $uiExe = Join-Path $InstallDir 'AMadmin.UiAgent.exe'
 $taskXml = @"
 <?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>AMadmin: окно оповещений в сессии пользователя</Description></RegistrationInfo>
   <Triggers><LogonTrigger><Enabled>true</Enabled><Delay>PT15S</Delay></LogonTrigger></Triggers>
   <Principals><Principal id="Users"><GroupId>S-1-5-32-545</GroupId><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
@@ -210,9 +226,11 @@ if ($LASTEXITCODE -ne 0) { Log 'ОШИБКА: не удалось создать
 # Запустить окно оповещений прямо сейчас, не дожидаясь следующего входа. Запускаем
 # через саму задачу планировщика: она стартует процесс в сессии вошедшего пользователя
 # и без прав администратора — ровно так, как будет при каждом входе. (Запуск через
-# explorer.exe из повышенного процесса на Windows 11 молча не срабатывал.)
-if (-not $NoStartUi -and [Environment]::UserInteractive) {
-    & schtasks.exe /Run /TN 'AMadmin UiAgent' 2>&1 | Out-Null
+# explorer.exe из повышенного процесса на Windows 11 молча не срабатывал.) Работает и от
+# SYSTEM — при раскатке deploy-clients окно возвращается к кассиру сразу, а не при
+# следующем входе. -NoStartUi — для GPO при загрузке, когда входа ещё нет.
+if (-not $NoStartUi) {
+    try { & schtasks.exe /Run /TN 'AMadmin UiAgent' 2>&1 | Out-Null } catch { }
     Start-Sleep -Seconds 3
     if (Get-Process AMadmin.UiAgent -ErrorAction SilentlyContinue) { Log 'Окно оповещений запущено (значок в трее).' }
     else { Log 'Окно оповещений запустится при следующем входе пользователя.' }

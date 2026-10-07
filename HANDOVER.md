@@ -127,7 +127,9 @@ Docker-образ сервера — nginx + PHP-FPM (был Apache): `server/do
 
 1. **GPO не проверен вживую** — нет домена. Скрипт `deploy/client/gpo/AMadmin-Startup.cmd`
    вызывает тот же `install-client.ps1 -ConfigsDir -OnlyIfChanged`, который отработал на стенде.
-2. `deploy-clients.ps1` (массовая раскатка по SMB+WinRM) — только синтаксис.
+2. `deploy-clients.ps1`: ветка schtasks проверена на PowerShell 2.0 (Win10 с .NET 3.5,
+   раскатка «на себя» поверх работающих агентов); ветки WinRM и `-Credential` (net use)
+   на реальных кассах не проверены. Настоящей Windows 7 на стенде нет.
 3. Подпись `.exe` сертификатом — обязательна перед продом (SmartScreen/антивирусы).
 4. CSRF-токены на POST панели, 2FA.
 5. Самообновление агентов без повторной раскатки.
@@ -168,6 +170,11 @@ deploy\client\build-client.cmd                   # комплект агенто
 | Native-установка «успешна», но панель не работает | `bin/migrate.php` падал (БД от старой схемы без новых миграций) молча — вывод и код возврата не проверялись | `install-server.ps1` печатает вывод migrate.php/seed.php/create-admin.php и останавливается на ненулевом коде возврата |
 | После перехода на чистые URL страница сама не грузила свои данные (`X.filter is not a function` в консоли) | Чистый путь страницы (`/admin/stores`) совпал с путём JSON-списка того же раздела — `PageRouter` перехватывал GET раньше `Router` и всегда отдавал HTML | `PageRouter::maybeServe()` отдаёт страницу только когда `Accept` содержит `text/html` (настоящая навигация браузера); иначе — дальше, в обычный JSON-роутер |
 | После обновления сервера страницы панели ломались до Ctrl+F5 | Сервер не отдаёт заголовков кэширования, браузер эвристически держал старые `ui.js`/`admin.css` при новом HTML | `PageRouter::render()` дописывает к ссылкам на `/admin/*.js` и `*.css` в HTML `?v=<время изменения файла>`, сам HTML — `Cache-Control: no-cache` |
+| `deploy-clients.ps1` на Windows 7: «Отсутствует оператор "=" после именованного аргумента» | в Windows 7 из коробки PowerShell 2.0, а скрипты писались под 5.1: `[Parameter(Mandatory)]`, `$PSScriptRoot`, `Get-Content -Raw`, `-File`/`-Directory`, `-in`, `[ordered]`, `[pscustomobject]`, `[pscredential]`, `::new()`, `New-PSDrive -Credential` | клиентские скрипты — только конструкции 2.0 (список в шапке каждого); проверять `powershell -Version 2` (на Win10 нужен .NET 3.5: `dism /online /enable-feature /featurename:NetFx3 /all /source:<ISO>\sources\sxs /limitaccess`) |
+| `deploy-clients` падал на кассах с выключенным WinRM в режиме Auto | `Test-WSMan` при недоступном WinRM бросает исключение, `-ErrorAction SilentlyContinue` его не глушит | `try { Test-WSMan -ErrorAction Stop } catch { планировщик }` |
+| Повторная раскатка `deploy-clients` на ту же кассу — «файл используется другим процессом» | комплект копировался прямо в `C:\AMadmin`, где работают агенты | комплект — в `C:\AMadmin\setup`, установщик сам останавливает агентов и раскладывает файлы |
+| `schtasks /Create` в фоновом задании «падал» при успешном создании | schtasks всегда пишет в stderr предупреждение про прошедшее время `/ST`; с `$ErrorActionPreference = 'Stop'` это исключение | внешние программы — через `Native`: stderr не исключение, решает код возврата |
+| Окно оповещений не возвращалось после раскатки до перезахода кассира | установщик убивал UiAgent, а запускал задачу только в интерактивной сессии | `schtasks /Run` задачи «AMadmin UiAgent» и от SYSTEM — она стартует окно в сессии вошедшего |
 | Окно оповещения нельзя было закрыть с клавиатуры (Enter на «Понятно» молча игнорировался) | WPF `Button` сам обрабатывает Enter в `OnKeyDown` и вызывает `Click` раньше обычного `KeyDown` — флаг «нажато с клавиатуры» выставлялся уже после проверки | `CloseButton` слушает `PreviewKeyDown` (агент 0.1.9) |
 | Поиск по Wiki не находил «касса» в «Касса» | `LIKE` в SQLite без учёта регистра только для латиницы | поиск по Wiki — в PHP через `mb_stripos` |
 | `PUT` с битым/пустым JSON давал 500 вместо 400 | `json_decode` → `null`, затем `array_key_exists(..., null)` — TypeError на PHP 8 | контроллеры приводят тело к `array()`, если это не объект |
