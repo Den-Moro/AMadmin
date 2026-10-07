@@ -13,9 +13,8 @@
     $('commandBtn').innerHTML = Ui.icon('terminal') + 'Команда…';
     $('fileBtn').innerHTML = Ui.icon('folder') + 'Файл…';
     $('editBtn').innerHTML = Ui.icon('sliders') + 'Изменить';
-    $('addPcsBtn').innerHTML = Ui.icon('plus') + 'Добавить кассы из других магазинов';
     $('searchIcon').outerHTML = Ui.icon('search');
-    if (canEdit) { $('adminActions').hidden = false; $('addPcsWrap').hidden = false; $('editBtn2').hidden = false; }
+    if (canEdit) { $('adminActions').hidden = false; $('editBtn2').hidden = false; }
 
     let store = null, pcs = [], suggestions = [];
     const selected = new Set();
@@ -113,7 +112,7 @@
         const tbody = document.querySelector('#pcsTable tbody');
         if (!pcs.length) {
             tbody.innerHTML = '<tr><td colspan="8">' + Ui.emptyState({ icon: 'monitor', title: 'В магазине пока нет касс',
-                text: canEdit ? 'Переведите сюда кассы из других магазинов — кнопка «Добавить кассы» выше — или заведите новые на странице «Хосты».' : 'Кассы заводит администратор.' }) + '</td></tr>';
+                text: canEdit ? 'Кассы переводятся в магазин на странице «Хосты»: отметьте нужные → «В магазин…».' : 'Кассы заводит администратор.' }) + '</td></tr>';
         } else if (!list.length) {
             tbody.innerHTML = '<tr><td colspan="8" class="empty">Под фильтр ничего не попало.</td></tr>';
         } else {
@@ -189,36 +188,6 @@
             });
             if (ok) { Ui.toast('Добавлено в группу: ' + ids.length, 'success'); selected.clear(); await load(); }
         }
-    });
-
-    // Перевести сюда кассы из других магазинов: список с поиском и чекбоксами.
-    $('addPcsBtn').addEventListener('click', async function () {
-        const others = (await Api.get('/admin/pcs')).filter(function (pc) { return +pc.store_id !== id; });
-        if (!others.length) { Ui.toast('Все кассы уже в этом магазине', 'info'); return; }
-        const ok = await Ui.modal({
-            title: 'Перевести кассы в «' + store.name + '»', wide: true,
-            body: '<input type="search" id="apSearch" placeholder="Поиск: имя, магазин, IP…">' +
-                '<div class="checklist" id="apList" style="max-height:46vh">' + others.map(function (pc) {
-                    return '<label data-text="' + esc([pc.display_name, pc.hostname, pc.store_name, pc.last_ip].join(' ').toLowerCase()) + '">' +
-                        '<input type="checkbox" value="' + pc.id + '">' + esc(pc.display_name || pc.hostname) +
-                        '<span class="sub">' + esc(pc.store_name) + (pc.last_ip ? ' · ' + esc(pc.last_ip) : '') + '</span></label>';
-                }).join('') + '</div>' +
-                '<p class="muted" style="margin:0">У кассы меняется только магазин: ключ, группы и история остаются.</p><p class="error modal-error"></p>',
-            buttons: [{ label: 'Отмена', value: null }, { label: 'Перевести отмеченные', value: 'submit', kind: 'primary' }],
-            onSubmit: async function (root) {
-                const ids = [...root.querySelectorAll('#apList input:checked')].map(function (c) { return +c.value; });
-                if (!ids.length) { root.querySelector('.modal-error').textContent = 'Отметьте хотя бы одну кассу.'; return false; }
-                const r = await Api.post('/admin/pcs/move', { pc_ids: ids, store_id: id });
-                Ui.toast('Переведено сюда: ' + r.moved, 'success');
-                return true;
-            },
-        });
-        if (ok) await load();
-    });
-    document.addEventListener('input', function (e) {
-        if (e.target.id !== 'apSearch') return;
-        const q = e.target.value.trim().toLowerCase();
-        document.querySelectorAll('#apList label').forEach(function (l) { l.hidden = !!q && l.dataset.text.indexOf(q) < 0; });
     });
 
     // ---- Действия над магазином --------------------------------------------------------------
