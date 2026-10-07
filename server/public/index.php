@@ -68,7 +68,9 @@ require __DIR__ . '/../Modules/Dashboard/AdminStatsController.php';
 require __DIR__ . '/../Modules/Logs/AdminLogsController.php';
 require __DIR__ . '/../Modules/Meta/AdminMetaController.php';
 require __DIR__ . '/../Modules/Groups/AdminHostGroupsController.php';
-require __DIR__ . '/../Modules/Manuals/AdminManualsController.php';
+require __DIR__ . '/../Modules/Wiki/AdminWikiController.php';
+require __DIR__ . '/../Modules/Media/MediaController.php';
+require __DIR__ . '/../Modules/Dashboard/AdminAnnouncementsController.php';
 require __DIR__ . '/../Modules/Commands/CommandsController.php';
 require __DIR__ . '/../Modules/Commands/AdminCommandsController.php';
 require __DIR__ . '/../Modules/Commands/FileStorage.php';
@@ -100,6 +102,8 @@ PageRouter::register($router);
 $router->get('/agent/config', array('AgentConfigController', 'index'));
 $router->get('/admin/agent-config/status', array('AgentConfigController', 'adminStatus'));
 $router->get('/occurrences', array('OccurrencesController', 'index'));
+$router->get('/occurrences/history', array('OccurrencesController', 'history'));
+$router->get('/media/{id}', array('MediaController', 'agentShow'));
 $router->post('/occurrences/{id}/ack', array('AckController', 'store'));
 $router->get('/commands', array('CommandsController', 'index'));
 $router->post('/commands/{id}/claim', array('CommandsController', 'claim'));
@@ -145,6 +149,21 @@ $router->put('/admin/device-types/{id}', array('AdminMetaController', 'updateDev
 $router->delete('/admin/device-types/{id}', array('AdminMetaController', 'destroyDeviceType'));
 $router->get('/admin/notifications', array('AdminNotificationsController', 'index'));
 $router->get('/admin/message-templates', array('AdminTemplatesController', 'index'));
+$router->post('/admin/media', array('MediaController', 'store'));
+$router->get('/admin/media/{id}', array('MediaController', 'adminShow'));
+$router->get('/admin/announcements', array('AdminAnnouncementsController', 'index'));
+$router->post('/admin/announcements', array('AdminAnnouncementsController', 'store'));
+$router->put('/admin/announcements/{id}', array('AdminAnnouncementsController', 'update'));
+$router->delete('/admin/announcements/{id}', array('AdminAnnouncementsController', 'destroy'));
+$router->get('/admin/wiki', array('AdminWikiController', 'index'));
+$router->get('/admin/wiki/search', array('AdminWikiController', 'search'));
+$router->get('/admin/wiki/articles/{id}', array('AdminWikiController', 'show'));
+$router->post('/admin/wiki/articles', array('AdminWikiController', 'storeArticle'));
+$router->put('/admin/wiki/articles/{id}', array('AdminWikiController', 'updateArticle'));
+$router->delete('/admin/wiki/articles/{id}', array('AdminWikiController', 'destroyArticle'));
+$router->post('/admin/wiki/sections', array('AdminWikiController', 'storeSection'));
+$router->put('/admin/wiki/sections/{id}', array('AdminWikiController', 'updateSection'));
+$router->delete('/admin/wiki/sections/{id}', array('AdminWikiController', 'destroySection'));
 $router->post('/admin/message-templates', array('AdminTemplatesController', 'store'));
 $router->put('/admin/message-templates/{id}', array('AdminTemplatesController', 'update'));
 $router->delete('/admin/message-templates/{id}', array('AdminTemplatesController', 'destroy'));
@@ -161,10 +180,6 @@ $router->post('/admin/host-groups/{id}/members', array('AdminHostGroupsControlle
 $router->delete('/admin/host-groups/{id}/members/{pcId}', array('AdminHostGroupsController', 'removeMember'));
 
 
-$router->get('/admin/manuals', array('AdminManualsController', 'index'));
-$router->post('/admin/manuals', array('AdminManualsController', 'store'));
-$router->put('/admin/manuals/{id}', array('AdminManualsController', 'update'));
-$router->delete('/admin/manuals/{id}', array('AdminManualsController', 'destroy'));
 
 $router->get('/admin/commands', array('AdminCommandsController', 'index'));
 $router->post('/admin/commands', array('AdminCommandsController', 'store'));

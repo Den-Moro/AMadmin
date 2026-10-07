@@ -13,7 +13,7 @@ const Nav = (function () {
         ] },
         { title: 'Оповещения', items: [
             { href: '/admin/notifications', label: 'Оповещения', icon: 'bell', tip: 'Сообщения кассирам о работах: шаблоны, отправка сейчас или по расписанию, кто увидел' },
-            { href: '/admin/manuals', label: 'Мануалы', icon: 'book', tip: 'Инструкции, которые прикладываются к оповещениям' },
+            { href: '/admin/wiki', label: 'Wiki', icon: 'book', tip: 'Мини-Wiki: инструкции и заметки по разделам, быстрый поиск; статью можно приложить к оповещению' },
         ] },
         { title: 'Управление', items: [
             { href: '/admin/commands', label: 'Команды', icon: 'terminal', tip: 'Службы, процессы и скрипты на кассах — и результат с каждой' },

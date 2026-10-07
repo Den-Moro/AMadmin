@@ -1,5 +1,6 @@
 // Дашборд. Порядок работы:
 //   1. requireAdminAuth — сессия и роль.
+//   1а. loadBoard — доска «Важная информация» (GET /admin/announcements).
 //   2. loadStats — одна сводка GET /admin/stats (парк, активность за сутки, магазины,
 //      версии агентов, лента событий).
 //   3. loadAttention — кассы, которые молчат больше суток / ни разу не выходили
@@ -159,7 +160,97 @@
         $('mIpsValue').textContent = lastIps.length ? lastIps.join(', ') : '—';
     });
 
-    async function refresh() { await Promise.all([loadStats(), loadAttention(), loadMetrics()]); }
+    // ---- Доска «Важная информация» ---------------------------------------------------------
+    // Объявления для всех пользователей панели. Пишут администраторы, видят все роли;
+    // истёкшие на дашборде не показываются (кнопка «Все, включая истёкшие» — показать).
+
+    const canPost = me.role === 'administrator' || me.role === 'superadmin';
+    const BOARD_LEVELS = { info: 'Информация', warning: 'Внимание', critical: 'Критично' };
+    let board = [], boardAll = false;
+    if (canPost) {
+        $('boardAdmin').hidden = false;
+        $('boardAddBtn').innerHTML = Ui.icon('plus') + 'Объявление';
+    }
+
+    function linkify(text) {
+        return esc(text).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    }
+
+    async function loadBoard() {
+        try { board = await Api.get('/admin/announcements' + (boardAll ? '?all=1' : '')); } catch (e) { return; }
+        // Блок виден, если есть что показать; администратору — всегда (чтобы было где добавить).
+        $('boardCard').hidden = !board.length && !canPost;
+        $('boardAllBtn').textContent = boardAll ? 'Только действующие' : 'Все, включая истёкшие';
+        $('boardList').innerHTML = board.length ? board.map(function (a) {
+            return '<div class="board-item ' + esc(a.level) + (+a.expired ? ' expired' : '') + '" data-id="' + a.id + '">' +
+                '<div class="board-text">' + linkify(a.text) + '</div>' +
+                '<div class="board-meta">' + esc(BOARD_LEVELS[a.level]) + ' · ' + esc(a.author || '—') + ' · ' + esc(formatServerTime(a.created_at)) +
+                    (a.expires_at ? ' · ' + (+a.expired ? 'истекло ' : 'до ') + esc(formatServerTime(a.expires_at)) : '') + '</div>' +
+                (canPost ? '<div class="actions"><button type="button" class="small ghost icon-only" data-board="' + a.id + '" title="Изменить или удалить">⋯</button></div>' : '') +
+                '</div>';
+        }).join('') : '<span class="muted">Объявлений нет. Напишите здесь то, что должны знать все пользователи панели: плановые работы на сервере, «в магазине №5 кассы не трогать», новые правила.</span>';
+    }
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function toLocalInput(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+    async function editBoard(a) {
+        const exp = a && a.expires_at ? toLocalInput(new Date(a.expires_at.replace(' ', 'T') + 'Z')) : '';
+        const ok = await Ui.modal({
+            title: a ? 'Объявление' : 'Новое объявление', wide: true,
+            body: '<label>Текст<span class="hint">Увидят все пользователи панели вверху дашборда. Ссылки станут кликабельными.</span>' +
+                '<textarea id="bText" rows="4" placeholder="Сегодня с 22:00 до 23:00 обновляем сервер — панель будет недоступна.">' + esc(a ? a.text : '') + '</textarea></label>' +
+                '<div class="row"><label>Уровень<span class="hint">Критично — красным и первым в списке, для аварий.</span><select id="bLevel">' +
+                    Object.keys(BOARD_LEVELS).map(function (k) { return '<option value="' + k + '"' + ((a ? a.level : 'info') === k ? ' selected' : '') + '>' + BOARD_LEVELS[k] + '</option>'; }).join('') +
+                '</select></label>' +
+                '<label>Показывать до (необязательно)<span class="hint">После этого времени объявление само уйдёт с дашборда. Пусто — пока не удалят.</span>' +
+                '<input type="datetime-local" id="bExpires" value="' + exp + '"></label></div>' +
+                '<div class="chips"><span class="muted">Быстро:</span>' +
+                    '<button type="button" class="chip link" style="font-family:inherit" data-exp="1">на сутки</button>' +
+                    '<button type="button" class="chip link" style="font-family:inherit" data-exp="7">на неделю</button>' +
+                    '<button type="button" class="chip link" style="font-family:inherit" data-exp="0">бессрочно</button></div>' +
+                '<p class="error modal-error"></p>',
+            buttons: [{ label: 'Отмена', value: null }, { label: a ? 'Сохранить' : 'Опубликовать', value: 'submit', kind: 'primary' }],
+            submitOnEnter: false,
+            errors: { text_required: 'введите текст', invalid_expires_at: 'неверная дата' },
+            onSubmit: async function (root) {
+                const text = root.querySelector('#bText').value.trim();
+                if (!text) { root.querySelector('.modal-error').textContent = 'Введите текст.'; return false; }
+                const expVal = root.querySelector('#bExpires').value;
+                const body = { text: text, level: root.querySelector('#bLevel').value, expires_at: expVal ? new Date(expVal).toISOString() : null };
+                if (a) await Api.request('PUT', '/admin/announcements/' + a.id, body);
+                else await Api.post('/admin/announcements', body);
+                return true;
+            },
+        });
+        if (ok) { Ui.toast('Опубликовано на дашборде', 'success'); loadBoard(); }
+    }
+    document.addEventListener('click', function (e) {
+        const q = e.target.closest('[data-exp]');
+        if (!q) return;
+        const input = document.getElementById('bExpires');
+        if (!input) return;
+        input.value = +q.dataset.exp ? toLocalInput(new Date(Date.now() + +q.dataset.exp * 86400000)) : '';
+    });
+
+    if (canPost) {
+        $('boardAddBtn').addEventListener('click', function () { editBoard(null); });
+        $('boardAllBtn').addEventListener('click', function () { boardAll = !boardAll; loadBoard(); });
+        $('boardList').addEventListener('click', async function (e) {
+            const b = e.target.closest('[data-board]');
+            if (!b) return;
+            const a = board.find(function (x) { return String(x.id) === b.dataset.board; });
+            const act = await Ui.menu(b, [{ label: 'Изменить', value: 'edit' }, { label: 'Удалить', value: 'delete', danger: true }]);
+            if (act === 'edit') editBoard(a);
+            if (act === 'delete') {
+                if (!await Ui.confirm('Удалить объявление? Оно пропадёт с дашборда у всех.', { danger: true, okLabel: 'Удалить' })) return;
+                try { await Api.request('DELETE', '/admin/announcements/' + a.id); Ui.toast('Удалено', 'success'); loadBoard(); }
+                catch (err) { Ui.toast('Не удалось: ' + Ui.reason(err), 'error'); }
+            }
+        });
+    }
+
+    async function refresh() { await Promise.all([loadBoard(), loadStats(), loadAttention(), loadMetrics()]); }
 
     $('refreshBtn').addEventListener('click', async function () {
         $('refreshBtn').disabled = true;

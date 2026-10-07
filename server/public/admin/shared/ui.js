@@ -454,12 +454,12 @@ const Ui = (function () {
 
     // По одному файлу за запрос, через XHR — у fetch нет прогресса отправки. Разрешается
     // ответом сервера ({id, sha256, size, version, duplicate}), ошибки — текстом.
-    function uploadFile(file, onProgress) {
+    function uploadFile(file, onProgress, url) {
         return new Promise(function (resolve, reject) {
             const form = new FormData();
             form.append('file', file);
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/admin/files');
+            xhr.open('POST', url || '/admin/files');
             xhr.upload.addEventListener('progress', function (e) {
                 if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
             });
@@ -469,7 +469,8 @@ const Ui = (function () {
                 if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
                 const code = data.error || ('http_' + xhr.status);
                 reject(new Error(code === 'file_required_or_too_large' ? 'больше лимита сервера (' + data.upload_max_filesize + ')'
-                    : reason({ data: data, message: code }, { insufficient_role: 'загружать файлы может администратор' })));
+                    : code === 'image_too_large' ? 'картинка больше ' + data.max_mb + ' МБ'
+                    : reason({ data: data, message: code }, { insufficient_role: 'загружать файлы может администратор', not_an_image: 'это не картинка (нужен PNG, JPEG, GIF или BMP)' })));
             });
             xhr.addEventListener('error', function () { reject(new Error('сеть недоступна')); });
             xhr.send(form);
@@ -493,6 +494,97 @@ const Ui = (function () {
             { n: +c.in_progress_count, kind: 'run', label: words.run },
             { n: +c.pending_count, kind: 'wait', label: words.wait },
         ], total);
+    }
+
+    // ---- Уровни важности оповещений ---------------------------------------------------
+
+    // Те же четыре уровня, что на сервере (AdminNotificationsController::LEVELS) и в окне
+    // на кассе. tip — что уровень делает на кассе: показывается подсказкой у значка.
+    const LEVELS = {
+        info: { label: 'Информация', cls: 'lvl-info', tip: 'Мягкое окно в углу, работе не мешает. Тихие часы действуют.' },
+        warning: { label: 'Внимание', cls: 'lvl-warning', tip: 'Обычное оповещение: окно — по настройке «Режим показа» (мягко или поверх). Тихие часы действуют.' },
+        important: { label: 'Важно', cls: 'lvl-important', tip: 'Окно поверх всех программ, закрыть — только прочитав. Тихие часы не действуют.' },
+        critical: { label: 'Критично', cls: 'lvl-critical', tip: 'Как «Важно», плюс звук всегда и показывается первым. Для аварий.' },
+    };
+    function levelBadge(level) {
+        const l = LEVELS[level] || LEVELS.warning;
+        return '<span class="badge ' + l.cls + '" title="' + escapeHtml(l.tip) + '">' + l.label + '</span>';
+    }
+
+    // ---- Картинки (оповещения, шаблоны, Wiki) -------------------------------------------
+
+    // В container — превью выбранных картинок и кнопка «＋ Картинка». Добавить можно
+    // кнопкой, перетаскиванием на блок или вставкой из буфера (Ctrl+V — скриншот прямо в
+    // форму, если фокус в pasteTarget). Возвращает { get(): [id], set([{id}]) }.
+    //   opts: { max = 6, pasteTarget, onChange }
+    function imagePicker(container, opts) {
+        opts = opts || {};
+        const max = opts.max || 6;
+        let items = []; // [{id}]
+        container.classList.add('image-picker');
+        container.innerHTML = '<div class="image-strip"></div>' +
+            '<label class="image-add" title="Добавить картинку: PNG, JPEG, GIF или BMP. Можно перетащить файл сюда или вставить скриншот (Ctrl+V)">' +
+            '<input type="file" accept="image/png,image/jpeg,image/gif,image/bmp" multiple>' + icon('plus') + '<span>Картинка</span></label>' +
+            '<span class="muted image-hint">или перетащите сюда / вставьте скриншот Ctrl+V</span>';
+        const strip = container.querySelector('.image-strip');
+        const input = container.querySelector('input[type=file]');
+
+        function render() {
+            strip.innerHTML = items.map(function (it, i) {
+                return '<span class="image-thumb' + (it.uploading ? ' uploading' : '') + '">' +
+                    (it.id ? '<img src="/admin/media/' + it.id + '" alt="">' : '<span class="spin"></span>') +
+                    (it.id ? '<button type="button" data-rm="' + i + '" title="Убрать картинку" aria-label="Убрать картинку">×</button>' : '') + '</span>';
+            }).join('');
+            container.querySelector('.image-add').hidden = items.length >= max;
+            if (opts.onChange) opts.onChange(items.filter(function (x) { return x.id; }).map(function (x) { return x.id; }));
+        }
+        async function add(files) {
+            for (const file of files) {
+                if (items.length >= max) { toast('Не больше ' + max + ' картинок', 'error'); break; }
+                if (!/^image\//.test(file.type)) { toast(file.name + ': это не картинка', 'error'); continue; }
+                const it = { id: null, uploading: true };
+                items.push(it);
+                render();
+                try {
+                    const res = await uploadFile(file, null, '/admin/media');
+                    it.id = res.id;
+                    it.uploading = false;
+                } catch (err) {
+                    items.splice(items.indexOf(it), 1);
+                    toast('Не удалось загрузить картинку: ' + err.message, 'error');
+                }
+                render();
+            }
+        }
+        input.addEventListener('change', function () { add(Array.from(input.files)); input.value = ''; });
+        strip.addEventListener('click', function (e) {
+            const b = e.target.closest('[data-rm]');
+            if (b) { items.splice(+b.dataset.rm, 1); render(); return; }
+            const img = e.target.closest('img');
+            if (img) window.open(img.src, '_blank');
+        });
+        ['dragenter', 'dragover'].forEach(function (ev) { container.addEventListener(ev, function (e) { e.preventDefault(); container.classList.add('over'); }); });
+        ['dragleave', 'drop'].forEach(function (ev) { container.addEventListener(ev, function (e) { e.preventDefault(); container.classList.remove('over'); }); });
+        container.addEventListener('drop', function (e) { if (e.dataTransfer.files.length) add(Array.from(e.dataTransfer.files)); });
+        (opts.pasteTarget || container).addEventListener('paste', function (e) {
+            const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(function (f) { return /^image\//.test(f.type); });
+            if (!files.length) return;
+            e.preventDefault();
+            add(files.map(function (f, i) { return f.name && f.name !== 'image.png' ? f : new File([f], 'скриншот-' + (i + 1) + '.png', { type: f.type }); }));
+        });
+        render();
+        return {
+            get: function () { return items.filter(function (x) { return x.id; }).map(function (x) { return x.id; }); },
+            set: function (images) { items = (images || []).map(function (im) { return { id: im.id || im }; }); render(); },
+        };
+    }
+
+    // Превью картинок в таблицах/истории: маленькие миниатюры, клик — открыть.
+    function imageThumbs(images) {
+        if (!images || !images.length) return '';
+        return '<span class="image-mini">' + images.map(function (im) {
+            return '<a href="/admin/media/' + im.id + '" target="_blank" title="Открыть картинку"><img src="/admin/media/' + im.id + '" alt="" loading="lazy"></a>';
+        }).join('') + '</span>';
     }
 
     // ---- Частые команды: одни и те же в форме «Команды» и в профиле хоста ---------------
@@ -827,5 +919,6 @@ const Ui = (function () {
         icon: icon, emptyState: emptyState, progressBar: progressBar, enhanceHints: enhanceHints, tip: Tip,
         plural: plural, targetPicker: targetPicker,
         targetFromQuery: targetFromQuery, uploadFile: uploadFile, commandProgressHtml: commandProgressHtml, COMMON_COMMANDS: COMMON_COMMANDS,
+        LEVELS: LEVELS, levelBadge: levelBadge, imagePicker: imagePicker, imageThumbs: imageThumbs,
     };
 })();

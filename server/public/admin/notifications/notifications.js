@@ -10,14 +10,10 @@
     $('searchIcon').outerHTML = Ui.icon('search');
     $('addTplBtn').innerHTML = Ui.icon('plus') + 'Шаблон';
 
-    const PRIORITY = {
-        important: '<span class="badge badge-important" title="Поверх всех окон, тихие часы не действуют">важное</span>',
-        normal: '<span class="badge badge-neutral" title="Ведёт себя по настройке «Режим показа» (обычно мягко, в углу)">обычное</span>',
-    };
     const SIZES = { small: 'маленькое', medium: 'среднее', large: 'крупное' };
     const ERRORS = {
         text_required: 'введите текст', target_id_required: 'выберите, кому именно', target_not_found: 'получатель не найден',
-        invalid_fire_at: 'неверное время показа', name_required: 'укажите название шаблона',
+        invalid_fire_at: 'неверное время показа', name_required: 'укажите название шаблона', invalid_level: 'неверный уровень важности',
     };
 
     // ---- Вкладки --------------------------------------------------------------------------
@@ -32,6 +28,7 @@
 
     let targetState = { type: 'all', id: null, total: 0, online: 0 };
     const target = Ui.targetPicker($('targetBox'), { onChange: function (s) { targetState = s; renderSendBtn(); } });
+    const images = Ui.imagePicker($('imagePicker'), { pasteTarget: $('createForm') });
 
     function openForm() {
         $('createForm').hidden = false;
@@ -46,7 +43,8 @@
 
     function fill(src) {
         $('text').value = src.text || '';
-        $('priority').value = src.priority || 'normal';
+        $('level').value = src.level || 'warning';
+        images.set(src.images || []);
         $('size').value = src.size || 'medium';
         $('manualUrl').value = src.manual_url || '';
         $('manualPicker').value = '';
@@ -98,18 +96,36 @@
             (total ? ' на ' + total + ' ' + Ui.plural(total, 'кассу', 'кассы', 'касс') : '');
     }
 
-    // Мануал из библиотеки копирует свой текст в поле — не ссылку на мануал (правка
-    // мануала в библиотеке не меняет уже отправленные оповещения задним числом).
-    let manuals = [];
+    // Статья Wiki копирует свой текст в поле — не ссылку на статью (правка статьи в Wiki
+    // не меняет уже отправленные оповещения задним числом). Окно на кассе показывает
+    // инструкцию простым текстом, поэтому разметку Wiki убираем; если статья — одна
+    // ссылка, уходит ссылка (касса откроет её в браузере).
     async function loadManualPicker() {
-        manuals = await Api.get('/admin/manuals');
-        $('manualPicker').innerHTML = '<option value="">— не выбирать —</option>' + manuals.map(function (m) {
-            return '<option value="' + m.id + '">' + esc(m.title) + '</option>';
+        const wiki = await Api.get('/admin/wiki');
+        const sections = {};
+        wiki.sections.forEach(function (s) { sections[s.id] = s.name; });
+        const groups = {};
+        wiki.articles.forEach(function (a) { (groups[a.section_id || 0] = groups[a.section_id || 0] || []).push(a); });
+        $('manualPicker').innerHTML = '<option value="">— не выбирать —</option>' + Object.keys(groups).map(function (sid) {
+            return '<optgroup label="' + esc(sections[sid] || 'Без раздела') + '">' + groups[sid].map(function (a) {
+                return '<option value="' + a.id + '">' + esc(a.title) + '</option>';
+            }).join('') + '</optgroup>';
         }).join('');
     }
-    $('manualPicker').addEventListener('change', function () {
-        const picked = manuals.find(function (m) { return String(m.id) === $('manualPicker').value; });
-        if (picked) $('manualUrl').value = picked.url_or_text;
+    function wikiPlain(body) {
+        const t = String(body || '').trim();
+        if (/^https?:\/\/\S+$/.test(t)) return t;
+        return t.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)')
+            .replace(/^#{1,6}\s*/gm, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1')
+            .replace(/^\s*[-*]\s+/gm, '• ').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    $('manualPicker').addEventListener('change', async function () {
+        if (!$('manualPicker').value) return;
+        try {
+            const a = await Api.get('/admin/wiki/articles/' + $('manualPicker').value);
+            $('manualUrl').value = wikiPlain(a.body) || a.title;
+        } catch (err) { Ui.toast('Не удалось открыть статью: ' + Ui.reason(err), 'error'); }
     });
 
     function formProblems() {
@@ -132,21 +148,23 @@
         const total = targetState.total;
         const at = fireAtDate();
         const later = at && at.getTime() > Date.now();
-        const important = $('priority').value === 'important';
+        const lvl = $('level').value;
+        const important = lvl === 'important' || lvl === 'critical';
         // Массовое важное оповещение перебивает работу каждого кассира — переспросить.
-        if (total > 1 && !await Ui.confirm((later ? 'Запланировать ' : 'Отправить ') + (important ? 'важное ' : '') + 'оповещение на ' + total + ' ' +
+        if (total > 1 && !await Ui.confirm((later ? 'Запланировать ' : 'Отправить ') + 'оповещение «' + Ui.LEVELS[lvl].label + '» на ' + total + ' ' +
             Ui.plural(total, 'кассу', 'кассы', 'касс') + ' (' + target.describe() + ')' + (later ? ' на ' + at.toLocaleString() : '') + '?',
             { okLabel: later ? 'Запланировать' : 'Отправить', title: 'Оповещение' })) return;
 
         $('sendBtn').disabled = true;
         try {
             await Api.post('/admin/notifications', {
-                text: $('text').value.trim(), priority: $('priority').value, size: $('size').value,
+                text: $('text').value.trim(), level: $('level').value, size: $('size').value, images: images.get(),
                 manual_url: $('manualUrl').value, target: target.value(),
                 fire_at: later ? at.toISOString() : null,
             });
             Ui.toast(later ? 'Запланировано на ' + at.toLocaleString() + ' — до этого его можно отозвать' : 'Отправлено — кассы покажут его на ближайшем опросе', 'success');
             $('createForm').reset();
+            images.set([]);
             $('fireAt').hidden = true;
             renderWhenHint();
             closeForm();
@@ -167,14 +185,14 @@
         $('tplCount').textContent = templates.length;
         $('templateChips').innerHTML = templates.length ? templates.map(function (t) {
             return '<button type="button" class="chip link" style="font-family:inherit" data-tpl="' + t.id + '" title="' + esc(t.text) + '">' +
-                (t.priority === 'important' ? '⚠ ' : '') + esc(t.title) + '</button>';
+                (t.level === 'critical' || t.level === 'important' ? '⚠ ' : '') + esc(t.title) + (t.images && t.images.length ? ' 🖼' : '') + '</button>';
         }).join('') : '<span class="muted">Шаблонов нет — создайте на вкладке «Шаблоны» или кнопкой «Сохранить как шаблон».</span>';
 
         const tbody = document.querySelector('#templatesTable tbody');
         tbody.innerHTML = templates.length ? templates.map(function (t) {
             return '<tr data-id="' + t.id + '"><td><b>' + esc(t.title) + '</b></td>' +
-                '<td><div class="tpl-text">' + esc(t.text) + '</div>' + (t.manual_url ? '<span class="muted" style="font-size:12px">+ инструкция</span>' : '') + '</td>' +
-                '<td>' + PRIORITY[t.priority] + ' <span class="muted" style="font-size:12px">' + SIZES[t.size] + '</span></td>' +
+                '<td><div class="tpl-text">' + esc(t.text) + '</div>' + (t.manual_url ? '<span class="muted" style="font-size:12px">+ инструкция</span>' : '') + Ui.imageThumbs(t.images) + '</td>' +
+                '<td>' + Ui.levelBadge(t.level) + ' <span class="muted" style="font-size:12px">' + SIZES[t.size] + '</span></td>' +
                 '<td><div class="actions" style="flex-wrap:nowrap">' +
                     '<button type="button" class="small primary" data-use title="Открыть форму с этим шаблоном">' + Ui.icon('send') + 'Использовать</button>' +
                     '<button type="button" class="small" data-edit title="Изменить шаблон">Изменить</button>' +
@@ -197,22 +215,24 @@
 
     async function editTemplate(t, preset) {
         const src = t || preset || {};
-        const ok = await Ui.modal({
+        let tplImages = null;
+        const opened = Ui.modal({
             title: t ? 'Шаблон «' + t.title + '»' : 'Новый шаблон',
             body: '<label>Название<span class="hint">Как шаблон подписан над формой, например «Плановые работы».</span>' +
                 '<input type="text" id="tTitle" value="' + esc(src.title || '') + '" placeholder="Плановые работы"></label>' +
                 '<label>Текст<span class="hint">Места, которые надо заполнять при каждой отправке, возьмите в [квадратные скобки] — например [время]. Панель не даст отправить, пока они не заполнены.</span>' +
                 '<textarea id="tText" rows="4">' + esc(src.text || '') + '</textarea></label>' +
-                '<div class="row"><label>Важность<select id="tPriority">' + options({ normal: 'Обычное', important: 'Важное' }, src.priority || 'normal') + '</select></label>' +
+                '<div class="row"><label>Уровень<select id="tLevel">' + options({ info: 'Информация', warning: 'Внимание', important: 'Важно', critical: 'Критично' }, src.level || 'warning') + '</select></label>' +
                 '<label>Размер окна<select id="tSize">' + options({ small: 'Маленькое', medium: 'Среднее', large: 'Крупное' }, src.size || 'medium') + '</select></label></div>' +
                 '<label>Ссылка или текст инструкции (необязательно)<textarea id="tManual" rows="2">' + esc(src.manual_url || '') + '</textarea></label>' +
+                '<label>Картинки</label><div id="tImages"></div>' +
                 '<p class="error modal-error"></p>',
             buttons: [{ label: 'Отмена', value: null }, { label: t ? 'Сохранить' : 'Создать', value: 'submit', kind: 'primary' }],
             submitOnEnter: false, errors: ERRORS,
             onSubmit: async function (root) {
                 const body = {
                     title: root.querySelector('#tTitle').value.trim(), text: root.querySelector('#tText').value.trim(),
-                    priority: root.querySelector('#tPriority').value, size: root.querySelector('#tSize').value,
+                    level: root.querySelector('#tLevel').value, size: root.querySelector('#tSize').value, images: tplImages.get(),
                     manual_url: root.querySelector('#tManual').value.trim(),
                 };
                 if (!body.title || !body.text) { root.querySelector('.modal-error').textContent = 'Укажите название и текст.'; return false; }
@@ -221,6 +241,10 @@
                 return true;
             },
         });
+        // Ui.modal вставляет окно сразу — выбор картинок подключаем к уже вставленному блоку.
+        tplImages = Ui.imagePicker(document.getElementById('tImages'), { pasteTarget: document.getElementById('tImages').closest('.modal') });
+        tplImages.set(src.images || []);
+        const ok = await opened;
         if (ok) { Ui.toast('Шаблон сохранён', 'success'); await loadTemplates(); }
     }
     function options(map, selected) {
@@ -230,7 +254,7 @@
     $('addTplBtn').addEventListener('click', function () { editTemplate(null); });
     $('saveTplBtn').addEventListener('click', function () {
         if (!$('text').value.trim()) { $('formError').textContent = 'Сначала введите текст — его и сохраним как шаблон.'; return; }
-        editTemplate(null, { title: '', text: $('text').value.trim(), priority: $('priority').value, size: $('size').value, manual_url: $('manualUrl').value });
+        editTemplate(null, { title: '', text: $('text').value.trim(), level: $('level').value, size: $('size').value, manual_url: $('manualUrl').value, images: images.get().map(function (id) { return { id: id }; }) });
     });
     document.querySelector('#templatesTable').addEventListener('click', async function (e) {
         const tr = e.target.closest('tr[data-id]');
@@ -260,7 +284,10 @@
         const q = $('search').value.toLowerCase();
         const tbody = document.querySelector('#notificationsTable tbody');
         const open = new Set([...tbody.querySelectorAll('tr.open')].map(function (tr) { return tr.dataset.id; }));
-        const visible = rows.filter(function (n) { return !q || (n.text + ' ' + describeTarget(n)).toLowerCase().indexOf(q) >= 0; });
+        const lf = $('levelFilter').value;
+        const visible = rows.filter(function (n) {
+            return (!lf || n.level === lf) && (!q || (n.text + ' ' + describeTarget(n)).toLowerCase().indexOf(q) >= 0);
+        });
         if (!visible.length) {
             tbody.innerHTML = '<tr><td colspan="6">' + (rows.length ? '<div class="empty">Ничего не найдено.</div>'
                 : Ui.emptyState({ icon: 'bell', title: 'Оповещений ещё не было', text: 'Нажмите «Новое оповещение» и выберите шаблон — например, «Плановые работы».' })) + '</td></tr>';
@@ -273,9 +300,9 @@
                 '<td class="muted nowrap">' + (scheduled
                     ? '<span class="badge badge-info" title="Ещё не показано — кассы получат его в это время. До этого можно отозвать">запланировано</span><span style="display:block;margin-top:3px">' + esc(formatServerTime(n.fire_at)) + '</span>'
                     : esc(formatServerTime(n.fire_at || n.created_at))) + '</td>' +
-                '<td><div class="text-short">' + esc(n.text) + '</div>' + (n.manual_url ? '<span class="muted" style="font-size:12px">+ инструкция</span>' : '') + '</td>' +
+                '<td><div class="text-short">' + esc(n.text) + '</div>' + (n.manual_url ? '<span class="muted" style="font-size:12px">+ инструкция</span>' : '') + Ui.imageThumbs(n.images) + '</td>' +
                 '<td>' + esc(describeTarget(n)) + '</td>' +
-                '<td>' + (PRIORITY[n.priority] || '') + '</td>' +
+                '<td>' + Ui.levelBadge(n.level) + '</td>' +
                 '<td class="acks-cell">' + (scheduled ? '<span class="muted">ещё не показано</span>'
                     : total ? '<span style="font-size:12.5px"><b>' + acks + '</b> из ' + total + '</span>' +
                         Ui.progressBar([{ n: Math.min(acks, total), kind: 'ok', label: 'подтвердили' }, { n: Math.max(0, total - acks), kind: 'wait', label: 'ещё нет' }], total)
@@ -295,7 +322,8 @@
     async function showAcks(tr, n, keepOpen) {
         if (!keepOpen && tr.classList.contains('open')) { Ui.toggleDetail(tr, '', 6); return; }
         const acks = await Api.get('/admin/notifications/' + n.id + '/acks');
-        let html = '<p class="muted" style="margin:0 0 8px;white-space:pre-line">' + esc(n.text) + '</p>';
+        let html = '<p class="muted" style="margin:0 0 8px;white-space:pre-line">' + esc(n.text) + '</p>' +
+            (n.images && n.images.length ? '<div style="margin:0 0 10px">' + Ui.imageThumbs(n.images) + '</div>' : '');
         if (!acks.length) {
             html += '<p class="muted" style="margin:0">' + (+n.scheduled ? 'Ещё не показано — запланировано на ' + esc(formatServerTime(n.fire_at)) + '.'
                 : 'Пока никто не подтвердил — кассы ещё не опрашивали сервер, или окно ещё на экране.') + '</p>';
@@ -333,7 +361,7 @@
                 { label: 'Сохранить как шаблон…', value: 'tpl' },
                 { label: +n.scheduled ? 'Отменить (ещё не показано)' : 'Отозвать', value: 'recall', danger: true },
             ]);
-            if (act === 'tpl') editTemplate(null, { title: '', text: n.text, priority: n.priority, size: n.size, manual_url: n.manual_url });
+            if (act === 'tpl') editTemplate(null, { title: '', text: n.text, level: n.level, size: n.size, manual_url: n.manual_url, images: n.images });
             if (act === 'recall') {
                 if (!await Ui.confirm('Отозвать оповещение «' + n.text.slice(0, 60) + '»? Кассы, которые его ещё не показали, уже не покажут.', { danger: true, okLabel: 'Отозвать' })) return;
                 try { await Api.request('DELETE', '/admin/notifications/' + n.id); Ui.toast('Отозвано', 'success'); loadNotifications(); }
@@ -345,6 +373,7 @@
     });
 
     $('search').addEventListener('input', loadNotifications);
+    $('levelFilter').addEventListener('change', loadNotifications);
 
     // ---- Старт ------------------------------------------------------------------------------
 
@@ -356,6 +385,13 @@
     if (preset) {
         openForm();
         await target.set(preset.type, preset.id);
+    }
+    // «Приложить к оповещению» из Wiki (?wiki=ID): форма с этой статьёй как инструкцией.
+    const wikiId = new URLSearchParams(location.search).get('wiki');
+    if (wikiId) {
+        openForm();
+        $('manualPicker').value = wikiId;
+        $('manualPicker').dispatchEvent(new Event('change'));
     }
 
     setInterval(function () { if (!document.hidden) loadNotifications(); }, 30000);

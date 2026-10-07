@@ -24,7 +24,8 @@ class AdminNotificationsController
         // всех касс сразу.
         $sql = "
             SELECT
-                n.id, n.text, n.priority, n.size, n.manual_url, n.recurrence, n.created_at,
+                n.id, n.text, n.priority, COALESCE(n.level, CASE n.priority WHEN 'important' THEN 'important' ELSE 'warning' END) AS level,
+                n.images, n.size, n.manual_url, n.recurrence, n.created_at,
                 t.target_type, t.target_id,
                 CASE t.target_type
                     WHEN 'store' THEN (SELECT name FROM stores WHERE id = t.target_id)
@@ -46,11 +47,26 @@ class AdminNotificationsController
             LIMIT 100
         ";
 
-        echo json_encode(Db::get()->query($sql)->fetchAll());
+        $rows = Db::get()->query($sql)->fetchAll();
+        foreach ($rows as &$row) {
+            $row['images'] = MediaController::listFor($row['images']);
+        }
+        unset($row);
+        echo json_encode($rows);
+    }
+
+    // Уровни важности (см. миграцию 026). priority — для агентов старых версий:
+    // «Важно» и «Критично» для них «important», остальное — «normal».
+    const LEVELS = array('info', 'warning', 'important', 'critical');
+
+    public static function priorityOf($level)
+    {
+        return in_array($level, array('important', 'critical'), true) ? 'important' : 'normal';
     }
 
     // POST /admin/notifications
-    // body: { text, priority, size, manual_url?, target: { type, id? }, fire_at? }
+    // body: { text, level (или устаревшее priority), size, manual_url?, images?: [media id],
+    //         target: { type, id? }, fire_at? }
     // Пока только разовая рассылка (recurrence всегда 'once') — генерация повторов по
     // расписанию появится вместе с полным функционалом оповещений (шаг 6 плана).
     public static function store()
@@ -60,7 +76,15 @@ class AdminNotificationsController
         $body = json_decode(file_get_contents('php://input'), true);
 
         $text = isset($body['text']) ? trim($body['text']) : '';
-        $priority = isset($body['priority']) ? $body['priority'] : 'normal';
+        $level = isset($body['level']) ? $body['level']
+            : ((isset($body['priority']) && $body['priority'] === 'important') ? 'important' : 'warning');
+        if (!in_array($level, self::LEVELS, true)) {
+            http_response_code(400);
+            echo json_encode(array('error' => 'invalid_level'));
+            return;
+        }
+        $priority = self::priorityOf($level);
+        $images = MediaController::normalizeIds(isset($body['images']) ? $body['images'] : null);
         $size = isset($body['size']) ? $body['size'] : 'medium';
         $manualUrl = (!empty($body['manual_url'])) ? trim($body['manual_url']) : null;
         // fire_at — когда показать (UTC, «Y-m-d H:i:s» или ISO 8601). Нет или уже прошло —
@@ -129,12 +153,14 @@ class AdminNotificationsController
 
         try {
             $stmt = $db->prepare('
-                INSERT INTO notifications (text, priority, manual_url, size, recurrence, created_by)
-                VALUES (:text, :priority, :manual_url, :size, :recurrence, :created_by)
+                INSERT INTO notifications (text, priority, level, images, manual_url, size, recurrence, created_by)
+                VALUES (:text, :priority, :level, :images, :manual_url, :size, :recurrence, :created_by)
             ');
             $stmt->execute(array(
                 'text'         => $text,
                 'priority'     => $priority,
+                'level'        => $level,
+                'images'       => $images,
                 'manual_url'   => $manualUrl,
                 'size'         => $size,
                 'recurrence'   => 'once',
@@ -161,7 +187,7 @@ class AdminNotificationsController
 
         Logger::info(
             "Оповещение создано: id={$notificationId} автор='{$_SESSION['admin_username']}' " .
-            "таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " priority={$priority} показ={$fireAt} UTC"
+            "таргет={$targetType}" . ($targetId ? ":{$targetId}" : '') . " уровень={$level}" . ($images ? " картинки={$images}" : '') . " показ={$fireAt} UTC"
         );
 
         echo json_encode(array('status' => 'ok', 'notification_id' => $notificationId, 'occurrence_id' => $occurrenceId));

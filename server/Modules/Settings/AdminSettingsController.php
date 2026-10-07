@@ -37,6 +37,11 @@ class AdminSettingsController
         AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         if (!is_array($body)) {
             http_response_code(400);
             echo json_encode(array('error' => 'invalid_body'));

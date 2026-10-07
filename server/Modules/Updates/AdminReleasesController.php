@@ -71,6 +71,11 @@ class AdminReleasesController
         AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $version = self::normalizeVersion(isset($body['version']) ? $body['version'] : '');
         if ($version === null) {
             self::fail('version_invalid');
@@ -128,6 +133,11 @@ class AdminReleasesController
             return;
         }
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
 
         $sets = array();
         $params = array('id' => (int) $id);
@@ -219,6 +229,11 @@ class AdminReleasesController
         }
 
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $target = isset($body['target']) && is_array($body['target']) ? $body['target'] : array();
         $targetType = isset($target['type']) ? $target['type'] : '';
         $targetId = !empty($target['id']) ? (int) $target['id'] : null;

@@ -189,6 +189,11 @@ class AdminPcsController
         AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $storeId = isset($body['store_id']) ? (int) $body['store_id'] : 0;
         $deviceTypeId = isset($body['device_type_id']) ? (int) $body['device_type_id'] : 0;
         $hostname = isset($body['hostname']) ? trim($body['hostname']) : '';
@@ -229,6 +234,11 @@ class AdminPcsController
 
         $id = (int) $id;
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $fields = array();
         $params = array('id' => $id);
 
@@ -317,6 +327,11 @@ class AdminPcsController
         AdminAuth::requireRole(array('administrator', 'superadmin'));
 
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $storeId = isset($body['store_id']) ? (int) $body['store_id'] : 0;
         $deviceTypeId = isset($body['device_type_id']) ? (int) $body['device_type_id'] : 0;
         $raw = isset($body['hostnames']) ? (string) $body['hostnames'] : '';

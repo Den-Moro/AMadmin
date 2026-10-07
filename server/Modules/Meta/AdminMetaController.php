@@ -20,6 +20,11 @@ class AdminMetaController
     {
         AdminAuth::requireRole(array('administrator', 'superadmin'));
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $name = isset($body['name']) ? trim($body['name']) : '';
         if ($name === '') {
             http_response_code(400);
@@ -49,6 +54,11 @@ class AdminMetaController
     {
         AdminAuth::requireRole(array('administrator', 'superadmin'));
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $fields = array();
         $params = array('id' => (int) $id);
         if (isset($body['name']) && trim($body['name']) !== '') {
@@ -101,6 +111,11 @@ class AdminMetaController
     {
         AdminAuth::requireRole(array('administrator', 'superadmin'));
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $name = isset($body['name']) ? trim($body['name']) : '';
         if ($name === '') {
             http_response_code(400);
@@ -118,6 +133,11 @@ class AdminMetaController
     {
         AdminAuth::requireRole(array('administrator', 'superadmin'));
         $body = json_decode(file_get_contents('php://input'), true);
+        // Не JSON-объект (пустое или битое тело) — как пустой: дальше ответит проверка
+        // полей (400), а не TypeError в array_key_exists (500).
+        if (!is_array($body)) {
+            $body = array();
+        }
         $name = isset($body['name']) ? trim($body['name']) : '';
         if ($name === '') {
             http_response_code(400);

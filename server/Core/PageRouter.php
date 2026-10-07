@@ -25,7 +25,7 @@ class PageRouter
         '/admin/hosts/host' => 'hosts/host.html',
         '/admin/notifications' => 'notifications/notifications.html',
         '/admin/groups' => 'groups/groups.html',
-        '/admin/manuals' => 'manuals/manuals.html',
+        '/admin/wiki' => 'wiki/wiki.html',
         '/admin/commands' => 'commands/commands.html',
         '/admin/stores' => 'stores/stores.html',
         '/admin/stores/store' => 'stores/store.html',

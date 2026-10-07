@@ -10,12 +10,19 @@ class AdminTemplatesController
     public static function index()
     {
         AdminAuth::requireLogin();
-        echo json_encode(Db::get()->query('
-            SELECT id, title, text, priority, size, manual_url FROM message_templates ORDER BY sort_order, title
-        ')->fetchAll());
+        $rows = Db::get()->query("
+            SELECT id, title, text, priority, COALESCE(level, CASE priority WHEN 'important' THEN 'important' ELSE 'warning' END) AS level,
+                   size, manual_url, images
+            FROM message_templates ORDER BY sort_order, title
+        ")->fetchAll();
+        foreach ($rows as &$row) {
+            $row['images'] = MediaController::listFor($row['images']);
+        }
+        unset($row);
+        echo json_encode($rows);
     }
 
-    // POST /admin/message-templates   body: { title, text, priority, size, manual_url? }
+    // POST /admin/message-templates   body: { title, text, level, size, manual_url?, images? }
     public static function store()
     {
         AdminAuth::requireLogin();
@@ -27,8 +34,8 @@ class AdminTemplatesController
         }
         $t['sort_order'] = (int) Db::get()->query('SELECT COALESCE(MAX(sort_order), 0) + 10 FROM message_templates')->fetchColumn();
         Db::get()->prepare('
-            INSERT INTO message_templates (title, text, priority, size, manual_url, sort_order)
-            VALUES (:title, :text, :priority, :size, :manual_url, :sort_order)
+            INSERT INTO message_templates (title, text, priority, level, images, size, manual_url, sort_order)
+            VALUES (:title, :text, :priority, :level, :images, :size, :manual_url, :sort_order)
         ')->execute($t);
         $id = Db::get()->lastInsertId();
         Logger::info("Шаблон сообщения создан: id={$id} '{$t['title']}' автор='{$_SESSION['admin_username']}'");
@@ -47,7 +54,7 @@ class AdminTemplatesController
         }
         $t['id'] = (int) $id;
         $stmt = Db::get()->prepare('
-            UPDATE message_templates SET title = :title, text = :text, priority = :priority, size = :size, manual_url = :manual_url
+            UPDATE message_templates SET title = :title, text = :text, priority = :priority, level = :level, images = :images, size = :size, manual_url = :manual_url
             WHERE id = :id
         ');
         $stmt->execute($t);
@@ -79,7 +86,7 @@ class AdminTemplatesController
     {
         $title = isset($b['title']) ? trim($b['title']) : '';
         $text = isset($b['text']) ? trim($b['text']) : '';
-        $priority = isset($b['priority']) ? $b['priority'] : 'normal';
+        $level = isset($b['level']) ? $b['level'] : ((isset($b['priority']) && $b['priority'] === 'important') ? 'important' : 'warning');
         $size = isset($b['size']) ? $b['size'] : 'medium';
         $manual = isset($b['manual_url']) ? trim($b['manual_url']) : '';
         if ($title === '') {
@@ -88,12 +95,16 @@ class AdminTemplatesController
         if ($text === '') {
             return array('error' => 'text_required');
         }
-        if (!in_array($priority, array('normal', 'important'), true)) {
-            return array('error' => 'invalid_priority');
+        if (!in_array($level, AdminNotificationsController::LEVELS, true)) {
+            return array('error' => 'invalid_level');
         }
         if (!in_array($size, array('small', 'medium', 'large'), true)) {
             return array('error' => 'invalid_size');
         }
-        return array('title' => $title, 'text' => $text, 'priority' => $priority, 'size' => $size, 'manual_url' => $manual !== '' ? $manual : null);
+        return array(
+            'title' => $title, 'text' => $text, 'level' => $level, 'priority' => AdminNotificationsController::priorityOf($level),
+            'images' => MediaController::normalizeIds(isset($b['images']) ? $b['images'] : null),
+            'size' => $size, 'manual_url' => $manual !== '' ? $manual : null,
+        );
     }
 }

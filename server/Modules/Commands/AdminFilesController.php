@@ -180,8 +180,9 @@ class AdminFilesController
     {
         Db::get()->prepare('DELETE FROM deploy_files WHERE id = :id')->execute(array('id' => (int) $id));
 
-        $others = Db::get()->prepare('SELECT COUNT(*) FROM deploy_files WHERE sha256 = :sha256');
-        $others->execute(array('sha256' => $sha256));
+        // Те же байты могут быть и картинкой (media) — общее хранилище по хешу.
+        $others = Db::get()->prepare('SELECT (SELECT COUNT(*) FROM deploy_files WHERE sha256 = :a) + (SELECT COUNT(*) FROM media WHERE sha256 = :b)');
+        $others->execute(array('a' => $sha256, 'b' => $sha256));
         if ((int) $others->fetchColumn() === 0) {
             $path = FileStorage::path($sha256);
             if (file_exists($path)) {

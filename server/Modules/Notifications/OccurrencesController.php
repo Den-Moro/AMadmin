@@ -29,6 +29,8 @@ class OccurrencesController
                 o.id AS occurrence_id,
                 n.text,
                 n.priority,
+                COALESCE(n.level, CASE n.priority WHEN 'important' THEN 'important' ELSE 'warning' END) AS level,
+                n.images,
                 n.manual_url,
                 n.size,
                 o.fire_at
@@ -40,10 +42,9 @@ class OccurrencesController
             WHERE o.fire_at <= CURRENT_TIMESTAMP
               AND a.id IS NULL
               AND " . TargetMatcher::CONDITION . "
-            ORDER BY (n.priority = 'important') DESC, o.fire_at ASC
+            ORDER BY CASE COALESCE(n.level, n.priority) WHEN 'critical' THEN 0 WHEN 'important' THEN 1 ELSE 2 END, o.fire_at ASC
         ";
-        // (n.priority = 'important') DESC — в MySQL булево выражение даёт 0/1,
-        // так важные оповещения оказываются раньше неважных без CASE.
+        // Критичные — первыми, затем важные, затем остальные по времени.
 
         $params = TargetMatcher::params($pc);
         $params['ack_pc_id'] = $pc['id'];
@@ -65,16 +66,19 @@ class OccurrencesController
 
         $result = array();
         foreach ($rows as $row) {
-            $important = $row['priority'] === 'important';
+            $level = $row['level'];
+            $important = $level === 'important' || $level === 'critical';
 
-            // Тихие часы глушат только неважные — важные проходят всегда, так требует ТЗ.
+            // Тихие часы глушат только «Информацию» и «Внимание» — «Важно» и «Критично»
+            // проходят всегда, так требует ТЗ.
             if (!$important && $quietNow) {
                 continue;
             }
 
-            // Важное — всегда принудительный режим, независимо от настройки.
-            // Неважное — по настройке force_mode_default (strict = тоже принудительно).
-            $row['force_mode'] = $important ? 'strict' : $settings['force_mode_default'];
+            // Важно/Критично — всегда принудительный режим. Информация — всегда мягко
+            // (её смысл — не мешать). Внимание — по настройке force_mode_default.
+            $row['force_mode'] = $important ? 'strict' : ($level === 'info' ? 'soft' : $settings['force_mode_default']);
+            $row['images'] = MediaController::listFor($row['images']);
 
             $importantDelay = (int) self::setting($settings, 'close_delay_seconds_important', '0');
             $row['close_delay_seconds'] = $important && $importantDelay > 0
@@ -83,7 +87,8 @@ class OccurrencesController
 
             $row['confirm_close_required'] = self::setting($settings, 'confirm_close_required', '1') === '1';
             $row['accidental_tap_guard_ms'] = (int) self::setting($settings, 'accidental_tap_guard_ms', '600');
-            $row['play_sound'] = $important && self::setting($settings, 'sound_on_important', '1') === '1';
+            // Критично — со звуком всегда; Важно — по настройке.
+            $row['play_sound'] = $level === 'critical' || ($important && self::setting($settings, 'sound_on_important', '1') === '1');
             $row['soft_corner'] = self::setting($settings, 'soft_corner', 'bottom-right');
             $row['brand_name'] = $brand['brand_name'];
             $row['brand_contact'] = $brand['brand_contact'];
@@ -101,6 +106,46 @@ class OccurrencesController
 
         Logger::debug('GET /occurrences: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
 
+        echo json_encode($rows);
+    }
+
+    // GET /occurrences/history — что показывалось этой кассе за последние 30 дней
+    // (не больше 100): для окна «История оповещений» в трее кассира. Только чтение:
+    // ack и heartbeat здесь не трогаются. acked_at — когда эта касса закрыла окно.
+    public static function history()
+    {
+        $pc = Auth::authenticatePc();
+        if (!$pc) {
+            http_response_code(401);
+            echo json_encode(array('error' => 'invalid_token'));
+            return;
+        }
+        $sql = "
+            SELECT DISTINCT
+                o.id AS occurrence_id, n.text, n.priority,
+                COALESCE(n.level, CASE n.priority WHEN 'important' THEN 'important' ELSE 'warning' END) AS level,
+                n.images, n.manual_url, n.size, o.fire_at, a.acked_at
+            FROM notification_occurrences o
+            JOIN notifications n ON n.id = o.notification_id
+            JOIN notification_targets t ON t.notification_id = n.id
+            " . TargetMatcher::JOIN . "
+            LEFT JOIN notification_acks a ON a.occurrence_id = o.id AND a.pc_id = :ack_pc_id
+            WHERE o.fire_at <= CURRENT_TIMESTAMP
+              AND o.fire_at >= datetime('now', '-30 days')
+              AND " . TargetMatcher::CONDITION . "
+            ORDER BY o.fire_at DESC
+            LIMIT 100
+        ";
+        $params = TargetMatcher::params($pc);
+        $params['ack_pc_id'] = $pc['id'];
+        $stmt = Db::get()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            $row['images'] = MediaController::listFor($row['images']);
+        }
+        unset($row);
+        Logger::debug('GET /occurrences/history: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
         echo json_encode($rows);
     }
 

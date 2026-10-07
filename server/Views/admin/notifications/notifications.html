@@ -45,13 +45,15 @@
             <textarea id="text" rows="3" required></textarea>
         </label>
         <div class="row">
-            <label>Важность
-                <span class="hint">Важное — окно поверх всех программ, закрыть можно только
-                прочитав, тихие часы на него не действуют. Обычное — ведёт себя по настройке из
-                раздела «Настройки» (обычно мягко, в углу).</span>
-                <select id="priority">
-                    <option value="normal">Обычное</option>
-                    <option value="important">Важное</option>
+            <label>Уровень важности
+                <span class="hint">Информация — мягкое окно в углу. Внимание — обычное оповещение (окно — по настройке «Режим показа»).
+                Важно — окно поверх всех программ, закрыть только прочитав, тихие часы не действуют. Критично — как «Важно», плюс
+                звук всегда и показывается первым: для аварий.</span>
+                <select id="level">
+                    <option value="info">Информация — не мешает работе</option>
+                    <option value="warning" selected>Внимание — обычное</option>
+                    <option value="important">Важно — поверх всех окон</option>
+                    <option value="critical">Критично — авария, со звуком</option>
                 </select>
             </label>
             <label>Размер окна
@@ -76,11 +78,16 @@
                 <span class="muted" id="fireAtHint"></span>
             </span>
         </label>
+        <label>Картинки (необязательно)
+            <span class="hint">Покажите, как это выглядит: скриншот нужного окна, фото кнопки или ценника. Касса покажет картинку в окне
+            оповещения, по клику — крупно. До 6 штук, PNG/JPEG/GIF/BMP. Скриншот можно вставить прямо сюда — Ctrl+V.</span>
+        </label>
+        <div id="imagePicker" style="margin-top:-6px"></div>
         <div id="targetBox"></div>
         <div class="row">
-            <label>Мануал из библиотеки (необязательно)
-                <span class="hint">Готовая инструкция из раздела «Мануалы». Её текст подставится
-                в поле справа — потом его можно поправить под этот конкретный случай.</span>
+            <label>Инструкция из Wiki (необязательно)
+                <span class="hint">Статья из Wiki: её текст подставится в поле справа — потом его можно поправить под этот случай.
+                Кассир увидит кнопку «Открыть инструкцию».</span>
                 <select id="manualPicker">
                     <option value="">— не выбирать —</option>
                 </select>
@@ -108,6 +115,13 @@
     <section class="tab-panel" data-panel="history">
         <div class="toolbar">
             <div class="search-wrap"><span id="searchIcon"></span><input type="search" id="search" placeholder="Поиск по тексту или получателю…"></div>
+            <select id="levelFilter" title="Показать только оповещения этого уровня">
+                <option value="">Все уровни</option>
+                <option value="critical">Критично</option>
+                <option value="important">Важно</option>
+                <option value="warning">Внимание</option>
+                <option value="info">Информация</option>
+            </select>
         </div>
         <table id="notificationsTable">
             <thead>
@@ -115,7 +129,7 @@
                     <th>Когда</th>
                     <th>Текст</th>
                     <th>Кому</th>
-                    <th>Важность</th>
+                    <th title="Уровень важности: Информация, Внимание, Важно, Критично">Уровень</th>
                     <th title="Сколько касс из адресованных уже закрыли окно (подтвердили)">Подтвердили</th>
                     <th></th>
                 </tr>
@@ -134,7 +148,7 @@
             <button type="button" id="addTplBtn" class="primary"></button>
         </div>
         <table id="templatesTable">
-            <thead><tr><th>Название</th><th>Текст</th><th>Важность</th><th></th></tr></thead>
+            <thead><tr><th>Название</th><th>Текст</th><th>Уровень</th><th></th></tr></thead>
             <tbody></tbody>
         </table>
     </section>
