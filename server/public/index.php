@@ -53,6 +53,11 @@ require __DIR__ . '/../Core/ServerMetrics.php';
 require __DIR__ . '/../Core/PeVersion.php';
 require __DIR__ . '/../Core/NetworkSiteMatcher.php';
 require __DIR__ . '/../Core/VersionCompare.php';
+require __DIR__ . '/../Core/Csv.php';
+require __DIR__ . '/../Core/HostVariables.php';
+require __DIR__ . '/../Core/SmartGroups.php';
+require __DIR__ . '/../Core/Recurrence.php';
+require __DIR__ . '/../Core/Housekeeping.php';
 require __DIR__ . '/../Core/Router.php';
 require __DIR__ . '/../Core/PageRouter.php';
 require __DIR__ . '/../Modules/Agent/AgentConfigController.php';
@@ -80,6 +85,7 @@ require __DIR__ . '/../Modules/Commands/AdminDeployDestinationsController.php';
 require __DIR__ . '/../Modules/Updates/AdminReleasesController.php';
 require __DIR__ . '/../Modules/Stores/AdminStoresController.php';
 require __DIR__ . '/../Modules/Settings/AdminSettingsController.php';
+require __DIR__ . '/../Modules/Variables/AdminVariablesController.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -168,11 +174,15 @@ $router->post('/admin/message-templates', array('AdminTemplatesController', 'sto
 $router->put('/admin/message-templates/{id}', array('AdminTemplatesController', 'update'));
 $router->delete('/admin/message-templates/{id}', array('AdminTemplatesController', 'destroy'));
 $router->post('/admin/notifications', array('AdminNotificationsController', 'store'));
+$router->get('/admin/notifications/stats.csv', array('AdminNotificationsController', 'statsCsv'));
 $router->get('/admin/notifications/{id}/acks', array('AdminNotificationsController', 'acks'));
+$router->post('/admin/notifications/{id}/stop', array('AdminNotificationsController', 'stopRepeat'));
 $router->delete('/admin/notifications/{id}', array('AdminNotificationsController', 'destroy'));
 
 $router->get('/admin/host-groups', array('AdminHostGroupsController', 'index'));
 $router->post('/admin/host-groups', array('AdminHostGroupsController', 'store'));
+$router->post('/admin/host-groups/preview', array('AdminHostGroupsController', 'preview'));
+$router->post('/admin/host-groups/{id}/refresh', array('AdminHostGroupsController', 'refresh'));
 $router->put('/admin/host-groups/{id}', array('AdminHostGroupsController', 'update'));
 $router->delete('/admin/host-groups/{id}', array('AdminHostGroupsController', 'destroy'));
 $router->get('/admin/host-groups/{id}/members', array('AdminHostGroupsController', 'members'));
@@ -185,6 +195,7 @@ $router->get('/admin/commands', array('AdminCommandsController', 'index'));
 $router->post('/admin/commands', array('AdminCommandsController', 'store'));
 $router->post('/admin/commands/batch', array('AdminCommandsController', 'storeBatch'));
 $router->get('/admin/commands/{id}/results', array('AdminCommandsController', 'results'));
+$router->get('/admin/commands/{id}/results.csv', array('AdminCommandsController', 'resultsCsv'));
 $router->get('/admin/files', array('AdminFilesController', 'index'));
 $router->post('/admin/files', array('AdminFilesController', 'store'));
 $router->get('/admin/files/recent-folders', array('AdminFilesController', 'recentFolders'));
@@ -201,8 +212,18 @@ $router->put('/admin/agent-releases/{id}', array('AdminReleasesController', 'upd
 $router->delete('/admin/agent-releases/{id}', array('AdminReleasesController', 'destroy'));
 $router->post('/admin/agent-releases/{id}/deploy', array('AdminReleasesController', 'deploy'));
 
+// Переменные хоста (бета, только superadmin).
+$router->get('/admin/variables', array('AdminVariablesController', 'index'));
+$router->get('/admin/variables/effective', array('AdminVariablesController', 'effective'));
+$router->post('/admin/variables', array('AdminVariablesController', 'store'));
+$router->put('/admin/variables/{id}', array('AdminVariablesController', 'update'));
+$router->delete('/admin/variables/{id}', array('AdminVariablesController', 'destroy'));
+
 $router->get('/admin/settings', array('AdminSettingsController', 'index'));
 $router->put('/admin/settings', array('AdminSettingsController', 'update'));
+
+// Фоновые задачи раз в минуту (смарт-группы, повторы оповещений) — см. Housekeeping.
+Housekeeping::tick();
 
 try {
     // У части страниц чистый путь совпадает с путём JSON-эндпоинта того же раздела

@@ -98,6 +98,9 @@
                     <span class="hint keep">Выполнится от SYSTEM на каждой кассе. Вывод (stdout/stderr, код возврата) вернётся в результаты. Либо текст, либо путь ниже — не оба.</span>
                     <textarea id="scriptText" rows="6" placeholder="Get-Date&#10;Get-Service Spooler | Select-Object Status"></textarea>
                 </label>
+                <p class="muted" id="varsHint" hidden style="margin:-4px 0 10px;font-size:12.5px"><span class="badge badge-beta">бета</span>
+                    <code>{{ИМЯ}}</code> в тексте, пути или аргументах — переменная хоста: у каждой кассы подставится своё значение
+                    (<a href="/admin/variables">страница «Переменные»</a>). Нет переменной у кассы — команда на ней не запустится.</p>
                 <div class="row">
                     <label>…или путь к программе/скрипту на ПК
                         <span class="hint">Полный путь к файлу, который уже лежит на кассе, например C:\Tools\fix.ps1 или C:\Windows\System32\ipconfig.exe.</span>
@@ -138,6 +141,7 @@
                 <option value="process_action">Процессы</option>
                 <option value="script_run">Скрипты</option>
                 <option value="file_deploy">Файлы</option>
+                <option value="env_var">Переменные среды</option>
             </select>
             <button type="button" id="refreshBtn" class="ghost" title="Перечитать список прямо сейчас (он и так обновляется сам)"></button>
         </div>

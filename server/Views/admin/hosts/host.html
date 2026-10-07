@@ -61,11 +61,19 @@
         <tbody></tbody>
     </table>
 
-    <h1>Подтверждённые оповещения</h1>
+    <h1>Оповещения за 30 дней</h1>
+    <p class="muted" style="margin-top:-6px">Всё, что было адресовано этой кассе, — и подтверждённое, и нет. Для разбора «мне никто не сказал».</p>
     <table id="acksTable">
-        <thead><tr><th>Когда</th><th>Оповещение</th><th>Важность</th><th>Открыл инструкцию</th></tr></thead>
+        <thead><tr><th>Показ</th><th>Оповещение</th><th>Уровень</th><th>Подтверждено</th><th>Открыл инструкцию</th></tr></thead>
         <tbody></tbody>
     </table>
+
+    <div class="card compact" id="varsCard" hidden style="margin-top:18px">
+        <div class="card-head"><h2>Переменные хоста <span class="badge badge-beta">бета</span></h2>
+            <a href="/admin/variables" class="muted" style="font-size:13px">все переменные →</a></div>
+        <p class="muted" style="margin-top:0">Что получит эта касса вместо {{ИМЯ}} в скриптах и путях файлов — и откуда взято значение.</p>
+        <div id="vars"></div>
+    </div>
 </main>
 
 <script src="/admin/shared/api.js"></script>

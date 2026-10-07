@@ -14,6 +14,10 @@
     const ERRORS = {
         text_required: 'введите текст', target_id_required: 'выберите, кому именно', target_not_found: 'получатель не найден',
         invalid_fire_at: 'неверное время показа', name_required: 'укажите название шаблона', invalid_level: 'неверный уровень важности',
+        invalid_repeat: 'неверное правило повтора', invalid_repeat_hours: 'интервал повтора — от 1 до 168 часов', invalid_repeat_time: 'укажите время повтора',
+        invalid_repeat_days: 'отметьте дни недели', invalid_repeat_until: 'неверная дата окончания повторов',
+        repeat_never_fires: 'с такими условиями не будет ни одного показа — проверьте дату «до»',
+        smart_group_requires_superadmin: 'смарт-группы — только для суперадмина', not_repeating: 'повторы уже остановлены',
     };
 
     // ---- Вкладки --------------------------------------------------------------------------
@@ -59,6 +63,8 @@
     $('whenMode').addEventListener('change', function () {
         const at = this.value === 'at';
         $('fireAt').hidden = !at;
+        $('repeatBox').hidden = this.value !== 'repeat';
+        renderRepeatHint();
         if (at && !$('fireAt').value) {
             // По умолчанию — начало ближайшего часа, но не раньше чем через полчаса.
             const d = new Date(Date.now() + 30 * 60 * 1000);
@@ -92,9 +98,60 @@
         const total = targetState.total;
         const at = fireAtDate();
         const later = at && at.getTime() > Date.now();
-        $('sendBtn').innerHTML = Ui.icon(later ? 'bell' : 'send') + (later ? 'Запланировать' : 'Отправить') +
+        const repeat = $('whenMode').value === 'repeat';
+        $('sendBtn').innerHTML = Ui.icon(later || repeat ? 'bell' : 'send') + (repeat ? 'Запланировать повторы' : later ? 'Запланировать' : 'Отправить') +
             (total ? ' на ' + total + ' ' + Ui.plural(total, 'кассу', 'кассы', 'касс') : '');
     }
+
+    // ---- Повторы (ТЗ: регулярные напоминания вроде плановой сверки) -----------------------
+    // Время повтора — по часам магазинов (часовой пояс в Настройках), как и тихие часы:
+    // сервер считает показы сам, браузер администратора может быть в другом поясе.
+    let storeTz = '';
+    Api.get('/admin/settings').then(function (s) { storeTz = s.timezone || ''; renderRepeatHint(); }).catch(function () { /* не важно */ });
+    const DAY_NAMES = { 1: 'пн', 2: 'вт', 3: 'ср', 4: 'чт', 5: 'пт', 6: 'сб', 7: 'вс' };
+
+    function repeatRule() {
+        if ($('whenMode').value !== 'repeat') return null;
+        const every = $('repeatEvery').value;
+        if (every === 'hours') return { every: 'hours', hours: parseInt($('repeatHours').value, 10) || 0 };
+        const rule = { every: every, time: $('repeatTime').value };
+        if (every === 'week') rule.days = [...document.querySelectorAll('#repeatDays input:checked')].map(function (i) { return +i.value; });
+        return rule;
+    }
+    function describeRepeat(rule) {
+        if (!rule) return '';
+        if (rule.every === 'hours') return 'каждые ' + rule.hours + ' ч';
+        const when = ' в ' + rule.time;
+        if (rule.every === 'day') return 'каждый день' + when;
+        if (rule.every === 'weekdays') return 'по будням' + when;
+        return (rule.days || []).map(function (d) { return DAY_NAMES[d]; }).join(', ') + when;
+    }
+    function repeatProblem() {
+        const rule = repeatRule();
+        if (!rule) return '';
+        if (rule.every === 'hours' && (rule.hours < 1 || rule.hours > 168)) return 'интервал повтора — от 1 до 168 часов';
+        if (rule.every !== 'hours' && !/^\d\d:\d\d$/.test(rule.time || '')) return 'укажите время повтора';
+        if (rule.every === 'week' && !rule.days.length) return 'отметьте хотя бы один день недели';
+        return '';
+    }
+    function renderRepeatHint() {
+        const every = $('repeatEvery').value;
+        $('repeatTimeWrap').hidden = every === 'hours';
+        $('repeatHoursWrap').hidden = every !== 'hours';
+        $('repeatDays').hidden = every !== 'week';
+        const rule = repeatRule();
+        const problem = repeatProblem();
+        $('repeatHint').textContent = !rule ? '' : problem ? problem
+            : 'Показ ' + describeRepeat(rule) + (rule.every === 'hours' ? ', первый — сразу' : ' по часам магазинов' + (storeTz ? ' (' + storeTz + ')' : '') + ', первый — в ближайшее такое время') +
+              ($('repeatUntil').value ? ', последний день — ' + new Date($('repeatUntil').value + 'T00:00').toLocaleDateString() : ', пока не остановите') +
+              '. Каждый показ подтверждается отдельно; касса, которая была выключена, получит только последний.';
+        renderSendBtn();
+    }
+    ['repeatEvery', 'repeatTime', 'repeatHours', 'repeatUntil'].forEach(function (id) {
+        $(id).addEventListener('input', renderRepeatHint);
+        $(id).addEventListener('change', renderRepeatHint);
+    });
+    $('repeatDays').addEventListener('change', renderRepeatHint);
 
     // Статья Wiki копирует свой текст в поле — не ссылку на статью (правка статьи в Wiki
     // не меняет уже отправленные оповещения задним числом). Окно на кассе показывает
@@ -135,6 +192,7 @@
         const holes = text.match(/\[[^\]\n]{1,40}\]/g);
         if (holes) problems.push('заполните в тексте ' + holes.join(', '));
         if ($('whenMode').value === 'at' && !fireAtDate()) problems.push('укажите дату и время показа');
+        if (repeatProblem()) problems.push(repeatProblem());
         if (targetState.type !== 'all' && !targetState.id) problems.push('выберите, кому именно');
         else if (!targetState.total) problems.push('под выбранную цель не подходит ни одна касса');
         return problems;
@@ -149,11 +207,11 @@
         const at = fireAtDate();
         const later = at && at.getTime() > Date.now();
         const lvl = $('level').value;
-        const important = lvl === 'important' || lvl === 'critical';
+        const rule = repeatRule();
         // Массовое важное оповещение перебивает работу каждого кассира — переспросить.
-        if (total > 1 && !await Ui.confirm((later ? 'Запланировать ' : 'Отправить ') + 'оповещение «' + Ui.LEVELS[lvl].label + '» на ' + total + ' ' +
-            Ui.plural(total, 'кассу', 'кассы', 'касс') + ' (' + target.describe() + ')' + (later ? ' на ' + at.toLocaleString() : '') + '?',
-            { okLabel: later ? 'Запланировать' : 'Отправить', title: 'Оповещение' })) return;
+        if (total > 1 && !await Ui.confirm((rule ? 'Запланировать повторяющееся ' : later ? 'Запланировать ' : 'Отправить ') + 'оповещение «' + Ui.LEVELS[lvl].label + '» на ' + total + ' ' +
+            Ui.plural(total, 'кассу', 'кассы', 'касс') + ' (' + target.describe() + ')' + (rule ? ': ' + describeRepeat(rule) : later ? ' на ' + at.toLocaleString() : '') + '?',
+            { okLabel: rule || later ? 'Запланировать' : 'Отправить', title: 'Оповещение' })) return;
 
         $('sendBtn').disabled = true;
         try {
@@ -161,11 +219,16 @@
                 text: $('text').value.trim(), level: $('level').value, size: $('size').value, images: images.get(),
                 manual_url: $('manualUrl').value, target: target.value(),
                 fire_at: later ? at.toISOString() : null,
+                repeat: rule,
+                // «До» — последний день включительно, по часам этого компьютера.
+                repeat_until: rule && $('repeatUntil').value ? new Date($('repeatUntil').value + 'T23:59:59').toISOString() : null,
             });
-            Ui.toast(later ? 'Запланировано на ' + at.toLocaleString() + ' — до этого его можно отозвать' : 'Отправлено — кассы покажут его на ближайшем опросе', 'success');
+            Ui.toast(rule ? 'Повторяющееся оповещение запланировано: ' + describeRepeat(rule) + '. Остановить — в истории, меню ⋯'
+                : later ? 'Запланировано на ' + at.toLocaleString() + ' — до этого его можно отозвать' : 'Отправлено — кассы покажут его на ближайшем опросе', 'success');
             $('createForm').reset();
             images.set([]);
             $('fireAt').hidden = true;
+            $('repeatBox').hidden = true;
             renderWhenHint();
             closeForm();
             await loadNotifications();
@@ -294,17 +357,27 @@
             return;
         }
         tbody.innerHTML = visible.map(function (n) {
-            const total = +n.target_count, acks = +n.acks_count;
+            const total = +n.target_count;
             const scheduled = +n.scheduled;
+            // У повторяющегося — подтверждения последнего показа: «все ли увидели сегодняшнее».
+            const repeating = !!n.repeat_rule;
+            const acks = repeating ? +n.last_acks_count : +n.acks_count;
+            const whenCell = repeating
+                ? '<span class="badge badge-info" title="Повторяющееся: каждый показ подтверждается отдельно">повторяется</span>' +
+                  '<span style="display:block;margin-top:3px">' + esc(describeRepeat(n.repeat_rule)) + '</span>' +
+                  '<span style="display:block;font-size:12px">' + (n.next_fire_at ? 'следующий: ' + esc(formatServerTime(n.next_fire_at))
+                    : n.repeat_stopped_at ? 'остановлено ' + esc(formatServerTime(n.repeat_stopped_at)) : 'повторы закончились') + '</span>'
+                : scheduled
+                ? '<span class="badge badge-info" title="Ещё не показано — кассы получат его в это время. До этого можно отозвать">запланировано</span><span style="display:block;margin-top:3px">' + esc(formatServerTime(n.fire_at)) + '</span>'
+                : esc(formatServerTime(n.fire_at || n.created_at));
             return '<tr class="clickable" data-id="' + n.id + '">' +
-                '<td class="muted nowrap">' + (scheduled
-                    ? '<span class="badge badge-info" title="Ещё не показано — кассы получат его в это время. До этого можно отозвать">запланировано</span><span style="display:block;margin-top:3px">' + esc(formatServerTime(n.fire_at)) + '</span>'
-                    : esc(formatServerTime(n.fire_at || n.created_at))) + '</td>' +
+                '<td class="muted nowrap">' + whenCell + '</td>' +
                 '<td><div class="text-short">' + esc(n.text) + '</div>' + (n.manual_url ? '<span class="muted" style="font-size:12px">+ инструкция</span>' : '') + Ui.imageThumbs(n.images) + '</td>' +
                 '<td>' + esc(describeTarget(n)) + '</td>' +
                 '<td>' + Ui.levelBadge(n.level) + '</td>' +
-                '<td class="acks-cell">' + (scheduled ? '<span class="muted">ещё не показано</span>'
-                    : total ? '<span style="font-size:12.5px"><b>' + acks + '</b> из ' + total + '</span>' +
+                '<td class="acks-cell">' + (scheduled || (repeating && !n.last_shown_at) ? '<span class="muted">ещё не показано</span>'
+                    : total ? '<span style="font-size:12.5px">' + (repeating ? '<span class="muted" title="' + esc(formatServerTime(n.last_shown_at)) + '">последний показ: </span>' : '') +
+                        '<b>' + acks + '</b> из ' + total + '</span>' +
                         Ui.progressBar([{ n: Math.min(acks, total), kind: 'ok', label: 'подтвердили' }, { n: Math.max(0, total - acks), kind: 'wait', label: 'ещё нет' }], total)
                     : '<span class="muted">' + acks + '</span>') + '</td>' +
                 '<td><div class="actions" style="flex-wrap:nowrap">' +
@@ -359,9 +432,18 @@
         if (btn && btn.dataset.act === 'more') {
             const act = await Ui.menu(btn, [
                 { label: 'Сохранить как шаблон…', value: 'tpl' },
+            ].concat(n.repeat_rule && !n.repeat_stopped_at && n.next_fire_at ? [
+                { label: 'Остановить повторы', value: 'stop' },
+            ] : []).concat([
                 { label: +n.scheduled ? 'Отменить (ещё не показано)' : 'Отозвать', value: 'recall', danger: true },
-            ]);
+            ]));
             if (act === 'tpl') editTemplate(null, { title: '', text: n.text, level: n.level, size: n.size, manual_url: n.manual_url, images: n.images });
+            if (act === 'stop') {
+                if (!await Ui.confirm('Остановить повторы «' + n.text.slice(0, 60) + '»? Уже показанные останутся в истории с подтверждениями, новых показов не будет.', { okLabel: 'Остановить' })) return;
+                try { await Api.post('/admin/notifications/' + n.id + '/stop'); Ui.toast('Повторы остановлены', 'success'); await loadNotifications(); }
+                catch (err) { Ui.toast('Не удалось: ' + Ui.reason(err, ERRORS), 'error'); }
+                return;
+            }
             if (act === 'recall') {
                 if (!await Ui.confirm('Отозвать оповещение «' + n.text.slice(0, 60) + '»? Кассы, которые его ещё не показали, уже не покажут.', { danger: true, okLabel: 'Отозвать' })) return;
                 try { await Api.request('DELETE', '/admin/notifications/' + n.id); Ui.toast('Отозвано', 'success'); loadNotifications(); }
@@ -393,6 +475,32 @@
         $('manualPicker').value = wikiId;
         $('manualPicker').dispatchEvent(new Event('change'));
     }
+
+    // ---- Выгрузка статистики (ТЗ: CSV/Excel по ПК и магазинам) -------------------------------
+    $('statsBtn').innerHTML = Ui.icon('download') + 'Статистика (CSV)';
+    $('statsBtn').addEventListener('click', function () {
+        const today = new Date();
+        const monthAgo = new Date(Date.now() - 30 * 86400000);
+        const day = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+        Ui.modal({
+            title: 'Статистика оповещений',
+            body: '<p class="muted" style="margin-top:0">Файл для Excel: сколько показов оповещений адресовано каждой кассе (или магазину) за период, ' +
+                'сколько подтверждено, открыли ли инструкцию и за сколько минут в среднем закрыли окно. Для отчётности и разбора проблемных точек.</p>' +
+                '<div class="row"><label>С<input type="date" id="stFrom" value="' + day(monthAgo) + '"></label>' +
+                '<label>По (включительно)<input type="date" id="stTo" value="' + day(today) + '"></label></div>' +
+                '<label>Разрез<select id="stBy"><option value="pc">по кассам</option><option value="store">по магазинам</option></select></label>' +
+                '<p class="error modal-error"></p>',
+            buttons: [{ label: 'Отмена', value: null }, { label: 'Скачать', value: 'submit', kind: 'primary' }],
+            onSubmit: function (root) {
+                const from = root.querySelector('#stFrom').value, to = root.querySelector('#stTo').value;
+                if (!from || !to || from > to) { root.querySelector('.modal-error').textContent = 'Проверьте даты периода.'; return false; }
+                // Границы — по часам этого компьютера, на сервер уходят в UTC.
+                const url = '/admin/notifications/stats.csv?from=' + encodeURIComponent(new Date(from + 'T00:00:00').toISOString()) +
+                    '&to=' + encodeURIComponent(new Date(to + 'T23:59:59').toISOString()) + '&by=' + root.querySelector('#stBy').value;
+                window.location.href = url;
+            },
+        });
+    });
 
     setInterval(function () { if (!document.hidden) loadNotifications(); }, 30000);
 })();

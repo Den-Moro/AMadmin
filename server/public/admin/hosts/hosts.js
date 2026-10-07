@@ -39,7 +39,7 @@
         groups = await Api.get('/admin/host-groups');
         fillSelect($('storeFilter'), stores, storeLabel, 'Все магазины');
         fillSelect($('deviceTypeFilter'), deviceTypes, nameLabel, 'Все типы');
-        fillSelect($('groupFilter'), groups, nameLabel, 'Все группы');
+        fillSelect($('groupFilter'), groups, function (g) { return g.name + (g.kind === 'smart' ? ' (смарт)' : ''); }, 'Все группы');
         fillSelect($('pcStoreId'), stores, storeLabel);
         fillSelect($('bulkStoreId'), stores, storeLabel);
         fillSelect($('pcDeviceTypeId'), deviceTypes, nameLabel);
@@ -196,10 +196,12 @@
             return;
         }
         if (btn.dataset.bulk === 'group') {
-            if (!groups.length) { Ui.toast('Сначала создайте группу на странице «Группы»', 'error'); return; }
+            // Смарт-группы наполняются сами по условиям — руками в них не добавляют.
+            const manual = groups.filter(function (g) { return g.kind !== 'smart'; });
+            if (!manual.length) { Ui.toast('Сначала создайте группу на странице «Группы»', 'error'); return; }
             const picked = await Ui.modal({
                 title: 'Добавить ' + ids.length + ' ПК в группу',
-                body: '<label>Группа<select id="bulkGroup">' + groups.map(function (g) { return '<option value="' + g.id + '">' + esc(g.name) + '</option>'; }).join('') + '</select></label>',
+                body: '<label>Группа<select id="bulkGroup">' + manual.map(function (g) { return '<option value="' + g.id + '">' + esc(g.name) + '</option>'; }).join('') + '</select></label>',
                 buttons: [{ label: 'Отмена', value: null }, { label: 'Добавить', value: 'submit', kind: 'primary' }],
                 onSubmit: async function (root) {
                     const gid = root.querySelector('#bulkGroup').value;

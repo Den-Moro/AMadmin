@@ -7,6 +7,7 @@
     const canEdit = me.role === 'administrator' || me.role === 'superadmin';
     const $ = Ui.$, esc = Ui.escapeHtml;
 
+    if (me.role === 'superadmin') $('folderVarsHint').hidden = false;
     $('deployBtn').innerHTML = Ui.icon('send') + 'Раскатать файлы';
     $('deployCloseBtn').innerHTML = Ui.icon('x');
     $('sentCloseBtn').innerHTML = Ui.icon('x');
@@ -45,8 +46,17 @@
 
     // Те же правила, что проверяет сервер (AdminCommandsController::validateFileDeploy),
     // — только здесь ошибку видно сразу, пока набираешь путь, а не после «Отправить».
+    // Суперадмин может писать в путь переменную хоста — {{PROFIT_DIR}} или
+    // C:\{{SHOP}}\in (бета): у каждой кассы подставится своё значение. Здесь проверяем путь
+    // с «заглушками», настоящий — сервер, когда касса забирает команду.
+    const VAR_RE = /\{\{\s*[A-Za-z_][A-Za-z0-9_]{0,63}\s*\}\}/g;
     function folderProblem(folder) {
         if (!folder) return 'укажите папку';
+        if (me.role === 'superadmin' && VAR_RE.test(folder)) {
+            VAR_RE.lastIndex = 0;
+            folder = folder.replace(/^\{\{\s*[A-Za-z_][A-Za-z0-9_]{0,63}\s*\}\}/, 'C:\\V').replace(VAR_RE, 'V');
+        }
+        VAR_RE.lastIndex = 0;
         if (!/^([A-Za-z]:\\|\\\\[^\\]+\\[^\\]+)/.test(folder)) return 'нужен полный путь: с буквы диска (C:\\…) или сетевой (\\\\сервер\\папка)';
         if (/[<>"|?*]/.test(folder) || folder.slice(2).indexOf(':') >= 0) return 'недопустимые символы в пути: < > " | ? * :';
         return '';

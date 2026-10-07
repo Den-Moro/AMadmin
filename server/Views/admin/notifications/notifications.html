@@ -25,6 +25,7 @@
             всё починено. Как окно ведёт себя на кассе — в <a href="/admin/settings">Настройках</a>.</p>
         </div>
         <div class="actions">
+            <button type="button" id="statsBtn" title="Выгрузить в Excel (CSV) по кассам или магазинам: сколько оповещений адресовано, сколько подтверждено, открыли ли инструкцию, среднее время реакции">Статистика (CSV)</button>
             <button type="button" id="newBtn" class="primary" title="Открыть форму нового оповещения"></button>
         </div>
     </div>
@@ -73,11 +74,32 @@
                 <select id="whenMode">
                     <option value="now">Сейчас</option>
                     <option value="at">По расписанию…</option>
+                    <option value="repeat">Повторять…</option>
                 </select>
                 <input type="datetime-local" id="fireAt" hidden>
                 <span class="muted" id="fireAtHint"></span>
             </span>
         </label>
+        <div id="repeatBox" class="note" hidden style="margin:-6px 0 12px">
+            <div class="when-line">
+                <select id="repeatEvery" title="Как часто показывать">
+                    <option value="day">каждый день</option>
+                    <option value="weekdays">по будням (пн–пт)</option>
+                    <option value="week">по дням недели…</option>
+                    <option value="hours">каждые N часов</option>
+                </select>
+                <span id="repeatTimeWrap">в <input type="time" id="repeatTime" value="09:00" style="width:auto"></span>
+                <span id="repeatHoursWrap" hidden>каждые <input type="number" id="repeatHours" min="1" max="168" value="4" style="width:80px"> ч</span>
+                <span>до <input type="date" id="repeatUntil" style="width:auto" title="Последний день повторов включительно. Пусто — пока не остановите вручную"></span>
+            </div>
+            <div class="when-line" id="repeatDays" hidden style="margin-top:8px">
+                <label><input type="checkbox" value="1" checked> пн</label><label><input type="checkbox" value="2"> вт</label>
+                <label><input type="checkbox" value="3"> ср</label><label><input type="checkbox" value="4"> чт</label>
+                <label><input type="checkbox" value="5"> пт</label><label><input type="checkbox" value="6"> сб</label>
+                <label><input type="checkbox" value="7"> вс</label>
+            </div>
+            <p class="muted" id="repeatHint" style="margin:8px 0 0;font-size:12.5px"></p>
+        </div>
         <label>Картинки (необязательно)
             <span class="hint">Покажите, как это выглядит: скриншот нужного окна, фото кнопки или ценника. Касса покажет картинку в окне
             оповещения, по клику — крупно. До 6 штук, PNG/JPEG/GIF/BMP. Скриншот можно вставить прямо сюда — Ctrl+V.</span>

@@ -9,7 +9,7 @@
     <LangVersion>7.3</LangVersion>
     <RootNamespace>AMadmin.ManagementAgent</RootNamespace>
     <AssemblyName>AMadmin.ManagementAgent</AssemblyName>
-    <Version>0.1.9</Version>
+    <Version>0.2.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 

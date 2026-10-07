@@ -245,6 +245,11 @@ class AdminReleasesController
             self::fail('target_id_required');
             return;
         }
+        if (!SmartGroups::targetAllowed($targetType, $targetId)) {
+            http_response_code(403);
+            echo json_encode(array('error' => 'smart_group_requires_superadmin'));
+            return;
+        }
 
         $dir = AdminDeployDestinationsController::normalizeFolder(
             isset($body['install_dir']) && trim($body['install_dir']) !== '' ? $body['install_dir'] : Settings::get('agent_install_dir', 'C:\\AMadmin')

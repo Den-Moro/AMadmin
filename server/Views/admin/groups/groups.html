@@ -13,15 +13,16 @@
     <div class="page-head">
         <div>
             <h1>Группы хостов</h1>
-            <p class="muted">Свои наборы ПК поверх структуры «магазин» — например, «Кассы 1 этажа» или «Пилот нового релиза». Группа — цель и для оповещений, и для команд.</p>
+            <p class="muted">Свои наборы ПК поверх структуры «магазин» — например, «Кассы 1 этажа» или «Пилот нового релиза». Группа — цель и для оповещений, и для команд, и для файлов.</p>
         </div>
         <div class="actions">
+            <button type="button" id="addSmartBtn" hidden title="Бета, только суперадмин: группа, которая наполняется сама по условиям — магазин, версия агента, подсеть, переменная хоста…">＋ Смарт-группа <span class="beta-tag" style="margin-left:6px">бета</span></button>
             <button type="button" id="addGroupBtn" class="primary">＋ Группа</button>
         </div>
     </div>
 
     <table id="groupsTable">
-        <thead><tr><th>Название</th><th>Участников</th><th></th></tr></thead>
+        <thead><tr><th>Название</th><th>Состав</th><th>Участников</th><th></th></tr></thead>
         <tbody></tbody>
     </table>
     <p class="muted">Нажмите на строку, чтобы открыть состав группы.</p>
@@ -29,6 +30,7 @@
 
 <script src="/admin/shared/api.js"></script>
 <script src="/admin/shared/nav.js"></script>
+<script src="/admin/groups/smart-rules.js"></script>
 <script src="/admin/groups/groups.js"></script>
 </body>
 </html>

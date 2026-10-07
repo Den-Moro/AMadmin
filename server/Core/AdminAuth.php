@@ -44,6 +44,20 @@ class AdminAuth
         }
     }
 
+    // Главный администратор? Роль берётся из сессии, которую requireLogin() только что
+    // сверил с базой, — поэтому вызывать после requireLogin()/requireRole().
+    public static function isSuperadmin()
+    {
+        return isset($_SESSION['admin_role']) && $_SESSION['admin_role'] === 'superadmin';
+    }
+
+    // Бета-функции (смарт-группы, переменные хоста, переменные среды Windows) — только
+    // главному администратору.
+    public static function requireSuperadmin()
+    {
+        self::requireRole(array('superadmin'));
+    }
+
     // true — вход выполнен, false — неверный логин/пароль, 'locked' — учётка временно
     // заблокирована из-за подбора.
     public static function attemptLogin($username, $password)

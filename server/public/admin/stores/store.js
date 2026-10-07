@@ -174,7 +174,8 @@
             return;
         }
         if (btn.dataset.bulk === 'group') {
-            const groups = await Api.get('/admin/host-groups');
+            // Смарт-группы наполняются сами по условиям — руками в них не добавляют.
+            const groups = (await Api.get('/admin/host-groups')).filter(function (g) { return g.kind !== 'smart'; });
             if (!groups.length) { Ui.toast('Сначала создайте группу на странице «Группы»', 'error'); return; }
             const ok = await Ui.modal({
                 title: 'Добавить ' + ids.length + ' ' + Ui.plural(ids.length, 'кассу', 'кассы', 'касс') + ' в группу',

@@ -60,7 +60,8 @@ class AdminPcsController
                 s.name AS store_name,
                 dt.name AS device_type_name,
                 (julianday('now') - julianday(p.last_seen)) * 86400.0 AS seconds_since_seen,
-                (SELECT GROUP_CONCAT(g.name, ', ') FROM host_group_members m JOIN host_groups g ON g.id = m.group_id WHERE m.pc_id = p.id) AS groups
+                (SELECT GROUP_CONCAT(g.name, ', ') FROM host_group_members m JOIN host_groups g ON g.id = m.group_id
+                 WHERE m.pc_id = p.id" . (AdminAuth::isSuperadmin() ? '' : " AND g.kind = 'static'") . ") AS groups
             FROM pcs p
             JOIN stores s ON s.id = p.store_id
             JOIN device_types dt ON dt.id = p.device_type_id
@@ -140,17 +141,13 @@ class AdminPcsController
         }
 
         $db = Db::get();
-        $groups = $db->prepare('SELECT g.id, g.name FROM host_group_members m JOIN host_groups g ON g.id = m.group_id WHERE m.pc_id = :id ORDER BY g.name');
+        $super = AdminAuth::isSuperadmin();
+        $groups = $db->prepare('SELECT g.id, g.name, g.kind FROM host_group_members m JOIN host_groups g ON g.id = m.group_id
+            WHERE m.pc_id = :id' . ($super ? '' : " AND g.kind = 'static'") . ' ORDER BY g.kind, g.name');
         $groups->execute(array('id' => $pc['id']));
 
-        $acks = $db->prepare('
-            SELECT a.acked_at, a.reacted, n.id AS notification_id, n.text, n.priority
-            FROM notification_acks a
-            JOIN notification_occurrences o ON o.id = a.occurrence_id
-            JOIN notifications n ON n.id = o.notification_id
-            WHERE a.pc_id = :id ORDER BY a.acked_at DESC LIMIT 20
-        ');
-        $acks->execute(array('id' => $pc['id']));
+        // Все оповещения, адресованные кассе за 30 дней, — и подтверждённые, и нет.
+        $notifications = OccurrencesController::historyFor($pc, 30);
 
         $results = $db->prepare('
             SELECT r.status, r.output, r.claimed_at, r.executed_at, c.id AS command_id, c.type, c.payload, u.username AS author
@@ -170,11 +167,13 @@ class AdminPcsController
         $totals->execute(array('id1' => $pc['id'], 'id2' => $pc['id'], 'id3' => $pc['id']));
 
         echo json_encode(array(
-            'pc'      => $pc,
-            'groups'  => $groups->fetchAll(),
-            'acks'    => $acks->fetchAll(),
-            'results' => $results->fetchAll(),
-            'totals'  => $totals->fetch(),
+            'pc'            => $pc,
+            'groups'        => $groups->fetchAll(),
+            'notifications' => $notifications,
+            'results'       => $results->fetchAll(),
+            'totals'        => $totals->fetch(),
+            // Переменные хоста (бета) — только superadmin.
+            'variables'     => $super ? array_values(HostVariables::effective($pc['id'], $pc['store_id'])) : null,
         ));
     }
 

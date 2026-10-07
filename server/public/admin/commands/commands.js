@@ -2,6 +2,8 @@
     const me = await requireAdminAuth();
     const canEdit = me.role === 'administrator' || me.role === 'superadmin';
     const $ = Ui.$, esc = Ui.escapeHtml;
+    // Переменные хоста ({{ИМЯ}}, бета) сервер подставляет только в командах суперадмина.
+    if (me.role === 'superadmin') $('varsHint').hidden = false;
 
     $('newBtn').innerHTML = Ui.icon('plus') + 'Новая команда';
     $('closeNewBtn').innerHTML = Ui.icon('x');
@@ -106,6 +108,8 @@
         // Пачка версии агента повторяется на «Обновлениях» (раскатка версии целиком), отдельный файл — в «Файлах».
         if (c.release_version) { window.location.href = '/admin/updates'; return; }
         if (c.type === 'file_deploy') { window.location.href = '/admin/files?repeat=' + c.id; return; }
+        // Переменные среды Windows (бета) отправляются со страницы «Переменные».
+        if (c.type === 'env_var') { window.location.href = '/admin/variables?target=' + c.target_type + ':' + (c.target_id || ''); return; }
         let p = {};
         try { p = JSON.parse(c.payload); } catch (e) { /* — */ }
         typeEl.value = c.type;
@@ -128,6 +132,7 @@
         pid_requires_single_pc_target: 'завершать по PID можно только на одном конкретном ПК', invalid_engine: 'неверный тип скрипта',
         script_or_path_required: 'введите текст скрипта или путь к файлу', script_and_path_are_exclusive: 'либо текст скрипта, либо путь — не оба сразу',
         invalid_target_type: 'неверный тип цели', target_id_required: 'выберите, кому именно', insufficient_role: 'нужна роль администратора',
+        smart_group_requires_superadmin: 'смарт-группы — только для суперадмина',
     };
 
     $('createForm').addEventListener('submit', async function (e) {
@@ -163,8 +168,8 @@
 
     let commands = [];
     const targetNames = { all: 'Всем кассам', store: 'Магазин', group: 'Группа', device_type: 'Тип', pc: 'ПК' };
-    const typeNames = { service_control: 'Служба', process_action: 'Процесс', script_run: 'Скрипт', file_deploy: 'Файл' };
-    const typeIcons = { service_control: 'cog', process_action: 'cpu', script_run: 'terminal', file_deploy: 'folder' };
+    const typeNames = { service_control: 'Служба', process_action: 'Процесс', script_run: 'Скрипт', file_deploy: 'Файл', env_var: 'Переменная среды' };
+    const typeIcons = { service_control: 'cog', process_action: 'cpu', script_run: 'terminal', file_deploy: 'folder', env_var: 'braces' };
 
     function describeTarget(c) {
         if (c.target_type === 'all') return targetNames.all;
@@ -188,6 +193,10 @@
             return (p.engine === 'cmd' ? 'CMD: ' : 'PowerShell: ') + what;
         }
         if (c.type === 'file_deploy') return 'файл «' + p.original_name + '» → ' + p.target_path;
+        if (c.type === 'env_var') {
+            const actions = { list: 'показать все', get: 'показать', set: 'задать', delete: 'удалить', path_add: 'добавить в PATH', path_remove: 'убрать из PATH' };
+            return (actions[p.action] || p.action) + (p.name && p.action !== 'path_add' && p.action !== 'path_remove' ? ' ' + p.name : '') + (p.value ? ' «' + p.value + '»' : '');
+        }
         return c.type;
     }
 
@@ -287,7 +296,8 @@
             (+c.failed_count ? ', с ошибкой ' + c.failed_count : '') +
             (+c.in_progress_count ? ', в работе ' + c.in_progress_count : '') +
             (+c.pending_count ? ', не забрали ' + c.pending_count : '') +
-            (watched.has(String(c.id)) && isActive(c) ? ' · обновляется само' : '') + '</p>' +
+            (watched.has(String(c.id)) && isActive(c) ? ' · обновляется само' : '') +
+            ' · <a href="/admin/commands/' + c.id + '/results.csv" title="Статус и вывод по каждой кассе одним файлом — открывается в Excel">скачать CSV</a></p>' +
             '<table><thead><tr><th>Магазин</th><th>Хост</th><th>Статус</th><th>Результат</th><th>Выполнено</th></tr></thead><tbody>' +
             results.map(function (r) {
                 const badge = r.status === 'pending' ? 'neutral' : r.status;

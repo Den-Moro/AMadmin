@@ -116,6 +116,7 @@ class AdminCommandsController
             'process_action'  => 'validateProcessAction',
             'script_run'      => 'validateScriptRun',
             'file_deploy'     => 'validateFileDeploy',
+            'env_var'         => 'validateEnvVar',
         );
 
         if (!isset($validators[$type])) {
@@ -124,10 +125,15 @@ class AdminCommandsController
             return;
         }
 
+        // Переменные среды Windows (бета) — только главному администратору.
+        if ($type === 'env_var') {
+            AdminAuth::requireSuperadmin();
+        }
+
         // Валидатор возвращает либо array('payload' => ..., 'summary' => 'для лога'),
         // либо array('error' => 'код') — тогда отвечаем 400 и ничего не создаём.
         $method = $validators[$type];
-        $checked = self::$method($payload);
+        $checked = $type === 'file_deploy' ? self::validateFileDeploy($payload, AdminAuth::isSuperadmin()) : self::$method($payload);
         if (isset($checked['error'])) {
             if (isset($checked['warn'])) {
                 Logger::warning($checked['warn'] . " автор='{$_SESSION['admin_username']}' — отклонено");
@@ -160,6 +166,14 @@ class AdminCommandsController
             echo json_encode(array('error' => 'pid_requires_single_pc_target'));
             return;
         }
+
+        if (!SmartGroups::targetAllowed($targetType, $targetId)) {
+            http_response_code(403);
+            echo json_encode(array('error' => 'smart_group_requires_superadmin'));
+            return;
+        }
+
+        $checked['payload'] = self::markVariables($checked['payload']);
 
         $stmt = Db::get()->prepare('
             INSERT INTO commands (type, payload, target_type, target_id, created_by)
@@ -220,6 +234,11 @@ class AdminCommandsController
             echo json_encode(array('error' => 'target_id_required'));
             return;
         }
+        if (!SmartGroups::targetAllowed($targetType, $targetId)) {
+            http_response_code(403);
+            echo json_encode(array('error' => 'smart_group_requires_superadmin'));
+            return;
+        }
 
         $payloads = array();
         foreach ($items as $i => $item) {
@@ -246,11 +265,14 @@ class AdminCommandsController
     public static function createFileBatch(array $payloads, $targetType, $targetId, $releaseId)
     {
         $checkedItems = array();
+        // Переменные в пути ({{ИМЯ}}) — только у superadmin и не для версий агента.
+        $allowVars = AdminAuth::isSuperadmin() && !$releaseId;
         foreach ($payloads as $i => $payload) {
-            $checked = self::validateFileDeploy($payload);
+            $checked = self::validateFileDeploy($payload, $allowVars);
             if (isset($checked['error'])) {
                 return array('error' => $checked['error'], 'index' => $i);
             }
+            $checked['payload'] = self::markVariables($checked['payload']);
             $checkedItems[] = $checked;
         }
 
@@ -409,7 +431,10 @@ class AdminCommandsController
         );
     }
 
-    private static function validateFileDeploy($p)
+    // $allowVars — путь может содержать {{ИМЯ}} (переменные хоста, только superadmin):
+    // тогда здесь проверяется путь с подставленными «заглушками», а настоящий — после
+    // подстановки, при выдаче команде конкретной кассе (CommandsController).
+    private static function validateFileDeploy($p, $allowVars = false)
     {
         $fileId = (!empty($p['file_id'])) ? (int) $p['file_id'] : 0;
         $targetPath = isset($p['target_path']) ? trim($p['target_path']) : '';
@@ -418,20 +443,17 @@ class AdminCommandsController
             return array('error' => 'file_id_required');
         }
 
-        // Полный путь Windows вместе с именем файла: C:\... или \\server\share\...
-        if ($targetPath === '' || !preg_match('#^([A-Za-z]:\\\\|\\\\\\\\)#', $targetPath)) {
-            return array('error' => 'target_path_must_be_absolute_windows_path');
+        $probe = $targetPath;
+        if ($allowVars && HostVariables::hasPlaceholders($targetPath)) {
+            // Путь, начинающийся с переменной ({{ProfiT}}\config.ini), — считаем, что в ней
+            // полный путь к папке.
+            $probe = preg_replace('/^' . substr(HostVariables::PLACEHOLDER, 1, -1) . '/', 'C:\\\\V', $targetPath);
+            $probe = preg_replace(HostVariables::PLACEHOLDER, 'V', $probe);
         }
 
-        // Путь заканчивается на «\» — это папка без имени файла: агент попытался бы
-        // записать файл с пустым именем. Раньше так легко было ошибиться, вписав папку.
-        if (substr($targetPath, -1) === '\\') {
-            return array('error' => 'target_path_is_folder');
-        }
-
-        // Символы, недопустимые в путях Windows (двоеточие — только после буквы диска).
-        if (preg_match('#[<>"|?*]#', $targetPath) || strpos(substr($targetPath, 2), ':') !== false) {
-            return array('error' => 'target_path_invalid_chars');
+        $problem = self::pathProblem($probe);
+        if ($problem) {
+            return array('error' => $problem);
         }
 
         $stmt = Db::get()->prepare('SELECT id, original_name, sha256, size FROM deploy_files WHERE id = :id');
@@ -453,6 +475,141 @@ class AdminCommandsController
             ),
             'summary' => "файл='{$file['original_name']}' -> '{$targetPath}'",
         );
+    }
+
+    // Путь файла на кассе: полный путь Windows вместе с именем файла. null — всё в порядке,
+    // иначе код ошибки. Нужен и здесь, и при выдаче команды после подстановки переменных.
+    public static function pathProblem($targetPath)
+    {
+        // C:\... или \\server\share\...
+        if ($targetPath === '' || !preg_match('#^([A-Za-z]:\\\\|\\\\\\\\)#', $targetPath)) {
+            return 'target_path_must_be_absolute_windows_path';
+        }
+        // Путь заканчивается на «\» — это папка без имени файла: агент попытался бы
+        // записать файл с пустым именем. Раньше так легко было ошибиться, вписав папку.
+        if (substr($targetPath, -1) === '\\') {
+            return 'target_path_is_folder';
+        }
+        // Символы, недопустимые в путях Windows (двоеточие — только после буквы диска).
+        if (preg_match('#[<>"|?*]#', $targetPath) || strpos(substr($targetPath, 2), ':') !== false) {
+            return 'target_path_invalid_chars';
+        }
+        return null;
+    }
+
+    // Переменные среды Windows на кассе (бета, только superadmin). Системные (уровень
+    // компьютера, HKLM) — служба работает от SYSTEM, переменных конкретного пользователя
+    // она не касается.
+    //   list        — все системные переменные;
+    //   get         — одна;
+    //   set         — задать (создать или заменить);
+    //   delete      — удалить;
+    //   path_add    — добавить папку в PATH (если её там ещё нет);
+    //   path_remove — убрать папку из PATH.
+    // Ключевые системные переменные (PATH, ComSpec, SystemRoot…) можно только смотреть;
+    // PATH — менять по одной папке, целиком перезаписать нельзя. Тот же список проверяет
+    // и сам агент.
+    const PROTECTED_ENV = array('path', 'pathext', 'comspec', 'systemroot', 'windir', 'temp', 'tmp', 'os',
+        'psmodulepath', 'number_of_processors', 'processor_architecture', 'processor_identifier',
+        'processor_level', 'processor_revision', 'driverdata', 'username', 'systemdrive', 'programdata',
+        'programfiles', 'programfiles(x86)', 'programw6432', 'commonprogramfiles', 'commonprogramfiles(x86)',
+        'commonprogramw6432', 'allusersprofile', 'public', 'computername');
+
+    private static function validateEnvVar($p)
+    {
+        $action = isset($p['action']) ? (string) $p['action'] : '';
+        if (!in_array($action, array('list', 'get', 'set', 'delete', 'path_add', 'path_remove'), true)) {
+            return array('error' => 'invalid_action');
+        }
+        if ($action === 'list') {
+            return array('payload' => array('action' => 'list'), 'summary' => 'переменные среды: список');
+        }
+
+        $name = $action === 'path_add' || $action === 'path_remove' ? 'Path' : (isset($p['name']) ? trim((string) $p['name']) : '');
+        $value = isset($p['value']) ? trim((string) $p['value']) : '';
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_().\-]{0,127}$/', $name)) {
+            return array('error' => 'invalid_env_name');
+        }
+
+        $protected = in_array(strtolower($name), self::PROTECTED_ENV, true);
+        if (($action === 'set' || $action === 'delete') && $protected) {
+            return array('error' => 'protected_env_var', 'warn' => "Попытка {$action} системной переменной среды '{$name}'");
+        }
+        if ($action === 'set') {
+            if ($value === '') {
+                return array('error' => 'env_value_required');
+            }
+            if (mb_strlen($value) > 2047 || strpos($value, "\n") !== false) {
+                return array('error' => 'env_value_invalid');
+            }
+        }
+        if ($action === 'path_add' || $action === 'path_remove') {
+            // Одна папка: полный путь или путь от переменной (%ProgramFiles%\...), без «;».
+            if ($value === '' || strpos($value, ';') !== false || !preg_match('#^([A-Za-z]:\\\\|%[A-Za-z_()]+%|\{\{)#', $value)) {
+                return array('error' => 'env_path_folder_invalid');
+            }
+        }
+
+        $payload = array('action' => $action, 'name' => $name);
+        if ($action === 'set' || $action === 'path_add' || $action === 'path_remove') {
+            $payload['value'] = $value;
+        }
+        $labels = array('get' => 'показать', 'set' => 'задать', 'delete' => 'удалить', 'path_add' => 'добавить в PATH', 'path_remove' => 'убрать из PATH');
+        return array(
+            'payload' => $payload,
+            'summary' => "переменная среды '{$name}': {$labels[$action]}" . (isset($payload['value']) ? " '" . mb_substr($value, 0, 80) . "'" : ''),
+        );
+    }
+
+    // Команда superadmin с {{ИМЯ}} в тексте скрипта, пути или значении — пометить, чтобы
+    // сервер подставил переменные хоста при выдаче. У остальных ролей текст уходит как
+    // есть: переменные (в том числе секретные) им недоступны.
+    private static function markVariables(array $payload)
+    {
+        if (!AdminAuth::isSuperadmin()) {
+            return $payload;
+        }
+        foreach (array('script', 'path', 'args', 'target_path', 'value') as $field) {
+            if (isset($payload[$field]) && HostVariables::hasPlaceholders($payload[$field])) {
+                $payload['use_vars'] = true;
+                break;
+            }
+        }
+        return $payload;
+    }
+
+    // GET /admin/commands/{id}/results.csv — результаты по каждой кассе одним файлом
+    // (открывается в Excel): удобно собрать вывод скрипта с сотни касс в одну таблицу.
+    public static function resultsCsv($commandId)
+    {
+        AdminAuth::requireLogin();
+        $stmt = Db::get()->prepare('SELECT id, type, created_at FROM commands WHERE id = :id');
+        $stmt->execute(array('id' => (int) $commandId));
+        $command = $stmt->fetch();
+        if (!$command) {
+            http_response_code(404);
+            echo json_encode(array('error' => 'not_found'));
+            return;
+        }
+
+        $rows = Db::get()->prepare("
+            SELECT s.name AS store_name, p.hostname, p.display_name, r.status, r.claimed_at, r.executed_at, r.output
+            FROM commands c
+            JOIN pcs p
+            JOIN stores s ON s.id = p.store_id
+            LEFT JOIN command_results r ON r.command_id = c.id AND r.pc_id = p.id
+            WHERE c.id = :command_id AND (r.id IS NOT NULL OR " . CommandsController::TARGETS_PC . ")
+            ORDER BY s.name, p.hostname
+        ");
+        $rows->execute(array('command_id' => (int) $commandId));
+
+        $labels = array('success' => 'ок', 'failed' => 'ошибка', 'timeout' => 'таймаут', 'in_progress' => 'в работе');
+        $out = array(array('Магазин', 'Касса', 'Hostname', 'Статус', 'Забрала (UTC)', 'Выполнила (UTC)', 'Вывод'));
+        foreach ($rows as $r) {
+            $out[] = array($r['store_name'], $r['display_name'] ?: $r['hostname'], $r['hostname'],
+                $r['status'] ? $labels[$r['status']] : 'ждёт', $r['claimed_at'], $r['executed_at'], $r['output']);
+        }
+        Csv::send('amadmin-command-' . (int) $commandId . '.csv', $out);
     }
 
     // ---- Помощники ----------------------------------------------------------------

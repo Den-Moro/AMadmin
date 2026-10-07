@@ -41,6 +41,10 @@ class OccurrencesController
             LEFT JOIN notification_acks a ON a.occurrence_id = o.id AND a.pc_id = :ack_pc_id
             WHERE o.fire_at <= CURRENT_TIMESTAMP
               AND a.id IS NULL
+              -- Только последний наступивший показ оповещения: у повторяющегося касса,
+              -- включившаяся через три дня, получит одно сегодняшнее напоминание, а не три.
+              AND o.fire_at = (SELECT MAX(o3.fire_at) FROM notification_occurrences o3
+                               WHERE o3.notification_id = o.notification_id AND o3.fire_at <= CURRENT_TIMESTAMP)
               AND " . TargetMatcher::CONDITION . "
             ORDER BY CASE COALESCE(n.level, n.priority) WHEN 'critical' THEN 0 WHEN 'important' THEN 1 ELSE 2 END, o.fire_at ASC
         ";
@@ -120,24 +124,36 @@ class OccurrencesController
             echo json_encode(array('error' => 'invalid_token'));
             return;
         }
+        $rows = self::historyFor($pc);
+        Logger::debug('GET /occurrences/history: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
+        echo json_encode($rows);
+    }
+
+    // Показы, адресованные кассе за $days дней (не больше 100), с отметкой, подтвердила ли
+    // она. Нужна и окну «История» на кассе, и профилю хоста в панели (ТЗ: «полный список
+    // оповещений, которые получал данный ПК за период» — для разбора «мне никто не сказал»).
+    // $pc — строка pcs (нужны id, store_id, device_type_id).
+    public static function historyFor($pc, $days = 30)
+    {
         $sql = "
             SELECT DISTINCT
-                o.id AS occurrence_id, n.text, n.priority,
+                o.id AS occurrence_id, n.id AS notification_id, n.text, n.priority,
                 COALESCE(n.level, CASE n.priority WHEN 'important' THEN 'important' ELSE 'warning' END) AS level,
-                n.images, n.manual_url, n.size, o.fire_at, a.acked_at
+                n.images, n.manual_url, n.size, n.recurrence, o.fire_at, a.acked_at, a.reacted
             FROM notification_occurrences o
             JOIN notifications n ON n.id = o.notification_id
             JOIN notification_targets t ON t.notification_id = n.id
             " . TargetMatcher::JOIN . "
             LEFT JOIN notification_acks a ON a.occurrence_id = o.id AND a.pc_id = :ack_pc_id
             WHERE o.fire_at <= CURRENT_TIMESTAMP
-              AND o.fire_at >= datetime('now', '-30 days')
+              AND o.fire_at >= datetime('now', :since)
               AND " . TargetMatcher::CONDITION . "
             ORDER BY o.fire_at DESC
             LIMIT 100
         ";
         $params = TargetMatcher::params($pc);
         $params['ack_pc_id'] = $pc['id'];
+        $params['since'] = '-' . max(1, (int) $days) . ' days';
         $stmt = Db::get()->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
@@ -145,8 +161,7 @@ class OccurrencesController
             $row['images'] = MediaController::listFor($row['images']);
         }
         unset($row);
-        Logger::debug('GET /occurrences/history: pc_id=' . $pc['id'] . ' отдано=' . count($rows));
-        echo json_encode($rows);
+        return $rows;
     }
 
     private static function setting($settings, $key, $default)

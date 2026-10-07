@@ -39,7 +39,7 @@ class CommandsController
         Auth::heartbeat($pc, false);
 
         $afterRestart = !empty($_GET['after_restart']);
-        $rows = self::commandsForPc($pc, true, null, null, $afterRestart);
+        $rows = self::withVariables($pc, self::commandsForPc($pc, true, null, null, $afterRestart));
 
         // Настройки раскатки файлов подмешиваем в момент отдачи, а не при создании
         // команды — тот же приём, что и с настройками окна в /occurrences: админ меняет
@@ -66,6 +66,56 @@ class CommandsController
         Logger::debug('GET /commands: pc_id=' . $pc['id'] . ' отдано=' . count($rows) . ($afterRestart ? ' (первый опрос после запуска агента)' : ''));
 
         echo json_encode($rows);
+    }
+
+    // Переменные хоста (бета): в командах superadmin с пометкой use_vars подставляет
+    // {{ИМЯ}} значениями этой кассы. Нет переменной у кассы (или путь файла после
+    // подстановки неправильный) — команду ей не отдаём, а сразу закрываем ошибкой с
+    // понятной причиной: запускать скрипт с неподставленным {{ИМЯ}} опаснее, чем не
+    // запускать. Старому агенту делать ничего не нужно — он получает готовый текст.
+    private static function withVariables($pc, array $rows)
+    {
+        $vars = null;
+        $out = array();
+        foreach ($rows as $row) {
+            $payload = json_decode($row['payload'], true);
+            if (!is_array($payload) || empty($payload['use_vars'])) {
+                $out[] = $row;
+                continue;
+            }
+            if ($vars === null) {
+                $vars = HostVariables::effective($pc['id'], $pc['store_id']);
+            }
+            $missing = array();
+            foreach (array('script', 'path', 'args', 'target_path', 'value') as $field) {
+                if (isset($payload[$field]) && is_string($payload[$field])) {
+                    $payload[$field] = HostVariables::render($payload[$field], $vars, $missing);
+                }
+            }
+            unset($payload['use_vars']);
+
+            $problem = null;
+            if ($missing) {
+                $problem = 'Не задана переменная хоста для этой кассы: ' . implode(', ', array_keys($missing)) .
+                    '. Задайте её на странице «Переменные» (для всех касс, магазина, группы или этой кассы) и отправьте команду снова.';
+            } elseif ($row['type'] === 'file_deploy' && ($code = AdminCommandsController::pathProblem($payload['target_path']))) {
+                $problem = 'После подстановки переменных путь файла неправильный (' . $payload['target_path'] . '): ' . $code . '.';
+            }
+
+            if ($problem !== null) {
+                // INSERT OR IGNORE: если строка уже есть (касса успела застолбить), не трогаем.
+                Db::get()->prepare("
+                    INSERT OR IGNORE INTO command_results (command_id, pc_id, status, output, claimed_at, executed_at)
+                    VALUES (:command_id, :pc_id, 'failed', :output, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ")->execute(array('command_id' => $row['id'], 'pc_id' => $pc['id'], 'output' => $problem));
+                Logger::warning('Команда id=' . $row['id'] . ' не выдана pc_id=' . $pc['id'] . ': ' . $problem);
+                continue;
+            }
+
+            $row['payload'] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $out[] = $row;
+        }
+        return $out;
     }
 
     // Команды, адресованные этому ПК и не старше command_ttl_hours (см. миграцию 009).

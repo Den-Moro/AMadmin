@@ -30,11 +30,12 @@
         return Math.round(sec / 86400) + ' дн назад';
     }
 
-    const typeNames = { service_control: 'Служба', process_action: 'Процесс', script_run: 'Скрипт', file_deploy: 'Файл' };
+    const typeNames = { service_control: 'Служба', process_action: 'Процесс', script_run: 'Скрипт', file_deploy: 'Файл', env_var: 'Переменная среды' };
     function describeCommand(r) {
         let p = {};
         try { p = JSON.parse(r.payload); } catch (e) { /* — */ }
-        const detail = p.service_name || p.process_name || p.original_name || (p.script ? p.script.split(/\r?\n/)[0] : p.path) || p.action || '';
+        const detail = p.service_name || p.process_name || p.original_name || (p.script ? p.script.split(/\r?\n/)[0] : p.path) ||
+            (r.type === 'env_var' ? (p.action || '') + (p.name ? ' ' + p.name : '') + (p.value ? ' «' + p.value + '»' : '') : '') || p.action || '';
         return (typeNames[r.type] || r.type) + (detail ? ': ' + detail : '');
     }
 
@@ -73,7 +74,10 @@
             (rate !== null ? fact('Надёжность', rate + '%') : '');
 
         $('groups').innerHTML = data.groups.length
-            ? data.groups.map(function (g) { return '<a href="/admin/hosts?group_id=' + g.id + '"><span class="badge badge-accent">' + esc(g.name) + '</span></a> '; }).join('')
+            ? data.groups.map(function (g) {
+                return '<a href="/admin/hosts?group_id=' + g.id + '"' + (g.kind === 'smart' ? ' title="Смарт-группа: касса попала в неё по условиям"' : '') + '>' +
+                    '<span class="badge ' + (g.kind === 'smart' ? 'badge-beta' : 'badge-accent') + '">' + esc(g.name) + (g.kind === 'smart' ? ' · смарт' : '') + '</span></a> ';
+            }).join('')
             : 'ни в одной группе';
 
         const rt = document.querySelector('#resultsTable tbody');
@@ -85,11 +89,24 @@
         }).join('') : '<tr><td colspan="5" class="empty">Команд на этот хост ещё не было.</td></tr>';
 
         const at = document.querySelector('#acksTable tbody');
-        at.innerHTML = data.acks.length ? data.acks.map(function (a) {
-            return '<tr><td class="muted" style="white-space:nowrap">' + esc(formatServerTime(a.acked_at)) + '</td><td>' + esc(a.text) + '</td>' +
-                '<td>' + (a.priority === 'important' ? '<span class="badge badge-important">важное</span>' : '<span class="badge badge-neutral">обычное</span>') + '</td>' +
-                '<td>' + (a.reacted ? '<span class="badge badge-success">да</span>' : '<span class="muted">—</span>') + '</td></tr>';
-        }).join('') : '<tr><td colspan="4" class="empty">Подтверждений пока нет.</td></tr>';
+        at.innerHTML = data.notifications.length ? data.notifications.map(function (n) {
+            return '<tr><td class="muted" style="white-space:nowrap">' + esc(formatServerTime(n.fire_at)) + '</td>' +
+                '<td><div style="white-space:pre-line;max-width:520px">' + esc(n.text) + '</div>' + (n.recurrence && n.recurrence !== 'once' ? '<span class="muted" style="font-size:12px">повторяющееся</span>' : '') + Ui.imageThumbs(n.images) + '</td>' +
+                '<td>' + Ui.levelBadge(n.level) + '</td>' +
+                '<td class="nowrap">' + (n.acked_at ? '<span class="badge badge-success">' + esc(formatServerTime(n.acked_at)) + '</span>'
+                    : '<span class="badge badge-failed" title="Касса не закрыла окно: не была на связи, окно ещё на экране, или этот показ заменён более новым">не подтверждено</span>') + '</td>' +
+                '<td>' + (n.manual_url ? (+n.reacted ? '<span class="badge badge-success">да</span>' : '<span class="muted">нет</span>') : '<span class="muted">—</span>') + '</td></tr>';
+        }).join('') : '<tr><td colspan="5" class="empty">За 30 дней этой кассе оповещений не было.</td></tr>';
+
+        // Переменные хоста (бета) — сервер присылает только суперадмину.
+        $('varsCard').hidden = !data.variables;
+        if (data.variables) {
+            const scopes = { global: 'все кассы', store: 'магазин', group: 'группа', pc: 'эта касса' };
+            $('vars').innerHTML = data.variables.length ? '<table><thead><tr><th>Имя</th><th>Значение</th><th>Откуда</th></tr></thead><tbody>' + data.variables.map(function (v) {
+                return '<tr><td><code>{{' + esc(v.name) + '}}</code></td><td>' + (+v.is_secret ? '<span class="secret-mask">••••••</span>' : '<code>' + esc(v.value) + '</code>') + '</td>' +
+                    '<td class="muted">' + scopes[v.scope] + (v.scope_name && v.scope !== 'pc' ? ' «' + esc(v.scope_name) + '»' : '') + '</td></tr>';
+            }).join('') + '</tbody></table>' : '<p class="muted" style="margin:0">У этой кассы нет ни одной переменной — задать можно на странице «Переменные».</p>';
+        }
     }
 
     // ---- Действия ------------------------------------------------------------------------
@@ -129,13 +146,16 @@
     const STATUS_LABELS = { pending: 'ждёт', in_progress: 'в работе', success: 'ок', failed: 'ошибка', timeout: 'таймаут' };
 
     $('quickBtn').addEventListener('click', async function () {
-        const act = await Ui.menu($('quickBtn'), QUICK.map(function (c) { return { label: c.label, value: c.key }; }).concat([
+        const act = await Ui.menu($('quickBtn'), QUICK.map(function (c) { return { label: c.label, value: c.key }; }).concat(me.role === 'superadmin' ? [
+            { label: 'Переменные среды Windows (бета)', value: 'env' },
+        ] : []).concat([
             { label: 'Перезапустить службу…', value: 'restart' },
             { label: 'Положить файл на эту кассу…', value: 'file' },
             { label: 'Другая команда или скрипт…', value: 'command' },
         ]));
         if (!act) return;
         if (act === 'file') { window.location.href = '/admin/files?pc=' + id; return; }
+        if (act === 'env') { runQuick({ label: 'Переменные среды Windows', type: 'env_var', payload: { action: 'list' } }); return; }
         if (act === 'command') { window.location.href = '/admin/commands?pc=' + id; return; }
         if (act === 'restart') {
             const name = await Ui.prompt('Имя службы', { title: 'Перезапустить службу', okLabel: 'Перезапустить', value: 'Spooler',

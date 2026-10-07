@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Переменные — AMadmin</title>
+<link rel="stylesheet" href="/admin/shared/admin.css">
+<script src="/admin/shared/ui.js"></script>
+<style>
+    /* Страница переменных хоста (бета, только суперадмин). */
+    .var-name { font-family: var(--mono, ui-monospace, Consolas, monospace); font-weight: 600; }
+    .scope-badge { white-space: nowrap; }
+    .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .help-grid pre { margin: 6px 0 0; white-space: pre-wrap; }
+    .env-form .row label { flex: 1; }
+</style>
+</head>
+<body class="app">
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+    <div class="page-head">
+        <div>
+            <h1>Переменные <span class="badge badge-beta" style="vertical-align:middle" title="Бета: функция новая, доступна только суперадмину">бета</span></h1>
+            <p class="muted">Свои переменные хоста для скриптов и путей файлов и системные переменные среды Windows на самих кассах. Только для суперадмина.</p>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button type="button" class="active" data-tab="panel">Переменные панели <span class="count" id="varCount">0</span></button>
+        <button type="button" data-tab="windows">Переменные среды Windows на кассах</button>
+    </div>
+
+    <!-- ---- Переменные панели ---------------------------------------------------------- -->
+    <section class="tab-panel" data-panel="panel">
+        <div class="toolbar">
+            <div class="search-wrap"><span id="searchIcon"></span><input type="search" id="search" placeholder="Поиск: имя, значение, магазин, касса…"></div>
+            <select id="scopeFilter" title="Уровень, на котором задано значение">
+                <option value="">Все уровни</option>
+                <option value="global">Все кассы</option>
+                <option value="store">Магазин</option>
+                <option value="group">Группа</option>
+                <option value="pc">Касса</option>
+            </select>
+            <button type="button" id="checkPcBtn" title="Какие значения получит конкретная касса и откуда каждое взято">Проверить кассу…</button>
+            <button type="button" id="addVarBtn" class="primary">＋ Переменная</button>
+        </div>
+        <table id="varsTable">
+            <thead><tr><th>Имя</th><th>Значение</th><th>Где задано</th><th>Примечание</th><th>Изменено</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="card compact" style="margin-top:18px">
+            <div class="card-head"><h2>Как это работает</h2></div>
+            <div class="help-grid">
+                <div>
+                    <b>Откуда берётся значение</b>
+                    <p class="muted" style="margin:6px 0 0">Одно имя можно задать на разных уровнях. Касса получает значение с самого узкого:
+                    <b>касса</b> → <b>группа</b> → <b>магазин</b> → <b>все кассы</b>. Если имя задано в двух группах кассы, берётся группа,
+                    первая по алфавиту. «Проверить кассу…» показывает итог для любой кассы.</p>
+                </div>
+                <div>
+                    <b>В скрипте и пути файла</b> — пишите <code>{{ИМЯ}}</code>:
+                    <pre class="output">Copy-Item "{{PROFIT_DIR}}\check.ini" "{{PROFIT_DIR}}\check.bak"</pre>
+                    <p class="muted" style="margin:6px 0 0">Сервер подставит значение этой кассы в момент, когда касса забирает команду. Нет переменной у кассы —
+                    команда на ней не запустится, в результате будет причина. Подставляет только в командах суперадмина.</p>
+                </div>
+                <div>
+                    <b>В смарт-группах</b> — условие «Переменная хоста»: например, <code>KKT_MODEL</code> равна «Атол 30Ф».
+                    Учитываются переменные всех касс, магазина, кассы и обычных групп.
+                    <p class="muted" style="margin:6px 0 0"><b>Секретное</b> значение не показывается в списке, но до кассы доходит открытым
+                    текстом вместе со скриптом — используйте HTTPS.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ---- Переменные среды Windows --------------------------------------------------- -->
+    <section class="tab-panel" data-panel="windows" hidden>
+        <form class="card env-form" id="envForm" autocomplete="off">
+            <div class="card-head"><h2>Системные переменные среды на кассах</h2></div>
+            <p class="muted" style="margin-top:0">Уровень компьютера (как «Системные переменные» в свойствах системы). Выполняет служба агента от SYSTEM —
+            нужен агент 0.2.0 или новее; старый ответит «не умеет». Новое значение увидят программы, запущенные после повторного входа
+            кассира или перезагрузки, службы — после перезапуска. PATH, ComSpec, SystemRoot и другие системные можно только смотреть, а в PATH —
+            добавлять и убирать по одной папке.</p>
+            <div class="row">
+                <label>Действие
+                    <select id="envAction">
+                        <option value="list">Показать все</option>
+                        <option value="get">Показать одну</option>
+                        <option value="set">Задать (создать или заменить)</option>
+                        <option value="delete">Удалить</option>
+                        <option value="path_add">Добавить папку в PATH</option>
+                        <option value="path_remove">Убрать папку из PATH</option>
+                    </select>
+                </label>
+                <label id="envNameWrap" hidden>Имя переменной
+                    <span class="hint">Как в Windows: латиница, цифры, _ ( ) . -, например PROFIT_HOME.</span>
+                    <input type="text" id="envName" class="mono" spellcheck="false" placeholder="PROFIT_HOME">
+                </label>
+                <label id="envValueWrap" hidden><span id="envValueLabel">Значение</span>
+                    <span class="hint">Можно ссылаться на другие переменные Windows (%ProgramFiles%\…) — такое значение будет раскрываться.
+                    Можно подставить переменную панели: {{ИМЯ}}.</span>
+                    <input type="text" id="envValue" class="mono" spellcheck="false">
+                </label>
+            </div>
+            <div id="envTarget"></div>
+            <p class="error" id="envError"></p>
+            <div class="form-actions"><button type="submit" class="primary" id="envSendBtn">Отправить</button></div>
+        </form>
+
+        <div class="section-head"><h2>Последние команды с переменными среды</h2>
+            <a href="/admin/commands" class="muted" style="font-size:13px">все команды →</a></div>
+        <table id="envTable">
+            <thead><tr><th>Когда</th><th>Что</th><th>Кому</th><th>Ход</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </section>
+</main>
+
+<script src="/admin/shared/api.js"></script>
+<script src="/admin/shared/nav.js"></script>
+<script src="/admin/variables/variables.js"></script>
+</body>
+</html>

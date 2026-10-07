@@ -116,6 +116,8 @@ const Ui = (function () {
 
             document.body.appendChild(back);
             enhanceHints(root);
+            // Окно уже в документе — можно навесить живые элементы (конструкторы, предпросмотр).
+            if (opts.onOpen) opts.onOpen(root);
             requestAnimationFrame(function () {
                 back.classList.add('show');
                 const first = root.querySelector('input, select, textarea');
@@ -415,7 +417,8 @@ const Ui = (function () {
                 idEl.hidden = false;
                 pcBox.hidden = true;
                 idEl.innerHTML = items.map(function (it) {
-                    return '<option value="' + it.id + '">' + escapeHtml(it.name || it.display_name || it.hostname) + '</option>';
+                    return '<option value="' + it.id + '">' + escapeHtml(it.name || it.display_name || it.hostname) +
+                        (it.kind === 'smart' ? ' — смарт-группа (бета)' : '') + '</option>';
                 }).join('');
                 if (selectedId) idEl.value = selectedId;
             }
@@ -593,6 +596,17 @@ const Ui = (function () {
     // поэтому Get-WmiObject, а не Get-CimInstance). Перезагрузки и прочее разрушительное
     // сюда намеренно не входит — такое пишется руками, осознанно. readonly — ничего не
     // меняет на кассе (профиль хоста отправляет такие без подтверждения).
+    //
+    // Хвост лога агента: папку берём из пути службы — агент мог быть поставлен не в
+    // C:\AMadmin (-InstallDir). Select-Object -Last вместо Get-Content -Tail: в PowerShell
+    // 2.0 (Windows 7) -Tail нет.
+    function AGENT_LOG_SCRIPT(file) {
+        return "$svc = Get-WmiObject Win32_Service -Filter \"Name='AMadminAgent'\"\n" +
+            "$dir = if ($svc) { Split-Path $svc.PathName.Trim('\"') } else { 'C:\\AMadmin' }\n" +
+            "$log = Join-Path $dir '" + file + "'\n" +
+            "if (Test-Path $log) { Get-Content $log -Encoding UTF8 | Select-Object -Last 200 } else { 'Нет файла ' + $log }";
+    }
+
     const COMMON_COMMANDS = [
         { key: 'disk', label: 'Свободное место на дисках', readonly: true, tip: 'PowerShell: свободно и всего по каждому локальному диску, в ГБ',
           type: 'script_run', payload: { engine: 'powershell',
@@ -610,6 +624,10 @@ const Ui = (function () {
           type: 'process_action', payload: { action: 'list' } },
         { key: 'services', label: 'Список служб', readonly: true, tip: 'Все службы Windows с состоянием',
           type: 'service_control', payload: { action: 'list', service_name: '' } },
+        { key: 'agentlog', label: 'Лог агента управления (200 строк)', readonly: true, tip: 'Последние строки management-agent.log с кассы — что агент делал и какие были ошибки, без похода на кассу',
+          type: 'script_run', payload: { engine: 'powershell', script: AGENT_LOG_SCRIPT('management-agent.log') } },
+        { key: 'uilog', label: 'Лог окна оповещений (200 строк)', readonly: true, tip: 'Последние строки ui-agent.log: показ оповещений, подтверждения, ошибки связи окна',
+          type: 'script_run', payload: { engine: 'powershell', script: AGENT_LOG_SCRIPT('ui-agent.log') } },
         { key: 'spooler', label: 'Перезапустить печать', tip: 'Перезапустить службу диспетчера печати (Spooler) — помогает, когда «завис» принтер чеков или документов',
           type: 'service_control', payload: { action: 'restart', service_name: 'Spooler' } },
         { key: 'queue', label: 'Очистить очередь печати', tip: 'Остановить Spooler, удалить застрявшие задания печати и запустить снова',
@@ -655,6 +673,7 @@ const Ui = (function () {
 
     // Контурные SVG 24×24, цвет — от текста (stroke: currentColor в admin.css).
     const ICONS = {
+        braces: '<path d="M8 4c-2 0-3 1-3 3v2.5C5 11 4 12 3 12c1 0 2 1 2 2.5V17c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2.5c0 1.5 1 2.5 2 2.5-1 0-2 1-2 2.5V17c0 2-1 3-3 3"/>',
         grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
         monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
         bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>',

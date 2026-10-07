@@ -19,6 +19,7 @@ const Nav = (function () {
             { href: '/admin/commands', label: 'Команды', icon: 'terminal', tip: 'Службы, процессы и скрипты на кассах — и результат с каждой' },
             { href: '/admin/files', label: 'Файлы', icon: 'folder', tip: 'Загрузить файл и разложить его по кассам в нужную папку' },
             { href: '/admin/updates', label: 'Обновления', icon: 'download', roles: ['administrator', 'superadmin'], tip: 'Новая версия агента на выбранные кассы' },
+            { href: '/admin/variables', label: 'Переменные', icon: 'braces', roles: ['superadmin'], beta: true, tip: 'Бета, только суперадмин: переменные хоста для скриптов и путей ({{ИМЯ}}) и переменные среды Windows на кассах' },
         ] },
         { title: 'Система', items: [
             { href: '/admin/settings', label: 'Настройки', icon: 'sliders', tip: 'Поведение окна оповещений, пароль клиента, брендинг' },
@@ -44,7 +45,7 @@ const Nav = (function () {
                 const active = path === item.href || (item.match && path.indexOf(item.match) === 0);
                 html += '<a href="' + item.href + '" class="' + (active ? 'active' : '') + '" data-tip="' + Ui.escapeHtml(item.tip) + '" data-tip-side="right"' +
                     (item.roles ? ' data-roles="' + item.roles.join(',') + '" style="display:none"' : '') + '>' +
-                    Ui.icon(item.icon) + '<span>' + item.label + '</span></a>';
+                    Ui.icon(item.icon) + '<span>' + item.label + '</span>' + (item.beta ? '<span class="beta-tag">бета</span>' : '') + '</a>';
             });
             html += '</div>';
         });

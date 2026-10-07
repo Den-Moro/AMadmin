@@ -70,6 +70,7 @@ namespace AMadmin.ManagementAgent
                 { "process_action",  new ProcessExecutor() },
                 { "script_run",      new ScriptExecutor() },
                 { "file_deploy",     new FileDeployExecutor(api, config) },
+                { "env_var",         new EnvVarExecutor() },
             };
         }
 
